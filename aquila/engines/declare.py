@@ -58,3 +58,34 @@ task "something" {
 #
 # Actually, I think I can use Pydantic class - and it's mechanisms - to declaratively define things like "target state" and hence
 # convert the above into a readable pydantic-like thing maybe?
+
+# from pydantic import BaseModel
+
+# class Task(BaseModel):
+#     name = "something"
+    
+#     imports = {
+#         "old_init_task": {
+#             "x": "l"
+#         }
+#     },
+    
+#     target_state = {
+#         "a": "x",
+#         "b": "y"
+#     }
+
+#     __run__ = "old_init_task",
+
+#     __agent__ = {
+#         "ghost-agent": {
+#             "target_state": {
+
+#             }
+#         }
+#     }
+
+# ^ Ugh that is incomplete cuz it gets frustrating to write very quickly to me, it'll be nice if I could say write a plugin in python
+# for something that already exists - like maybe Pulumi? Since it has a Python SDK unlike Terraform
+
+# That would also give me things like state management, graph creation, diff management, etc. out of the box
