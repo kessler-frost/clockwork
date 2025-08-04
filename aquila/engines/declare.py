@@ -89,3 +89,4 @@ task "something" {
 # for something that already exists - like maybe Pulumi? Since it has a Python SDK unlike Terraform
 
 # That would also give me things like state management, graph creation, diff management, etc. out of the box
+# Seems like I can, using the "dynamic provider" mechanism and just do it in Python
