@@ -30,3 +30,6 @@
 
 # Natural language is not deterministic and tribal knowledge is not in the codebase
 
+# For example, an intelligent "compiler" can be built because it's simple to compile one thing into another locally as it
+# doesn't require the model to be too smart
+
