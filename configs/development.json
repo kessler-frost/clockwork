@@ -1,0 +1,71 @@
+{
+  "name": "Clockwork Development Configuration",
+  "description": "Default settings for local development",
+  "environment": "development",
+  "clockwork": {
+    "core": {
+      "project_name": "clockwork-dev",
+      "log_level": "INFO",
+      "build_dir": ".clockwork/build",
+      "state_file": ".clockwork/state.json"
+    },
+    "intake": {
+      "validation_enabled": true,
+      "strict_mode": false,
+      "resolver_cache_ttl": 300
+    },
+    "assembly": {
+      "planning_strategy": "default",
+      "dependency_resolution": "automatic",
+      "parallel_execution": true
+    },
+    "forge": {
+      "compiler": {
+        "use_agno": true,
+        "build_dir": ".clockwork/build",
+        "security_validation": true,
+        "timeout": 300
+      },
+      "ai_agent": {
+        "enabled": true,
+        "provider": "lm_studio",
+        "model_id": "qwen/qwen3-4b-2507",
+        "base_url": "http://localhost:1234",
+        "timeout": 300,
+        "max_tokens": 6000,
+        "temperature": 0.1
+      },
+      "execution": {
+        "default_runner": "local",
+        "timeout": 600,
+        "retry_attempts": 3,
+        "parallel_limit": 4
+      }
+    },
+    "security": {
+      "allowed_runtimes": [
+        "bash", "python3", "python", "deno", "go", "node", 
+        "npm", "npx", "java", "mvn", "gradle", "dotnet", 
+        "cargo", "rustc", "env"
+      ],
+      "allowed_build_paths": [
+        ".clockwork/build",
+        "scripts",
+        "artifacts"
+      ],
+      "validate_artifacts": true,
+      "scan_dangerous_patterns": true
+    }
+  },
+  "logging": {
+    "level": "INFO",
+    "format": "%(levelname)s: %(message)s",
+    "file_logging": false,
+    "console_logging": true
+  },
+  "debug": {
+    "enabled": true,
+    "trace_requests": false,
+    "save_intermediate_files": false
+  }
+}

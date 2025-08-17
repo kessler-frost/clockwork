@@ -38,7 +38,7 @@ def run_command(cmd, description):
 def run_unit_tests():
     """Run unit tests."""
     return run_command(
-        ["uv", "run", "pytest", "tests/test_models.py", "-v", "-m", "not manual"],
+        ["uv", "run", "pytest", "tests/unit/", "-v"],
         "Running unit tests"
     )
 
@@ -46,34 +46,47 @@ def run_unit_tests():
 def run_integration_tests():
     """Run integration tests."""
     return run_command(
-        ["uv", "run", "pytest", "tests/test_integration.py", "-v"],
+        ["uv", "run", "pytest", "tests/integration/", "-v"],
         "Running integration tests"
     )
 
 
+def run_e2e_tests():
+    """Run end-to-end tests."""
+    # Set PYTHONPATH to include current directory for imports
+    import os
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(Path.cwd())
+    
+    return run_command(
+        ["uv", "run", "pytest", "tests/e2e/", "-v"],
+        "Running end-to-end tests"
+    )
+
+
 def run_manual_e2e_test():
-    """Run manual end-to-end test."""
+    """Run manual end-to-end test directly."""
     # Set PYTHONPATH to include current directory for imports
     import os
     env = os.environ.copy()
     env["PYTHONPATH"] = str(Path.cwd())
     
     print(f"\n🚀 Running manual end-to-end test")
-    print(f"Command: PYTHONPATH={Path.cwd()} uv run python tests/test_manual_e2e.py")
+    print(f"Command: PYTHONPATH={Path.cwd()} uv run python tests/e2e/test_manual_e2e.py")
     print("-" * 60)
     
     try:
         import subprocess
         result = subprocess.run(
-            ["uv", "run", "python", "tests/test_manual_e2e.py"],
+            ["uv", "run", "python", "tests/e2e/test_manual_e2e.py"],
             env=env,
             check=True, 
             capture_output=False
         )
-        print(f"✅ Running manual end-to-end test completed successfully")
+        print(f"✅ Manual end-to-end test completed successfully")
         return True
     except subprocess.CalledProcessError as e:
-        print(f"❌ Running manual end-to-end test failed with exit code {e.returncode}")
+        print(f"❌ Manual end-to-end test failed with exit code {e.returncode}")
         return False
     except FileNotFoundError:
         print(f"❌ Command not found: uv")
@@ -95,8 +108,8 @@ def run_all_tests():
     if not run_integration_tests():
         success = False
     
-    # Run manual E2E test
-    if not run_manual_e2e_test():
+    # Run E2E tests
+    if not run_e2e_tests():
         success = False
     
     print("\n" + "=" * 60)
@@ -126,7 +139,7 @@ Examples:
         "test_type",
         nargs="?",
         default="all",
-        choices=["unit", "integration", "manual", "all"],
+        choices=["unit", "integration", "e2e", "manual", "all"],
         help="Type of tests to run (default: all)"
     )
     
@@ -144,6 +157,8 @@ Examples:
         success = run_unit_tests()
     elif args.test_type == "integration":
         success = run_integration_tests()
+    elif args.test_type == "e2e":
+        success = run_e2e_tests()
     elif args.test_type == "manual":
         success = run_manual_e2e_test()
     elif args.test_type == "all":

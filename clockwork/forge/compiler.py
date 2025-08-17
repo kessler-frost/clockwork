@@ -13,6 +13,7 @@ import stat
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 from ..models import ActionStep, ActionList as ModelsActionList, ArtifactBundle, Artifact, ExecutionStep
+from .agno_agent import AgnoCompiler, AgnoCompilerError, create_agno_compiler
 
 logger = logging.getLogger(__name__)
 
@@ -55,23 +56,50 @@ class Compiler:
         api_key: Optional[str] = None,
         model_name: str = "gpt-4",
         timeout: int = 300,
-        build_dir: str = ".clockwork/build"
+        build_dir: str = ".clockwork/build",
+        # New LM Studio / Agno parameters
+        use_agno: bool = True,
+        lm_studio_url: Optional[str] = None,
+        agno_model_id: Optional[str] = None
     ):
         """
         Initialize the compiler.
         
         Args:
-            agent_endpoint: URL of the AI agent endpoint
-            api_key: API key for authentication
-            model_name: Name of the AI model to use
+            agent_endpoint: URL of the AI agent endpoint (legacy)
+            api_key: API key for authentication (legacy)
+            model_name: Name of the AI model to use (legacy)
             timeout: Request timeout in seconds
             build_dir: Base directory for artifact output
+            use_agno: Whether to use Agno/LM Studio integration (default: True)
+            lm_studio_url: LM Studio server URL (default: http://localhost:1234)
+            agno_model_id: Model ID for Agno agent (default: qwen/qwen3-4b-2507)
         """
+        # Legacy parameters
         self.agent_endpoint = agent_endpoint
         self.api_key = api_key
         self.model_name = model_name
         self.timeout = timeout
         self.build_dir = Path(build_dir)
+        
+        # New Agno integration parameters
+        self.use_agno = use_agno
+        self.lm_studio_url = lm_studio_url or "http://localhost:1234"
+        self.agno_model_id = agno_model_id or "qwen/qwen3-4b-2507"
+        
+        # Initialize Agno compiler if enabled
+        self.agno_compiler = None
+        if self.use_agno:
+            try:
+                self.agno_compiler = create_agno_compiler(
+                    model_id=self.agno_model_id,
+                    lm_studio_url=self.lm_studio_url,
+                    timeout=timeout
+                )
+                logger.info(f"Initialized Agno AI compiler with model: {self.agno_model_id}")
+            except Exception as e:
+                logger.warning(f"Failed to initialize Agno compiler: {e}")
+                logger.info("Falling back to placeholder implementation")
         
         logger.info(f"Initialized compiler with model: {model_name}, build_dir: {build_dir}")
     
@@ -91,14 +119,17 @@ class Compiler:
         try:
             logger.info(f"Compiling ActionList with {len(action_list.steps)} steps")
             
-            # Generate prompt for AI agent
-            prompt = self._generate_compilation_prompt(action_list)
-            
-            # Call AI agent
-            response = self._call_agent(prompt)
-            
-            # Parse response into ArtifactBundle
-            artifact_bundle = self._parse_agent_response(response, action_list)
+            # Use Agno AI compiler if available
+            if self.use_agno and self.agno_compiler:
+                logger.info("Using Agno AI compiler for artifact generation")
+                try:
+                    artifact_bundle = self.agno_compiler.compile_to_artifacts(action_list)
+                except AgnoCompilerError as e:
+                    logger.warning(f"Agno compilation failed: {e}, falling back to placeholder")
+                    artifact_bundle = self._fallback_compile(action_list)
+            else:
+                logger.info("Using fallback compilation (no Agno compiler available)")
+                artifact_bundle = self._fallback_compile(action_list)
             
             # Comprehensive validation
             self._validate_artifact_bundle(artifact_bundle, action_list)
@@ -109,6 +140,30 @@ class Compiler:
         except Exception as e:
             logger.error(f"Compilation failed: {e}")
             raise CompilerError(f"Failed to compile ActionList: {e}")
+    
+    def _fallback_compile(self, action_list: ModelsActionList) -> ArtifactBundle:
+        """
+        Fallback compilation method using placeholder implementation.
+        
+        Args:
+            action_list: The list of actions to compile
+            
+        Returns:
+            ArtifactBundle containing placeholder artifacts
+            
+        Raises:
+            CompilerError: If compilation fails
+        """
+        # Generate prompt for AI agent
+        prompt = self._generate_compilation_prompt(action_list)
+        
+        # Call AI agent (placeholder implementation)
+        response = self._call_agent(prompt)
+        
+        # Parse response into ArtifactBundle
+        artifact_bundle = self._parse_agent_response(response, action_list)
+        
+        return artifact_bundle
     
     def _generate_compilation_prompt(self, action_list: ModelsActionList) -> str:
         """Generate prompt for the AI agent."""

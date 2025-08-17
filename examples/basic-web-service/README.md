@@ -41,6 +41,7 @@ You can customize the deployment by:
 ## Expected Output
 
 After running `clockwork apply`, you should have:
+
 - A running NGINX container
 - Service accessible at the configured port
 - Health checks monitoring the service

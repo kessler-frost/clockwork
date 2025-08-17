@@ -1,0 +1,41 @@
+{
+  "name": "Clockwork AI Agent Configuration",
+  "description": "Configuration template for using Clockwork with LM Studio and Agno framework",
+  "lm_studio": {
+    "url": "http://localhost:1234",
+    "model_id": "qwen/qwen3-4b-thinking-2507",
+    "timeout": 300,
+    "max_retries": 3
+  },
+  "agno": {
+    "enabled": true,
+    "structured_output": true,
+    "markdown": false,
+    "temperature": 0.1
+  },
+  "clockwork": {
+    "compiler": {
+      "use_agno": true,
+      "build_dir": ".clockwork/build",
+      "security_validation": true,
+      "allowed_runtimes": [
+        "bash", "python3", "python", "deno", "go", "node", 
+        "npm", "npx", "java", "mvn", "gradle", "dotnet", 
+        "cargo", "rustc", "env"
+      ]
+    }
+  },
+  "setup_instructions": [
+    "1. Install LM Studio from https://lmstudio.ai/",
+    "2. Download the qwen/qwen3-4b-thinking-2507 model in LM Studio",
+    "3. Start LM Studio server on port 1234",
+    "4. Install Agno: pip install agno>=1.7.11",
+    "5. Run: clockwork compile your_config.cw"
+  ],
+  "troubleshooting": {
+    "connection_failed": "Ensure LM Studio server is running on http://localhost:1234",
+    "model_not_found": "Download the qwen/qwen3-4b-thinking-2507 model in LM Studio",
+    "timeout_error": "Increase timeout value or check model performance",
+    "agno_import_error": "Install Agno framework: pip install agno>=1.7.11"
+  }
+}
