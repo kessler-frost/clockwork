@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "clockwork"
 version = "0.1.0"
@@ -20,6 +24,13 @@ dependencies = [
 
 [project.scripts]
 clockwork = "clockwork.cli:app"
+
+[tool.setuptools.packages.find]
+include = ["clockwork*"]
+exclude = ["configs*", "docs*", "tests*", "examples*"]
+
+[tool.uv]
+package = true
 
 [dependency-groups]
 dev = [
