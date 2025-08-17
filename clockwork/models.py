@@ -1,11 +1,11 @@
 """
-Centralized Pydantic models for Clockwork infrastructure tool.
+Centralized Pydantic models for Clockwork task orchestration platform.
 
 This module contains the core data models used throughout the Clockwork pipeline:
 - IR (Intermediate Representation) from intake
 - ActionList from assembly  
 - ArtifactBundle from forge
-- State management models
+- State management models for task execution
 """
 
 from typing import Dict, List, Any, Optional, Union, Literal

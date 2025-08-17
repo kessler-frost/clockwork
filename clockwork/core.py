@@ -2,9 +2,9 @@
 Clockwork Core - Main pipeline orchestration for Intake → Assembly → Forge.
 
 This module contains the ClockworkCore class that coordinates the three main phases:
-1. Intake: Parse .cw files into IR (Intermediate Representation)
+1. Intake: Parse .cw task definitions into IR (Intermediate Representation)
 2. Assembly: Convert IR into ActionList with dependencies and ordering
-3. Forge: Compile ActionList to ArtifactBundle and execute
+3. Forge: Compile ActionList to ArtifactBundle and execute tasks
 """
 
 import logging

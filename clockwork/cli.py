@@ -1,5 +1,5 @@
 """
-Clockwork CLI - Command Line Interface for infrastructure automation.
+Clockwork CLI - Command Line Interface for intelligent task execution.
 
 Provides the main entry point and command definitions for the Clockwork tool.
 Commands: plan, build, apply, verify
@@ -24,7 +24,7 @@ from .__init__ import __version__
 console = Console()
 app = typer.Typer(
     name="clockwork",
-    help="Ultra-simple, agent-assisted infrastructure tool with deterministic core",
+    help="Factory of intelligent declarative tasks",
     add_completion=False,
 )
 
@@ -48,12 +48,12 @@ def main(
     ),
 ):
     """
-    Clockwork - Ultra-simple infrastructure automation with AI assistance.
+    Clockwork - Factory of intelligent declarative tasks with AI assistance.
     
-    Clockwork follows a simple pipeline: Intake → Assembly → Forge
-    - Intake: Parse .cw files into Intermediate Representation (IR)
+    Clockwork builds intelligent declarative tasks: Intake → Assembly → Forge
+    - Intake: Parse .cw task definitions into Intermediate Representation (IR)
     - Assembly: Plan actions from IR (ActionList)  
-    - Forge: Compile and execute artifacts
+    - Forge: Compile and execute task artifacts
     """
     # Set global verbose mode
     if verbose:
@@ -166,7 +166,7 @@ def apply(
     Apply .cw configuration by building and executing artifacts.
     
     Runs the complete pipeline: Intake → Assembly → Forge (compile + execute).
-    This will make actual changes to your infrastructure.
+    This will execute your declared tasks.
     """
     console.print("[bold blue]🚀 Applying...[/bold blue]")
     
@@ -221,7 +221,7 @@ def verify(
     timeout: int = typer.Option(60, help="Verification timeout in seconds"),
 ):
     """
-    Run verification steps to check infrastructure health.
+    Run verification steps to check task completion and health.
     
     Executes only the verification actions from the plan (e.g., health checks, 
     connectivity tests) without making any changes.
@@ -344,7 +344,7 @@ def display_verification_results(results):
 def status(
     path: Path = typer.Argument(".", help="Path to .cw configuration files"),
 ):
-    """Show current status of infrastructure."""
+    """Show current status of declared tasks."""
     console.print("[bold blue]📊 Status[/bold blue]")
     
     try:
@@ -356,7 +356,7 @@ def status(
             return
         
         # Display state summary
-        table = Table(title="Infrastructure Status", show_header=True, header_style="bold green")
+        table = Table(title="Task Status", show_header=True, header_style="bold green")
         table.add_column("Resource", style="cyan")
         table.add_column("Type", style="green")
         table.add_column("Status", style="yellow")
@@ -396,7 +396,7 @@ def init(
         
         # Create main.cw example
         main_cw = project_path / "main.cw"
-        main_cw.write_text(f'''# {name} - Clockwork Infrastructure Configuration
+        main_cw.write_text(f'''# {name} - Clockwork Task Configuration
 
 variable "app_name" {{
   type        = "string"

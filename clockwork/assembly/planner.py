@@ -2,7 +2,7 @@
 Planner module for converting intermediate representation (IR) to ActionList.
 
 This module provides functionality to take validated IR and generate an ordered
-ActionList with deterministic steps for infrastructure provisioning.
+ActionList with deterministic steps for task execution.
 """
 
 from dataclasses import dataclass, field

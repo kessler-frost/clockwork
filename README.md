@@ -1,10 +1,10 @@
-# Clockwork - Infrastructure Automation Tool
+# Clockwork - Factory of Intelligent Declarative Tasks
 
-**Ultra-simple, agent-assisted infrastructure tool with deterministic core and intelligent compiler agent that emits runnable artifacts in any language.**
+**Factory of intelligent declarative tasks with deterministic core and AI-powered compiler that generates executable artifacts in any language.**
 
 ## Overview
 
-Clockwork is an infrastructure-as-code tool designed with simplicity first. It features a deterministic core pipeline (Intake → Assembly → Forge) with an optional daemon for continuous reconciliation. All artifacts are materialized to disk and user-editable, with strict boundaries where agents propose and the core validates & executes.
+Clockwork is a factory for building intelligent declarative tasks, designed with simplicity first. It features a deterministic core pipeline (Intake → Assembly → Forge) with optional daemon for continuous reconciliation. All artifacts are materialized to disk and user-editable, with strict boundaries where agents propose and the core validates & executes. Start with infrastructure tasks, expand to any domain.
 
 ### North Star Principles
 
