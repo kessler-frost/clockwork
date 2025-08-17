@@ -1,4 +1,4 @@
-# Aquila - Clockwork Infrastructure Tool
+# Clockwork - Infrastructure Automation Tool
 
 **Ultra-simple, agent-assisted infrastructure tool with deterministic core and intelligent compiler agent that emits runnable artifacts in any language.**
 
