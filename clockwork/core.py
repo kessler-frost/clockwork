@@ -837,16 +837,22 @@ class ClockworkCore:
         ir_dict = {
             "config": {},
             "services": {},
-            "repositories": {}
+            "repositories": {},
+            "files": {},
+            "verifications": {}
         }
         
         # Extract config from metadata or resources
         if ir.metadata.get("namespace"):
             ir_dict["config"]["namespace"] = ir.metadata["namespace"]
         
-        # Convert resources to services format
+        # Convert resources by type
+        logger.debug(f"Converting {len(ir.resources)} resources from IR")
         for resource_name, resource in ir.resources.items():
-            if resource.type.value == "service":  # Use .value for enum
+            resource_type = resource.type.value if hasattr(resource.type, 'value') else str(resource.type)
+            logger.debug(f"Processing resource {resource_name} of type {resource_type}")
+            
+            if resource_type == "service":
                 service_config = {
                     "name": resource.name,
                     "image": resource.config.get("image", "nginx:latest"),
@@ -877,6 +883,36 @@ class ClockworkCore:
                     service_config["depends_on"] = resource.depends_on
                 
                 ir_dict["services"][resource.name] = service_config
+                
+            elif resource_type == "file":
+                file_config = {
+                    "name": resource.name,
+                    "path": resource.config.get("path", ""),
+                    "type": resource.config.get("type", "file"),  # file, directory
+                    "mode": resource.config.get("mode", "644"),
+                }
+                
+                # Add content if specified
+                if "content" in resource.config:
+                    file_config["content"] = resource.config["content"]
+                
+                # Add dependencies if specified
+                if resource.depends_on:
+                    file_config["depends_on"] = resource.depends_on
+                
+                ir_dict["files"][resource.name] = file_config
+                
+            elif resource_type == "verification":
+                verification_config = {
+                    "name": resource.config.get("name", resource.name),
+                    "checks": resource.config.get("checks", []),
+                }
+                
+                # Add dependencies if specified
+                if resource.depends_on:
+                    verification_config["depends_on"] = resource.depends_on
+                
+                ir_dict["verifications"][resource.name] = verification_config
         
         # Convert modules to repositories if any
         for module_name, module in ir.modules.items():

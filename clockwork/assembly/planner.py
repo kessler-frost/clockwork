@@ -62,9 +62,14 @@ def convert_ir_to_actions(ir_data: Dict[str, Any]) -> ActionList:
         config = ir_data.get("config", {})
         services = ir_data.get("services", {})
         repositories = ir_data.get("repositories", {})
+        files = ir_data.get("files", {})
+        verifications = ir_data.get("verifications", {})
+        
+        logger.debug(f"Planner received: {len(services)} services, {len(files)} files, {len(verifications)} verifications")
         
         # Keep track of action ordering for dependency resolution
         action_order = []
+        dependency_map = {}
         
         # Step 1: Create namespace if specified
         if config.get("namespace"):
@@ -90,7 +95,34 @@ def convert_ir_to_actions(ir_data: Dict[str, Any]) -> ActionList:
             ))
             action_order.append(action_name)
         
-        # Step 3: Build images
+        # Step 3: Handle file operations
+        for file_name, file_config in files.items():
+            action_name = f"file_operation"
+            if len(files) > 1:
+                action_name = f"file_operation_{file_name}"
+            
+            file_args = {
+                "name": file_config.get("name", file_name),
+                "path": file_config.get("path", ""),
+                "type": file_config.get("type", "file"),  # file, directory
+                "mode": file_config.get("mode", "644")
+            }
+            
+            # Add content if specified
+            if file_config.get("content"):
+                file_args["content"] = file_config["content"]
+            
+            action_steps.append(ActionStep(
+                name=action_name,
+                args=file_args
+            ))
+            action_order.append(action_name)
+            
+            # Track dependencies
+            if file_config.get("depends_on"):
+                dependency_map[action_name] = file_config["depends_on"]
+        
+        # Step 4: Build images
         for service_name, service_config in services.items():
             if service_config.get("build"):
                 action_name = f"build_image"
@@ -117,7 +149,7 @@ def convert_ir_to_actions(ir_data: Dict[str, Any]) -> ActionList:
                 ))
                 action_order.append(action_name)
         
-        # Step 4: Ensure services are running
+        # Step 5: Ensure services are running
         for service_name, service_config in services.items():
             action_name = f"ensure_service"
             if len(services) > 1:
@@ -157,8 +189,33 @@ def convert_ir_to_actions(ir_data: Dict[str, Any]) -> ActionList:
                 args=service_args
             ))
             action_order.append(action_name)
+            
+            # Track dependencies
+            if service_config.get("depends_on"):
+                dependency_map[action_name] = service_config["depends_on"]
         
-        # Step 5: Verify HTTP endpoints
+        # Step 6: Handle verification checks
+        for verification_name, verification_config in verifications.items():
+            action_name = f"verification"
+            if len(verifications) > 1:
+                action_name = f"verification_{verification_name}"
+            
+            verification_args = {
+                "name": verification_config.get("name", verification_name),
+                "checks": verification_config.get("checks", [])
+            }
+            
+            action_steps.append(ActionStep(
+                name=action_name,
+                args=verification_args
+            ))
+            action_order.append(action_name)
+            
+            # Track dependencies
+            if verification_config.get("depends_on"):
+                dependency_map[action_name] = verification_config["depends_on"]
+        
+        # Step 7: Verify HTTP endpoints
         for service_name, service_config in services.items():
             if service_config.get("health_check"):
                 health_config = service_config["health_check"]
@@ -180,6 +237,10 @@ def convert_ir_to_actions(ir_data: Dict[str, Any]) -> ActionList:
                     args=verify_args
                 ))
                 action_order.append(action_name)
+        
+        # Apply dependency sorting to ensure proper execution order
+        if dependency_map:
+            action_steps = _resolve_dependencies(action_steps, dependency_map)
         
         # Create ActionList with proper README format
         action_list = ActionList(
@@ -348,7 +409,9 @@ def _validate_action_name_and_args(name: str, args: Dict[str, Any]) -> bool:
         "build_image": ["tags"],
         "ensure_service": ["name"],
         "verify_http": ["url"],
-        "create_namespace": ["namespace"]
+        "create_namespace": ["namespace"],
+        "file_operation": ["name", "path"],
+        "verification": ["name", "checks"]
     }
     
     # Check if the action name matches a known pattern
@@ -367,3 +430,95 @@ def _validate_action_name_and_args(name: str, args: Dict[str, Any]) -> bool:
                 # Don't fail validation for missing args, just warn
     
     return True
+
+
+def _resolve_dependencies(action_steps: List[ActionStep], dependency_map: Dict[str, List[str]]) -> List[ActionStep]:
+    """
+    Sort action steps based on their dependencies.
+    
+    Args:
+        action_steps: List of action steps to sort
+        dependency_map: Map of action names to their dependencies
+        
+    Returns:
+        Sorted list of action steps
+        
+    Raises:
+        DependencyError: If circular dependencies are detected
+    """
+    # Create a mapping from action name to ActionStep for easy lookup
+    action_by_name = {action.name: action for action in action_steps}
+    
+    # Create a simplified dependency graph using action names
+    resolved = []
+    visited = set()
+    visiting = set()
+    
+    def visit(action_name: str):
+        if action_name in visiting:
+            raise DependencyError(f"Circular dependency detected involving '{action_name}'")
+        
+        if action_name in visited:
+            return
+            
+        visiting.add(action_name)
+        
+        # Visit dependencies first
+        if action_name in dependency_map:
+            for dep in dependency_map[action_name]:
+                # Convert resource reference to action name
+                dep_action_name = _convert_resource_ref_to_action_name(dep, list(action_by_name.keys()))
+                if dep_action_name and dep_action_name in action_by_name:
+                    visit(dep_action_name)
+        
+        visiting.remove(action_name)
+        visited.add(action_name)
+        
+        # Add to resolved list if the action exists
+        if action_name in action_by_name:
+            resolved.append(action_by_name[action_name])
+    
+    # Visit all actions
+    for action in action_steps:
+        if action.name not in visited:
+            visit(action.name)
+    
+    return resolved
+
+
+def _convert_resource_ref_to_action_name(resource_ref: str, action_names: List[str]) -> Optional[str]:
+    """
+    Convert a resource reference like 'file.demo_directory' to the corresponding action name.
+    
+    Args:
+        resource_ref: Resource reference (e.g., 'file.demo_directory')
+        action_names: List of available action names
+        
+    Returns:
+        Corresponding action name or None if not found
+    """
+    if '.' not in resource_ref:
+        return resource_ref
+    
+    resource_type, resource_name = resource_ref.split('.', 1)
+    
+    # Map resource types to action prefixes
+    type_mapping = {
+        'file': 'file_operation',
+        'service': 'ensure_service',
+        'verification': 'verification'
+    }
+    
+    if resource_type in type_mapping:
+        action_prefix = type_mapping[resource_type]
+        
+        # Try exact match first
+        candidate_name = f"{action_prefix}_{resource_name}"
+        if candidate_name in action_names:
+            return candidate_name
+        
+        # Try without suffix if only one of this type
+        if action_prefix in action_names:
+            return action_prefix
+    
+    return None

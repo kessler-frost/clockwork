@@ -49,7 +49,9 @@ class IntakeError(ClockworkError):
     """Errors during the intake phase."""
     
     def __init__(self, message: str, **kwargs):
-        super().__init__(message, error_code="INTAKE_ERROR", **kwargs)
+        if 'error_code' not in kwargs:
+            kwargs['error_code'] = "INTAKE_ERROR"
+        super().__init__(message, **kwargs)
 
 
 class ParseError(IntakeError):
@@ -69,7 +71,9 @@ class ParseError(IntakeError):
             context['line_number'] = line_number
         
         kwargs['context'] = context
-        kwargs['error_code'] = "PARSE_ERROR"
+        # Don't override error_code if it's already in kwargs
+        if 'error_code' not in kwargs:
+            kwargs['error_code'] = "PARSE_ERROR"
         
         super().__init__(message, **kwargs)
 
@@ -91,7 +95,8 @@ class ValidationError(IntakeError):
             context['validation_issues'] = validation_issues
         
         kwargs['context'] = context
-        kwargs['error_code'] = "VALIDATION_ERROR"
+        if 'error_code' not in kwargs:
+            kwargs['error_code'] = "VALIDATION_ERROR"
         
         super().__init__(message, **kwargs)
 
@@ -113,7 +118,8 @@ class ResolutionError(IntakeError):
             context['provider_name'] = provider_name
         
         kwargs['context'] = context
-        kwargs['error_code'] = "RESOLUTION_ERROR"
+        if 'error_code' not in kwargs:
+            kwargs['error_code'] = "RESOLUTION_ERROR"
         
         super().__init__(message, **kwargs)
 
@@ -122,7 +128,9 @@ class AssemblyError(ClockworkError):
     """Errors during the assembly phase."""
     
     def __init__(self, message: str, **kwargs):
-        super().__init__(message, error_code="ASSEMBLY_ERROR", **kwargs)
+        if 'error_code' not in kwargs:
+            kwargs['error_code'] = "ASSEMBLY_ERROR"
+        super().__init__(message, **kwargs)
 
 
 class PlanningError(AssemblyError):
@@ -142,7 +150,8 @@ class PlanningError(AssemblyError):
             context['dependency_cycle'] = dependency_cycle
         
         kwargs['context'] = context
-        kwargs['error_code'] = "PLANNING_ERROR"
+        if 'error_code' not in kwargs:
+            kwargs['error_code'] = "PLANNING_ERROR"
         
         super().__init__(message, **kwargs)
 
@@ -151,7 +160,10 @@ class ForgeError(ClockworkError):
     """Errors during the forge phase."""
     
     def __init__(self, message: str, **kwargs):
-        super().__init__(message, error_code="FORGE_ERROR", **kwargs)
+        # Don't override error_code if it's already provided
+        if 'error_code' not in kwargs:
+            kwargs['error_code'] = "FORGE_ERROR"
+        super().__init__(message, **kwargs)
 
 
 class CompilerError(ForgeError):
@@ -171,7 +183,8 @@ class CompilerError(ForgeError):
             context['compilation_stage'] = compilation_stage
         
         kwargs['context'] = context
-        kwargs['error_code'] = "COMPILER_ERROR"
+        if 'error_code' not in kwargs:
+            kwargs['error_code'] = "COMPILER_ERROR"
         
         super().__init__(message, **kwargs)
 
@@ -196,7 +209,8 @@ class ExecutionError(ForgeError):
             context['exit_code'] = exit_code
         
         kwargs['context'] = context
-        kwargs['error_code'] = "EXECUTION_ERROR"
+        if 'error_code' not in kwargs:
+            kwargs['error_code'] = "EXECUTION_ERROR"
         
         super().__init__(message, **kwargs)
 
@@ -215,7 +229,8 @@ class SecurityValidationError(ForgeError):
             context['security_violations'] = security_violations
         
         kwargs['context'] = context
-        kwargs['error_code'] = "SECURITY_ERROR"
+        if 'error_code' not in kwargs:
+            kwargs['error_code'] = "SECURITY_ERROR"
         
         super().__init__(message, **kwargs)
 
@@ -241,7 +256,8 @@ class StateError(ClockworkError):
             context['corruption_detected'] = corruption_detected
         
         kwargs['context'] = context
-        kwargs['error_code'] = "STATE_ERROR"
+        if 'error_code' not in kwargs:
+            kwargs['error_code'] = "STATE_ERROR"
         
         super().__init__(message, **kwargs)
 
@@ -260,7 +276,8 @@ class DaemonError(ClockworkError):
             context['daemon_state'] = daemon_state
         
         kwargs['context'] = context
-        kwargs['error_code'] = "DAEMON_ERROR"
+        if 'error_code' not in kwargs:
+            kwargs['error_code'] = "DAEMON_ERROR"
         
         super().__init__(message, **kwargs)
 
@@ -282,7 +299,8 @@ class RunnerError(ClockworkError):
             context['environment_issue'] = environment_issue
         
         kwargs['context'] = context
-        kwargs['error_code'] = "RUNNER_ERROR"
+        if 'error_code' not in kwargs:
+            kwargs['error_code'] = "RUNNER_ERROR"
         
         super().__init__(message, **kwargs)
 
@@ -304,7 +322,8 @@ class ConfigurationError(ClockworkError):
             context['config_field'] = config_field
         
         kwargs['context'] = context
-        kwargs['error_code'] = "CONFIG_ERROR"
+        if 'error_code' not in kwargs:
+            kwargs['error_code'] = "CONFIG_ERROR"
         
         super().__init__(message, **kwargs)
 

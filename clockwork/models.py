@@ -49,6 +49,9 @@ class ResourceType(str, Enum):
     VOLUME = "volume"
     SECRET = "secret"
     CONFIG = "config"
+    FILE = "file"
+    VERIFICATION = "verification"
+    CUSTOM = "custom"
 
 
 class ExecutionStatus(str, Enum):
@@ -132,7 +135,9 @@ class IR(BaseModel):
 class ActionStep(BaseModel):
     """Individual step in the ActionList matching README data contract."""
     name: str
+    type: ActionType = ActionType.CUSTOM
     args: Dict[str, Any] = Field(default_factory=dict)
+    depends_on: List[str] = Field(default_factory=list)
 
 
 class Action(BaseModel):

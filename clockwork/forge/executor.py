@@ -30,6 +30,7 @@ import shutil
 
 from ..models import ArtifactBundle, Artifact, ExecutionStep
 from .runner import Runner, RunnerFactory, RunnerType, select_runner
+from ..errors import ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -475,6 +476,30 @@ class ArtifactExecutor:
         
         logger.info(f"Initialized Enhanced ArtifactExecutor with build dir: {self.build_dir}")
         logger.info(f"Using runner: {self.runner.__class__.__name__}")
+    
+    def validate_bundle(self, bundle: ArtifactBundle) -> None:
+        """
+        Validate an artifact bundle before execution.
+        
+        Args:
+            bundle: The bundle to validate
+            
+        Raises:
+            ValidationError: If validation fails
+        """
+        logger.debug(f"Validating artifact bundle with {len(bundle.artifacts)} artifacts")
+        
+        for artifact in bundle.artifacts:
+            # Validate artifact content
+            violations, warnings = self.validator.validate_artifact_content(artifact)
+            
+            if violations:
+                raise ValidationError(f"Artifact {artifact.path} validation failed: {'; '.join(violations)}")
+            
+            if warnings:
+                logger.warning(f"Artifact {artifact.path} validation warnings: {'; '.join(warnings)}")
+        
+        logger.debug("Artifact bundle validation completed successfully")
     
     def execute_bundle(self, bundle: ArtifactBundle) -> List[ExecutionResult]:
         """

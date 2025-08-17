@@ -7,6 +7,7 @@ representations (IR) for further processing.
 """
 
 import hcl2
+import logging
 from pathlib import Path
 from typing import Dict, Any, Union, List, Optional
 import json
@@ -14,6 +15,8 @@ from datetime import datetime
 
 # Import IR models
 from ..models import IR, Variable, Provider, Resource, Module, Output, ResourceType
+
+logger = logging.getLogger(__name__)
 
 
 class ParseError(Exception):
@@ -155,9 +158,11 @@ class Parser:
             raise NotADirectoryError(f"Path is not a directory: {directory_path}")
             
         cw_files = list(directory_path.glob("*.cw"))
+        logger.debug(f"Found {len(cw_files)} .cw files: {[f.name for f in cw_files]}")
         
         if not cw_files:
             # Return empty IR if no .cw files found
+            logger.warning(f"No .cw files found in {directory_path}")
             return IR(
                 version="1.0",
                 metadata={
@@ -308,6 +313,7 @@ class Parser:
             elif block_type == "resource":
                 # Handle HCL resource structure: resource "type" "name" { ... }
                 # Parsed as: {"type": {"name": {...}}}
+                logger.debug(f"Processing resource block with types: {list(block_data.keys())}")
                 for resource_type_name, resource_instances in block_data.items():
                     # Try to map to known ResourceType
                     resource_type = ResourceType.SERVICE  # default
@@ -315,6 +321,7 @@ class Parser:
                         if rt.value.lower() == resource_type_name.lower():
                             resource_type = rt
                             break
+                    logger.debug(f"Mapped resource type '{resource_type_name}' to {resource_type}")
                     
                     # Process each instance of this resource type
                     for resource_name, resource_config in resource_instances.items():

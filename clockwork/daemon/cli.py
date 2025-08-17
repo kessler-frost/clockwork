@@ -17,7 +17,6 @@ from typing import List, Optional
 
 import typer
 from rich.console import Console
-from rich.table import Table
 from rich.panel import Panel
 from rich.text import Text
 
@@ -281,7 +280,7 @@ def stop_daemon_by_pid_file(pid_file: Path, timeout: int):
 
 
 def display_daemon_status(status: dict, detailed: bool = False):
-    """Display daemon status in a formatted table."""
+    """Display daemon status in a formatted way."""
     
     # Create main status panel
     if isinstance(status, dict) and "state" in status:
@@ -299,19 +298,14 @@ def display_daemon_status(status: dict, detailed: bool = False):
         console.print(Panel(status_text))
         
         if detailed and "metrics" in status:
-            # Create metrics table
-            table = Table(title="Daemon Metrics")
-            table.add_column("Metric")
-            table.add_column("Value")
-            
+            # Display metrics in simple format
             metrics = status["metrics"]
-            table.add_row("Uptime", f"{status.get('uptime_seconds', 0)} seconds")
-            table.add_row("Drift Checks", str(metrics.get("drift_checks_performed", 0)))
-            table.add_row("Fixes Applied", str(metrics.get("fixes_applied", 0)))
-            table.add_row("Fixes Failed", str(metrics.get("fixes_failed", 0)))
-            table.add_row("Files Processed", str(metrics.get("files_processed", 0)))
-            
-            console.print(table)
+            console.print("\n[bold]Daemon Metrics:[/bold]")
+            console.print(f"  Uptime: {status.get('uptime_seconds', 0)} seconds")
+            console.print(f"  Drift Checks: {metrics.get('drift_checks_performed', 0)}")
+            console.print(f"  Fixes Applied: {metrics.get('fixes_applied', 0)}")
+            console.print(f"  Fixes Failed: {metrics.get('fixes_failed', 0)}")
+            console.print(f"  Files Processed: {metrics.get('files_processed', 0)}")
             
             # Rate limiting info
             if "rate_limiter" in status:
@@ -353,22 +347,14 @@ Drift Percentage: {drift_percentage:.1f}%
     if resources_with_drift > 0:
         immediate_attention = report.get("immediate_action_required", [])
         if immediate_attention:
-            table = Table(title="Resources Requiring Immediate Attention")
-            table.add_column("Resource")
-            table.add_column("Type") 
-            table.add_column("Severity")
-            table.add_column("Actions")
-            
-            for resource in immediate_attention[:10]:  # Limit display
+            console.print("\n[bold red]Resources Requiring Immediate Attention:[/bold red]")
+            for i, resource in enumerate(immediate_attention[:10], 1):  # Limit display
                 actions = ", ".join(resource.get("suggested_actions", [])[:2])
-                table.add_row(
-                    resource.get("resource_id", "unknown"),
-                    resource.get("resource_type", "unknown"),
-                    resource.get("severity", "unknown"),
-                    actions
-                )
-            
-            console.print(table)
+                console.print(f"  {i}. [bold]{resource.get('resource_id', 'unknown')}[/bold]")
+                console.print(f"     Type: {resource.get('resource_type', 'unknown')}")
+                console.print(f"     Severity: {resource.get('severity', 'unknown')}")
+                console.print(f"     Actions: {actions}")
+                console.print()
 
 
 def show_current_policy(config_path: Path):
@@ -382,15 +368,10 @@ def show_current_policy(config_path: Path):
         engine = PatchEngine(AutoFixPolicy.CONSERVATIVE)
         policy_summary = engine.get_policy_summary(AutoFixPolicy.CONSERVATIVE)
         
-        table = Table(title="Policy Details")
-        table.add_column("Setting")
-        table.add_column("Enabled")
-        
-        table.add_row("Auto-apply artifact patches", str(policy_summary["auto_apply_artifact_patches"]))
-        table.add_row("Auto-apply safe config patches", str(policy_summary["auto_apply_safe_config_patches"]))
-        table.add_row("Auto-apply sensitive config patches", str(policy_summary["auto_apply_sensitive_config_patches"]))
-        
-        console.print(table)
+        console.print("\n[bold]Policy Details:[/bold]")
+        console.print(f"  Auto-apply artifact patches: {policy_summary['auto_apply_artifact_patches']}")
+        console.print(f"  Auto-apply safe config patches: {policy_summary['auto_apply_safe_config_patches']}")
+        console.print(f"  Auto-apply sensitive config patches: {policy_summary['auto_apply_sensitive_config_patches']}")
     
     except Exception as e:
         console.print(f"[red]Failed to show policy: {e}[/red]")
