@@ -24,7 +24,7 @@ from .__init__ import __version__
 console = Console()
 app = typer.Typer(
     name="clockwork",
-    help="Factory of intelligent declarative tasks",
+    help="Factory for intelligent declarative tasks",
     add_completion=False,
 )
 
@@ -48,7 +48,7 @@ def main(
     ),
 ):
     """
-    Clockwork - Factory of intelligent declarative tasks with AI assistance.
+    Clockwork - Factory for intelligent declarative tasks with AI assistance.
     
     Clockwork builds intelligent declarative tasks: Intake → Assembly → Forge
     - Intake: Parse .cw task definitions into Intermediate Representation (IR)

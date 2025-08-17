@@ -1,6 +1,6 @@
-# Clockwork - Factory of Intelligent Declarative Tasks
+# Clockwork - Factory for Intelligent Declarative Tasks
 
-**Factory of intelligent declarative tasks with deterministic core and AI-powered compiler that generates executable artifacts in any language.**
+**Factory for intelligent declarative tasks with deterministic core and AI-powered compiler that generates executable artifacts in any language.**
 
 ## Overview
 

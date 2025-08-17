@@ -1,5 +1,5 @@
 """
-Clockwork - Factory of intelligent declarative tasks.
+Clockwork - Factory for intelligent declarative tasks.
 
 Clockwork provides a simple three-phase pipeline for building intelligent task automation:
 1. Intake: Parse .cw (HCL-ish) task definitions into IR (Intermediate Representation)
