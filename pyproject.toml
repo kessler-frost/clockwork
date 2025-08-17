@@ -17,3 +17,8 @@ dependencies = [
 
 [project.scripts]
 clockwork = "clockwork.cli:app"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.1",
+]

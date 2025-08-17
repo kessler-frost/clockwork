@@ -29,7 +29,7 @@ from .assembly import convert_ir_to_actions, compute_state_diff
 from .assembly.differ import detect_state_drift, generate_drift_report, calculate_state_diff_score
 from .forge import Compiler, ArtifactExecutor, StateManager
 from .forge.runner import RunnerFactory, select_runner
-from .daemon import ClockworkDaemon, DaemonConfig
+# Daemon imports moved to avoid circular imports - imported dynamically when needed
 
 
 logger = logging.getLogger(__name__)
@@ -249,9 +249,10 @@ class ClockworkCore:
             # Load current state for diffing
             current_state = self.state_manager.load_state()
             
-            # Convert IR to actions
+            # Convert IR to actions (convert Pydantic model to dict format expected by planner)
             logger.debug("Converting IR to actions...")
-            action_list = convert_ir_to_actions(ir)
+            ir_dict = self._convert_ir_to_planner_format(ir)
+            action_list = convert_ir_to_actions(ir_dict)
             
             # Compute state differences if we have current state
             if current_state and current_state.current_resources:
@@ -828,6 +829,66 @@ class ClockworkCore:
             logger.warning(f"Failed to update state: {e}")
 
     # =========================================================================
+    # Helper Methods
+    # =========================================================================
+    
+    def _convert_ir_to_planner_format(self, ir: IR) -> Dict[str, Any]:
+        """Convert IR Pydantic model to dictionary format expected by planner."""
+        ir_dict = {
+            "config": {},
+            "services": {},
+            "repositories": {}
+        }
+        
+        # Extract config from metadata or resources
+        if ir.metadata.get("namespace"):
+            ir_dict["config"]["namespace"] = ir.metadata["namespace"]
+        
+        # Convert resources to services format
+        for resource_name, resource in ir.resources.items():
+            if resource.type.value == "service":  # Use .value for enum
+                service_config = {
+                    "name": resource.name,
+                    "image": resource.config.get("image", "nginx:latest"),
+                }
+                
+                # Add ports if specified
+                if "ports" in resource.config:
+                    service_config["ports"] = resource.config["ports"]
+                elif "port" in resource.config:
+                    # Convert single port to ports array
+                    service_config["ports"] = [{"external": resource.config["port"], "internal": 80}]
+                
+                # Add environment variables
+                if "environment" in resource.config:
+                    service_config["environment"] = resource.config["environment"]
+                
+                # Add health check if specified (handle both dict and list[dict] from HCL parsing)
+                if "health_check" in resource.config:
+                    health_check = resource.config["health_check"]
+                    if isinstance(health_check, list) and len(health_check) > 0:
+                        # HCL parser returns list, take first item
+                        service_config["health_check"] = health_check[0]
+                    else:
+                        service_config["health_check"] = health_check
+                
+                # Add dependencies if specified
+                if resource.depends_on:
+                    service_config["depends_on"] = resource.depends_on
+                
+                ir_dict["services"][resource.name] = service_config
+        
+        # Convert modules to repositories if any
+        for module_name, module in ir.modules.items():
+            if module.source.startswith(("http", "git")):
+                ir_dict["repositories"][module_name] = {
+                    "url": module.source,
+                    "branch": module.inputs.get("branch", "main")
+                }
+        
+        return ir_dict
+
+    # =========================================================================
     # Utility Methods
     # =========================================================================
 
@@ -835,7 +896,7 @@ class ClockworkCore:
     # Daemon Integration
     # =========================================================================
     
-    def start_daemon(self, daemon_config: Optional[DaemonConfig] = None, config_path: Optional[Path] = None) -> ClockworkDaemon:
+    def start_daemon(self, daemon_config = None, config_path: Optional[Path] = None):
         """
         Start the Clockwork daemon for continuous monitoring and drift detection.
         
@@ -850,7 +911,10 @@ class ClockworkCore:
             DaemonError: If daemon fails to start
         """
         try:
-            if self.daemon and self.daemon.is_running():
+            # Import daemon dynamically to avoid circular imports
+            from .daemon import ClockworkDaemon, DaemonConfig
+            
+            if hasattr(self, 'daemon') and self.daemon and self.daemon.is_running():
                 logger.warning("Daemon is already running")
                 return self.daemon
             
@@ -858,6 +922,7 @@ class ClockworkCore:
             
             # Validate watch path exists
             if not watch_path.exists():
+                from .errors import DaemonError
                 raise DaemonError(
                     f"Watch path does not exist: {watch_path}",
                     context=create_error_context(
