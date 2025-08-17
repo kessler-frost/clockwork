@@ -7,136 +7,32 @@ declarative action lists into executable artifacts in various languages.
 
 import json
 import logging
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+import os
+import re
+import stat
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
+from ..models import ActionStep, ActionList as ModelsActionList, ArtifactBundle, Artifact, ExecutionStep
 
 logger = logging.getLogger(__name__)
 
+# Allowlisted runtimes for security validation
+ALLOWED_RUNTIMES = {
+    "bash", "python3", "python", "deno", "go", "node", "npm", "npx", 
+    "java", "mvn", "gradle", "dotnet", "cargo", "rustc", "env"
+}
 
-class LanguageType(Enum):
-    """Supported artifact languages."""
-    PYTHON = "python"
-    BASH = "bash"
-    JAVASCRIPT = "javascript"
-    TYPESCRIPT = "typescript"
-    GO = "go"
-    RUST = "rust"
-
-
-class ActionType(Enum):
-    """Types of actions that can be compiled."""
-    FILE_OPERATION = "file_operation"
-    NETWORK_REQUEST = "network_request"
-    SYSTEM_COMMAND = "system_command"
-    DATA_PROCESSING = "data_processing"
-    API_CALL = "api_call"
-    CUSTOM = "custom"
+# Allowed build directory patterns
+ALLOWED_BUILD_PATHS = [
+    ".clockwork/build",
+    "scripts",
+    "artifacts"
+]
 
 
-@dataclass
-class Action:
-    """Represents a single action to be performed."""
-    action_type: ActionType
-    description: str
-    parameters: Dict[str, Any] = field(default_factory=dict)
-    dependencies: List[str] = field(default_factory=list)
-    timeout: Optional[int] = None
-    retry_count: int = 0
-    
-    def validate(self) -> None:
-        """Validate the action configuration."""
-        if not self.description.strip():
-            raise ValueError("Action description cannot be empty")
-        
-        if self.timeout is not None and self.timeout <= 0:
-            raise ValueError("Timeout must be positive")
-            
-        if self.retry_count < 0:
-            raise ValueError("Retry count must be non-negative")
-
-
-@dataclass
-class ActionList:
-    """Collection of actions to be compiled into artifacts."""
-    name: str
-    description: str
-    actions: List[Action]
-    target_language: LanguageType
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    
-    def validate(self) -> None:
-        """Validate the entire action list."""
-        if not self.name.strip():
-            raise ValueError("ActionList name cannot be empty")
-            
-        if not self.actions:
-            raise ValueError("ActionList must contain at least one action")
-            
-        # Validate each action
-        for i, action in enumerate(self.actions):
-            try:
-                action.validate()
-            except ValueError as e:
-                raise ValueError(f"Action {i}: {e}")
-                
-        # Validate dependencies
-        action_names = {f"action_{i}" for i in range(len(self.actions))}
-        for i, action in enumerate(self.actions):
-            for dep in action.dependencies:
-                if dep not in action_names:
-                    raise ValueError(f"Action {i} has invalid dependency: {dep}")
-
-
-@dataclass
-class Artifact:
-    """Represents a single executable artifact."""
-    name: str
-    language: LanguageType
-    code: str
-    entry_point: str
-    dependencies: List[str] = field(default_factory=list)
-    environment_vars: Dict[str, str] = field(default_factory=dict)
-    
-    def validate(self) -> None:
-        """Validate the artifact."""
-        if not self.name.strip():
-            raise ValueError("Artifact name cannot be empty")
-            
-        if not self.code.strip():
-            raise ValueError("Artifact code cannot be empty")
-            
-        if not self.entry_point.strip():
-            raise ValueError("Artifact entry point cannot be empty")
-
-
-@dataclass
-class ArtifactBundle:
-    """Bundle of artifacts generated from an ActionList."""
-    name: str
-    description: str
-    artifacts: List[Artifact]
-    execution_order: List[str]
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    
-    def validate(self) -> None:
-        """Validate the artifact bundle."""
-        if not self.name.strip():
-            raise ValueError("ArtifactBundle name cannot be empty")
-            
-        if not self.artifacts:
-            raise ValueError("ArtifactBundle must contain at least one artifact")
-            
-        # Validate each artifact
-        artifact_names = {artifact.name for artifact in self.artifacts}
-        for artifact in self.artifacts:
-            artifact.validate()
-            
-        # Validate execution order
-        for name in self.execution_order:
-            if name not in artifact_names:
-                raise ValueError(f"Execution order references unknown artifact: {name}")
+class SecurityValidationError(Exception):
+    """Exception raised when security validation fails."""
+    pass
 
 
 class CompilerError(Exception):
@@ -149,7 +45,8 @@ class Compiler:
     Compiler interface for converting ActionList to ArtifactBundle using AI agents.
     
     This class provides the interface for calling AI agents to transform
-    declarative action lists into executable artifacts.
+    declarative action lists into executable artifacts with comprehensive
+    security validation and runtime allowlisting.
     """
     
     def __init__(
@@ -157,7 +54,8 @@ class Compiler:
         agent_endpoint: Optional[str] = None,
         api_key: Optional[str] = None,
         model_name: str = "gpt-4",
-        timeout: int = 300
+        timeout: int = 300,
+        build_dir: str = ".clockwork/build"
     ):
         """
         Initialize the compiler.
@@ -167,15 +65,17 @@ class Compiler:
             api_key: API key for authentication
             model_name: Name of the AI model to use
             timeout: Request timeout in seconds
+            build_dir: Base directory for artifact output
         """
-        self.agent_endpoint = agent_endpoint or "https://api.openai.com/v1/chat/completions"
+        self.agent_endpoint = agent_endpoint
         self.api_key = api_key
         self.model_name = model_name
         self.timeout = timeout
+        self.build_dir = Path(build_dir)
         
-        logger.info(f"Initialized compiler with model: {model_name}")
+        logger.info(f"Initialized compiler with model: {model_name}, build_dir: {build_dir}")
     
-    def compile(self, action_list: ActionList) -> ArtifactBundle:
+    def compile(self, action_list: ModelsActionList) -> ArtifactBundle:
         """
         Compile an ActionList into an ArtifactBundle.
         
@@ -189,9 +89,7 @@ class Compiler:
             CompilerError: If compilation fails
         """
         try:
-            # Validate input
-            action_list.validate()
-            logger.info(f"Compiling ActionList: {action_list.name}")
+            logger.info(f"Compiling ActionList with {len(action_list.steps)} steps")
             
             # Generate prompt for AI agent
             prompt = self._generate_compilation_prompt(action_list)
@@ -202,8 +100,8 @@ class Compiler:
             # Parse response into ArtifactBundle
             artifact_bundle = self._parse_agent_response(response, action_list)
             
-            # Validate output
-            artifact_bundle.validate()
+            # Comprehensive validation
+            self._validate_artifact_bundle(artifact_bundle, action_list)
             
             logger.info(f"Successfully compiled {len(artifact_bundle.artifacts)} artifacts")
             return artifact_bundle
@@ -212,55 +110,58 @@ class Compiler:
             logger.error(f"Compilation failed: {e}")
             raise CompilerError(f"Failed to compile ActionList: {e}")
     
-    def _generate_compilation_prompt(self, action_list: ActionList) -> str:
+    def _generate_compilation_prompt(self, action_list: ModelsActionList) -> str:
         """Generate prompt for the AI agent."""
         prompt = f"""
-You are an expert software engineer tasked with converting a declarative action list 
-into executable code in {action_list.target_language.value}.
+You are an expert software engineer tasked with converting a declarative ActionList 
+into an ArtifactBundle with executable scripts in various languages.
 
 ActionList Details:
-Name: {action_list.name}
-Description: {action_list.description}
-Target Language: {action_list.target_language.value}
+Version: {action_list.version}
+Metadata: {json.dumps(action_list.metadata, indent=2)}
 
-Actions:
+Steps to implement:
 """
         
-        for i, action in enumerate(action_list.actions):
+        for i, step in enumerate(action_list.steps):
             prompt += f"""
-Action {i}:
-  Type: {action.action_type.value}
-  Description: {action.description}
-  Parameters: {json.dumps(action.parameters, indent=2)}
-  Dependencies: {action.dependencies}
-  Timeout: {action.timeout}
-  Retry Count: {action.retry_count}
+Step {i + 1}:
+  Name: {step.name}
+  Arguments: {json.dumps(step.args, indent=2)}
 """
         
         prompt += f"""
 
 Requirements:
-1. Generate clean, production-ready code in {action_list.target_language.value}
-2. Include proper error handling and logging
-3. Respect action dependencies and execution order
-4. Include necessary imports and dependencies
-5. Add appropriate comments and documentation
-6. Ensure code is secure and follows best practices
+1. Generate production-ready executable scripts
+2. Use appropriate languages: bash, python3, deno, go, etc.
+3. Include proper error handling and logging
+4. Respect step dependencies and ordering
+5. Ensure all paths are under .clockwork/build/ or scripts/
+6. Use only allowlisted runtimes: {', '.join(sorted(ALLOWED_RUNTIMES))}
+7. Add appropriate file permissions (0755 for executables, 0644 for data)
 
-Please respond with a JSON object containing:
+Respond with a JSON object exactly matching this ArtifactBundle format:
 {{
+  "version": "1",
   "artifacts": [
     {{
-      "name": "artifact_name",
-      "language": "{action_list.target_language.value}",
-      "code": "generated_code_here",
-      "entry_point": "main_function_or_file",
-      "dependencies": ["list", "of", "dependencies"],
-      "environment_vars": {{"ENV_VAR": "value"}}
+      "path": "scripts/01_step_name.sh",
+      "mode": "0755",
+      "purpose": "step_name",
+      "lang": "bash",
+      "content": "#!/bin/bash\\n# Script content here"
     }}
   ],
-  "execution_order": ["artifact1", "artifact2"],
-  "metadata": {{"compilation_info": "additional_details"}}
+  "steps": [
+    {{
+      "purpose": "step_name",
+      "run": {{"cmd": ["bash", "scripts/01_step_name.sh"]}}
+    }}
+  ],
+  "vars": {{
+    "KEY": "value"
+  }}
 }}
 """
         return prompt
@@ -278,29 +179,43 @@ Please respond with a JSON object containing:
         Raises:
             CompilerError: If the agent call fails
         """
-        # This is a placeholder implementation
-        # In a real implementation, this would make an HTTP request to the AI agent
-        logger.info("Calling AI agent for compilation")
+        # TODO: Replace with actual AI agent implementation
+        # This is a placeholder that should be replaced with real API calls
+        # to OpenAI, Claude, or other LLM services
         
-        # Mock response for demonstration
-        mock_response = {
-            "artifacts": [
-                {
-                    "name": "main_artifact",
-                    "language": "python",
-                    "code": "# Generated Python code\nprint('Hello, World!')",
-                    "entry_point": "main",
-                    "dependencies": ["requests"],
-                    "environment_vars": {}
-                }
-            ],
-            "execution_order": ["main_artifact"],
-            "metadata": {"compilation_timestamp": "2024-01-01T00:00:00Z"}
-        }
+        logger.warning("Using placeholder AI agent - replace with real implementation")
+        logger.debug(f"Agent prompt: {prompt[:200]}...")
         
-        return json.dumps(mock_response)
+        if not self.agent_endpoint:
+            raise CompilerError("No agent endpoint configured. Set agent_endpoint to use real AI agent.")
+        
+        if not self.api_key:
+            raise CompilerError("No API key configured. Set api_key to authenticate with AI agent.")
+        
+        # Placeholder implementation - would make HTTP request in real version
+        try:
+            # This would be replaced with actual HTTP client code:
+            # import httpx
+            # response = httpx.post(
+            #     self.agent_endpoint,
+            #     headers={"Authorization": f"Bearer {self.api_key}"},
+            #     json={
+            #         "model": self.model_name,
+            #         "messages": [{"role": "user", "content": prompt}],
+            #         "temperature": 0.1
+            #     },
+            #     timeout=self.timeout
+            # )
+            # return response.json()["choices"][0]["message"]["content"]
+            
+            logger.info("AI agent integration point - implement actual API call here")
+            raise CompilerError("Real AI agent integration not implemented yet. Please implement _call_agent method.")
+            
+        except Exception as e:
+            logger.error(f"AI agent call failed: {e}")
+            raise CompilerError(f"Failed to call AI agent: {e}")
     
-    def _parse_agent_response(self, response: str, action_list: ActionList) -> ArtifactBundle:
+    def _parse_agent_response(self, response: str, action_list: ModelsActionList) -> ArtifactBundle:
         """
         Parse the agent's response into an ArtifactBundle.
         
@@ -317,73 +232,228 @@ Please respond with a JSON object containing:
         try:
             data = json.loads(response)
             
-            # Parse artifacts
-            artifacts = []
-            for artifact_data in data.get("artifacts", []):
-                artifact = Artifact(
-                    name=artifact_data["name"],
-                    language=LanguageType(artifact_data["language"]),
-                    code=artifact_data["code"],
-                    entry_point=artifact_data["entry_point"],
-                    dependencies=artifact_data.get("dependencies", []),
-                    environment_vars=artifact_data.get("environment_vars", {})
-                )
-                artifacts.append(artifact)
+            # Validate response structure
+            required_fields = ["version", "artifacts", "steps", "vars"]
+            for field in required_fields:
+                if field not in data:
+                    raise CompilerError(f"Agent response missing required field: {field}")
             
-            # Create bundle
+            # Parse artifacts using the new models
+            artifacts = []
+            for artifact_data in data["artifacts"]:
+                try:
+                    artifact = Artifact(**artifact_data)
+                    artifacts.append(artifact)
+                except Exception as e:
+                    raise CompilerError(f"Invalid artifact in response: {e}")
+            
+            # Parse execution steps
+            steps = []
+            for step_data in data["steps"]:
+                try:
+                    step = ExecutionStep(**step_data)
+                    steps.append(step)
+                except Exception as e:
+                    raise CompilerError(f"Invalid execution step in response: {e}")
+            
+            # Create bundle using the updated model
             bundle = ArtifactBundle(
-                name=f"{action_list.name}_bundle",
-                description=f"Compiled artifacts for {action_list.name}",
+                version=data["version"],
                 artifacts=artifacts,
-                execution_order=data.get("execution_order", []),
-                metadata=data.get("metadata", {})
+                steps=steps,
+                vars=data["vars"]
             )
             
             return bundle
             
-        except (json.JSONDecodeError, KeyError, ValueError) as e:
+        except json.JSONDecodeError as e:
+            raise CompilerError(f"Agent response is not valid JSON: {e}")
+        except Exception as e:
             raise CompilerError(f"Failed to parse agent response: {e}")
     
-    def save_bundle(self, bundle: ArtifactBundle, output_dir: Path) -> None:
+    def save_bundle(self, bundle: ArtifactBundle, output_dir: Optional[Path] = None) -> None:
         """
         Save an ArtifactBundle to disk.
         
         Args:
             bundle: The bundle to save
-            output_dir: Directory to save artifacts
+            output_dir: Directory to save artifacts (defaults to build_dir)
         """
+        if output_dir is None:
+            output_dir = self.build_dir
+            
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
         
         # Save bundle metadata
-        bundle_info = {
-            "name": bundle.name,
-            "description": bundle.description,
-            "execution_order": bundle.execution_order,
-            "metadata": bundle.metadata
-        }
+        bundle_file = output_dir / "artifact_bundle.json"
+        with open(bundle_file, "w") as f:
+            f.write(bundle.to_json())
         
-        with open(output_dir / "bundle.json", "w") as f:
-            json.dump(bundle_info, f, indent=2)
-        
-        # Save each artifact
+        # Save each artifact with proper path structure
         for artifact in bundle.artifacts:
-            file_ext = self._get_file_extension(artifact.language)
-            artifact_file = output_dir / f"{artifact.name}{file_ext}"
+            artifact_path = output_dir / artifact.path
+            artifact_path.parent.mkdir(parents=True, exist_ok=True)
             
-            with open(artifact_file, "w") as f:
-                f.write(artifact.code)
+            # Write artifact content
+            with open(artifact_path, "w") as f:
+                f.write(artifact.content)
+            
+            # Set file permissions
+            try:
+                mode = int(artifact.mode, 8)  # Convert octal string to int
+                os.chmod(artifact_path, mode)
+            except (ValueError, OSError) as e:
+                logger.warning(f"Failed to set permissions {artifact.mode} on {artifact_path}: {e}")
         
-        logger.info(f"Saved bundle to {output_dir}")
+        logger.info(f"Saved bundle with {len(bundle.artifacts)} artifacts to {output_dir}")
     
-    def _get_file_extension(self, language: LanguageType) -> str:
-        """Get file extension for a given language."""
-        extensions = {
-            LanguageType.PYTHON: ".py",
-            LanguageType.BASH: ".sh",
-            LanguageType.JAVASCRIPT: ".js",
-            LanguageType.TYPESCRIPT: ".ts",
-            LanguageType.GO: ".go",
-            LanguageType.RUST: ".rs"
-        }
-        return extensions.get(language, ".txt")
+    def _validate_artifact_bundle(self, bundle: ArtifactBundle, action_list: ModelsActionList) -> None:
+        """
+        Comprehensive validation of the ArtifactBundle.
+        
+        Args:
+            bundle: The bundle to validate
+            action_list: Original action list for reference
+            
+        Raises:
+            SecurityValidationError: If validation fails
+        """
+        logger.info("Validating artifact bundle security and compliance")
+        
+        # Validate bundle structure using Pydantic validation
+        try:
+            bundle.model_validate(bundle.model_dump())
+        except Exception as e:
+            raise SecurityValidationError(f"Bundle structure validation failed: {e}")
+        
+        # Validate artifact paths are confined to allowed directories
+        for artifact in bundle.artifacts:
+            self._validate_artifact_path(artifact.path)
+            self._validate_artifact_content(artifact)
+        
+        # Validate execution steps
+        for step in bundle.steps:
+            self._validate_execution_step(step)
+        
+        # Validate that all action steps have corresponding artifacts/steps
+        self._validate_step_completeness(bundle, action_list)
+        
+        logger.info("Bundle validation completed successfully")
+    
+    def _validate_artifact_path(self, path: str) -> None:
+        """
+        Validate that artifact path is within allowed directories.
+        
+        Args:
+            path: The artifact path to validate
+            
+        Raises:
+            SecurityValidationError: If path is invalid
+        """
+        # Check if path starts with any allowed pattern (don't resolve to avoid filesystem access)
+        allowed = any(path.startswith(allowed_path) for allowed_path in ALLOWED_BUILD_PATHS)
+        
+        if not allowed:
+            raise SecurityValidationError(
+                f"Artifact path '{path}' is not within allowed directories: {ALLOWED_BUILD_PATHS}"
+            )
+        
+        # Additional security checks
+        if ".." in path:
+            raise SecurityValidationError(f"Artifact path '{path}' contains directory traversal")
+        
+        if path.startswith("/"):
+            raise SecurityValidationError(f"Artifact path '{path}' is absolute (must be relative)")
+    
+    def _validate_artifact_content(self, artifact: Artifact) -> None:
+        """
+        Validate artifact content for security issues.
+        
+        Args:
+            artifact: The artifact to validate
+            
+        Raises:
+            SecurityValidationError: If content is unsafe
+        """
+        # Validate file permissions
+        try:
+            mode = int(artifact.mode, 8)
+            if mode > 0o777:
+                raise SecurityValidationError(f"Invalid file mode: {artifact.mode}")
+        except ValueError:
+            raise SecurityValidationError(f"Invalid file mode format: {artifact.mode}")
+        
+        # Validate shebang lines if executable
+        if artifact.mode.endswith(("5", "7")):  # executable permissions
+            lines = artifact.content.split("\n")
+            if lines and lines[0].startswith("#!"):
+                shebang = lines[0][2:].strip()
+                runtime = shebang.split()[0] if shebang.split() else ""
+                runtime_name = Path(runtime).name
+                
+                if runtime_name not in ALLOWED_RUNTIMES:
+                    raise SecurityValidationError(
+                        f"Shebang runtime '{runtime_name}' not in allowed list: {sorted(ALLOWED_RUNTIMES)}"
+                    )
+        
+        # Basic content security checks
+        dangerous_patterns = [
+            r"rm\s+-rf\s+/",  # Dangerous deletions
+            r"dd\s+if=/dev/zero",  # Disk wiping
+            r":\(\)\{\s*:\|:\s*&\s*\}\s*;",  # Fork bombs
+            r"sudo\s+chmod\s+777",  # Dangerous permissions
+        ]
+        
+        for pattern in dangerous_patterns:
+            if re.search(pattern, artifact.content, re.IGNORECASE):
+                raise SecurityValidationError(
+                    f"Artifact '{artifact.path}' contains potentially dangerous pattern: {pattern}"
+                )
+    
+    def _validate_execution_step(self, step: ExecutionStep) -> None:
+        """
+        Validate execution step for allowed runtimes.
+        
+        Args:
+            step: The execution step to validate
+            
+        Raises:
+            SecurityValidationError: If step uses disallowed runtime
+        """
+        if "cmd" not in step.run:
+            raise SecurityValidationError(f"Execution step '{step.purpose}' missing 'cmd' field")
+        
+        cmd = step.run["cmd"]
+        if not isinstance(cmd, list) or not cmd:
+            raise SecurityValidationError(f"Execution step '{step.purpose}' cmd must be non-empty list")
+        
+        runtime = cmd[0]
+        if runtime not in ALLOWED_RUNTIMES:
+            raise SecurityValidationError(
+                f"Runtime '{runtime}' in step '{step.purpose}' not allowed. Allowed: {sorted(ALLOWED_RUNTIMES)}"
+            )
+    
+    def _validate_step_completeness(self, bundle: ArtifactBundle, action_list: ModelsActionList) -> None:
+        """
+        Validate that all ActionList steps are covered by the bundle.
+        
+        Args:
+            bundle: The artifact bundle
+            action_list: The original action list
+            
+        Raises:
+            SecurityValidationError: If steps are missing
+        """
+        action_step_names = {step.name for step in action_list.steps}
+        bundle_step_purposes = {step.purpose for step in bundle.steps}
+        
+        missing_steps = action_step_names - bundle_step_purposes
+        if missing_steps:
+            raise SecurityValidationError(
+                f"ActionList steps not covered by bundle: {sorted(missing_steps)}"
+            )
+        
+        extra_steps = bundle_step_purposes - action_step_names
+        if extra_steps:
+            logger.warning(f"Bundle contains extra steps not in ActionList: {sorted(extra_steps)}")

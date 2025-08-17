@@ -19,12 +19,12 @@ from .models import (
     IR, ActionList, ArtifactBundle, ClockworkState, ClockworkConfig,
     ActionType, ResourceType, ExecutionStatus
 )
-from . import intake, assembly, forge
+from . import intake, assembly, forge, daemon
 
 __version__ = "0.1.0"
 __all__ = [
     "ClockworkCore",
     "IR", "ActionList", "ArtifactBundle", "ClockworkState", "ClockworkConfig",
     "ActionType", "ResourceType", "ExecutionStatus",
-    "intake", "assembly", "forge"
+    "intake", "assembly", "forge", "daemon"
 ]

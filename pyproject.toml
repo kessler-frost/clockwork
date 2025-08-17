@@ -9,6 +9,10 @@ dependencies = [
     "typer>=0.16.0",
     "pydantic>=2.0.0",
     "rich>=13.0.0",
+    "psutil>=7.0.0",
+    "watchdog>=6.0.0",
+    "paramiko>=4.0.0",
+    "networkx>=3.5",
 ]
 
 [project.scripts]

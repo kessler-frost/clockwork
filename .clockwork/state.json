@@ -1,0 +1,20 @@
+{
+  "clockwork_state": {
+    "version": "1.0",
+    "last_applied_ir": null,
+    "current_resources": {},
+    "execution_history": [],
+    "created_at": "2025-08-17 11:35:04.272742",
+    "updated_at": "2025-08-17 11:35:04.272748"
+  },
+  "resources": {},
+  "execution_history": {
+    "entries": []
+  },
+  "metadata": {
+    "created_at": 1755444904.2727292,
+    "version": "2.0",
+    "last_backup": null,
+    "schema_version": "2.0"
+  }
+}

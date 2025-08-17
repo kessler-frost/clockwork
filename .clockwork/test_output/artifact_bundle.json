@@ -1,0 +1,53 @@
+{
+  "version": "1",
+  "artifacts": [
+    {
+      "path": "scripts/01_fetch_repo.sh",
+      "mode": "0755",
+      "purpose": "fetch_repo",
+      "lang": "bash",
+      "content": "#!/bin/bash\nset -e\necho 'Fetching repository...'\ngit clone $REPO_URL .\necho 'Repository fetched successfully'\n",
+      "checksum": null
+    },
+    {
+      "path": "scripts/02_build_image.py",
+      "mode": "0755",
+      "purpose": "build_image",
+      "lang": "python",
+      "content": "#!/usr/bin/env python3\nimport subprocess\nimport sys\n\ndef main():\n    print('Building Docker image...')\n    result = subprocess.run(['docker', 'build', '-t', 'myapp:latest', '.'])\n    sys.exit(result.returncode)\n\nif __name__ == '__main__':\n    main()\n",
+      "checksum": null
+    },
+    {
+      "path": "artifacts/metadata.json",
+      "mode": "0644",
+      "purpose": "metadata",
+      "lang": "json",
+      "content": "{\"build_time\": \"2025-08-17\", \"version\": \"1.0.0\"}",
+      "checksum": null
+    }
+  ],
+  "steps": [
+    {
+      "purpose": "fetch_repo",
+      "run": {
+        "cmd": [
+          "bash",
+          "scripts/01_fetch_repo.sh"
+        ]
+      }
+    },
+    {
+      "purpose": "build_image",
+      "run": {
+        "cmd": [
+          "python3",
+          "scripts/02_build_image.py"
+        ]
+      }
+    }
+  ],
+  "vars": {
+    "REPO_URL": "https://github.com/user/myapp",
+    "TAG": "myapp:latest"
+  }
+}

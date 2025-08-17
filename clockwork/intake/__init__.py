@@ -8,10 +8,24 @@ and validates them according to Clockwork's schema requirements.
 
 from .parser import Parser, ParseError
 from .validator import Validator, ValidationError
+from .resolver import (
+    Resolver, ModuleResolver, ProviderResolver, CacheManager,
+    ResolutionError, ResolutionResult, resolve_references,
+    VersionManager, VersionConstraint
+)
 
 __all__ = [
     "Parser",
     "ParseError", 
     "Validator",
-    "ValidationError"
+    "ValidationError",
+    "Resolver",
+    "ModuleResolver",
+    "ProviderResolver", 
+    "CacheManager",
+    "ResolutionError",
+    "ResolutionResult",
+    "resolve_references",
+    "VersionManager",
+    "VersionConstraint"
 ]

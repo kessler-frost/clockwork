@@ -6,13 +6,11 @@ representation (IR) to action lists and computing state differences.
 """
 
 from .planner import (
-    ActionList,
-    Action,
-    ActionType,
     convert_ir_to_actions,
     validate_action_list,
     optimize_action_list,
 )
+from ..models import Action, ActionList, ActionType
 
 from .differ import (
     StateDiff,

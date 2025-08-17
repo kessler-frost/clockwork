@@ -6,104 +6,17 @@ ActionList with deterministic steps for task execution.
 """
 
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Union
 import logging
+from ..models import ActionStep, ActionList, ActionType
 
 
 logger = logging.getLogger(__name__)
 
 
-class ActionType(Enum):
-    """Enumeration of supported action types in the clockwork system."""
-    
-    FETCH_REPO = "fetch_repo"
-    BUILD_IMAGE = "build_image"
-    ENSURE_SERVICE = "ensure_service" 
-    VERIFY_HTTP = "verify_http"
-    CREATE_NAMESPACE = "create_namespace"
-    APPLY_CONFIG = "apply_config"
-    WAIT_FOR_READY = "wait_for_ready"
-    CLEANUP = "cleanup"
 
 
-@dataclass
-class Action:
-    """
-    Represents a single action in the execution pipeline.
-    
-    Attributes:
-        action_type: The type of action to perform
-        name: Unique identifier for this action
-        parameters: Parameters required for the action
-        dependencies: List of action names this action depends on
-        retry_count: Number of times to retry on failure
-        timeout_seconds: Timeout for the action in seconds
-    """
-    
-    action_type: ActionType
-    name: str
-    parameters: Dict[str, Any]
-    dependencies: List[str] = field(default_factory=list)
-    retry_count: int = 3
-    timeout_seconds: int = 300
-    
-    def __post_init__(self):
-        """Validate action parameters after initialization."""
-        if not self.name:
-            raise ValueError("Action name cannot be empty")
-        
-        if not isinstance(self.parameters, dict):
-            raise ValueError("Action parameters must be a dictionary")
-        
-        # Validate dependencies are strings
-        if not all(isinstance(dep, str) for dep in self.dependencies):
-            raise ValueError("All dependencies must be strings")
 
-
-@dataclass
-class ActionList:
-    """
-    Represents an ordered list of actions to execute.
-    
-    Attributes:
-        actions: List of actions to execute
-        metadata: Additional metadata about the action list
-    """
-    
-    actions: List[Action]
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    
-    def __post_init__(self):
-        """Validate the action list after initialization."""
-        if not isinstance(self.actions, list):
-            raise ValueError("Actions must be a list")
-        
-        # Validate all items are Action instances
-        for i, action in enumerate(self.actions):
-            if not isinstance(action, Action):
-                raise ValueError(f"Item at index {i} is not an Action instance")
-    
-    def get_action_names(self) -> Set[str]:
-        """Get set of all action names in this list."""
-        return {action.name for action in self.actions}
-    
-    def validate_dependencies(self) -> bool:
-        """
-        Validate that all dependencies reference existing actions.
-        
-        Returns:
-            True if all dependencies are valid, False otherwise
-        """
-        action_names = self.get_action_names()
-        
-        for action in self.actions:
-            for dep in action.dependencies:
-                if dep not in action_names:
-                    logger.error(f"Action '{action.name}' depends on non-existent action '{dep}'")
-                    return False
-        
-        return True
 
 
 class PlannerError(Exception):
@@ -143,142 +56,147 @@ def convert_ir_to_actions(ir_data: Dict[str, Any]) -> ActionList:
             raise InvalidIRError("IR data must be a dictionary")
         
         logger.info("Converting IR to actions")
-        actions = []
+        action_steps = []
         
         # Extract basic configuration
         config = ir_data.get("config", {})
         services = ir_data.get("services", {})
         repositories = ir_data.get("repositories", {})
         
+        # Keep track of action ordering for dependency resolution
+        action_order = []
+        
         # Step 1: Create namespace if specified
         if config.get("namespace"):
-            actions.append(Action(
-                action_type=ActionType.CREATE_NAMESPACE,
+            action_steps.append(ActionStep(
                 name="create_namespace",
-                parameters={"namespace": config["namespace"]},
-                dependencies=[],
-                retry_count=1,
-                timeout_seconds=60
+                args={"namespace": config["namespace"]}
             ))
+            action_order.append("create_namespace")
         
         # Step 2: Fetch repositories
-        repo_actions = []
         for repo_name, repo_config in repositories.items():
-            action_name = f"fetch_repo_{repo_name}"
-            repo_actions.append(action_name)
+            action_name = f"fetch_repo"
+            if len(repositories) > 1:
+                action_name = f"fetch_repo_{repo_name}"
             
-            actions.append(Action(
-                action_type=ActionType.FETCH_REPO,
+            action_steps.append(ActionStep(
                 name=action_name,
-                parameters={
-                    "repository_url": repo_config.get("url"),
-                    "branch": repo_config.get("branch", "main"),
+                args={
+                    "url": repo_config.get("url"),
+                    "ref": repo_config.get("branch", "main"),
                     "destination": repo_config.get("destination", f"./{repo_name}")
-                },
-                dependencies=[]
+                }
             ))
+            action_order.append(action_name)
         
         # Step 3: Build images
-        image_actions = []
         for service_name, service_config in services.items():
             if service_config.get("build"):
-                action_name = f"build_image_{service_name}"
-                image_actions.append(action_name)
+                action_name = f"build_image"
+                if len([s for s in services.values() if s.get("build")]) > 1:
+                    action_name = f"build_image_{service_name}"
                 
-                # Determine dependencies - usually depends on repo fetch
-                deps = []
+                build_args = {
+                    "dockerfile": service_config["build"].get("dockerfile", "Dockerfile"),
+                    "context": service_config["build"].get("context", "."),
+                    "tags": [service_config.get("image", f"{service_name}:latest")]
+                }
+                
+                # Add context variable if repo was fetched
                 if service_config.get("source_repo"):
-                    deps.append(f"fetch_repo_{service_config['source_repo']}")
+                    build_args["contextVar"] = "APP_WORKDIR"
                 
-                actions.append(Action(
-                    action_type=ActionType.BUILD_IMAGE,
+                # Add build args if specified
+                if service_config["build"].get("args"):
+                    build_args["buildArgs"] = service_config["build"]["args"]
+                
+                action_steps.append(ActionStep(
                     name=action_name,
-                    parameters={
-                        "dockerfile": service_config["build"].get("dockerfile", "Dockerfile"),
-                        "context": service_config["build"].get("context", "."),
-                        "tag": service_config.get("image", f"{service_name}:latest"),
-                        "build_args": service_config["build"].get("args", {})
-                    },
-                    dependencies=deps
+                    args=build_args
                 ))
+                action_order.append(action_name)
         
         # Step 4: Ensure services are running
-        service_actions = []
         for service_name, service_config in services.items():
-            action_name = f"ensure_service_{service_name}"
-            service_actions.append(action_name)
+            action_name = f"ensure_service"
+            if len(services) > 1:
+                action_name = f"ensure_service_{service_name}"
             
-            # Dependencies: namespace creation and image building (if applicable)
-            deps = []
+            service_args = {
+                "name": service_name,
+                "image": service_config.get("image", f"{service_name}:latest")
+            }
+            
+            # Use imageVar if image was built
+            if service_config.get("build"):
+                service_args["imageVar"] = "IMAGE_REF"
+                
+            # Add ports if specified
+            if service_config.get("ports"):
+                service_args["ports"] = service_config["ports"]
+                
+            # Add environment if specified
+            if service_config.get("environment"):
+                service_args["env"] = service_config["environment"]
+                
+            # Add logging if specified
+            if service_config.get("logging"):
+                service_args["logging"] = service_config["logging"]
+                
+            # Add replicas if specified
+            if service_config.get("replicas", 1) != 1:
+                service_args["replicas"] = service_config["replicas"]
+                
+            # Add namespace if specified
             if config.get("namespace"):
-                deps.append("create_namespace")
-            if f"build_image_{service_name}" in [a.name for a in actions]:
-                deps.append(f"build_image_{service_name}")
+                service_args["namespace"] = config["namespace"]
             
-            actions.append(Action(
-                action_type=ActionType.ENSURE_SERVICE,
+            action_steps.append(ActionStep(
                 name=action_name,
-                parameters={
-                    "service_name": service_name,
-                    "image": service_config.get("image"),
-                    "ports": service_config.get("ports", []),
-                    "environment": service_config.get("environment", {}),
-                    "replicas": service_config.get("replicas", 1),
-                    "namespace": config.get("namespace", "default")
-                },
-                dependencies=deps
+                args=service_args
             ))
+            action_order.append(action_name)
         
-        # Step 5: Wait for services to be ready
-        wait_actions = []
-        for service_name in services.keys():
-            action_name = f"wait_ready_{service_name}"
-            wait_actions.append(action_name)
-            
-            actions.append(Action(
-                action_type=ActionType.WAIT_FOR_READY,
-                name=action_name,
-                parameters={
-                    "service_name": service_name,
-                    "namespace": config.get("namespace", "default"),
-                    "timeout_seconds": 300
-                },
-                dependencies=[f"ensure_service_{service_name}"]
-            ))
-        
-        # Step 6: Verify HTTP endpoints
+        # Step 5: Verify HTTP endpoints
         for service_name, service_config in services.items():
             if service_config.get("health_check"):
                 health_config = service_config["health_check"]
-                action_name = f"verify_http_{service_name}"
+                action_name = f"verify_http"
+                if len([s for s in services.values() if s.get("health_check")]) > 1:
+                    action_name = f"verify_http_{service_name}"
                 
-                actions.append(Action(
-                    action_type=ActionType.VERIFY_HTTP,
+                verify_args = {
+                    "url": health_config.get("url", f"http://localhost:8080{health_config.get('path', '/health')}"),
+                    "expect_status": health_config.get("status_code", 200)
+                }
+                
+                # Add timeout if specified
+                if health_config.get("timeout"):
+                    verify_args["timeout"] = health_config["timeout"]
+                
+                action_steps.append(ActionStep(
                     name=action_name,
-                    parameters={
-                        "service_name": service_name,
-                        "endpoint": health_config.get("path", "/health"),
-                        "expected_status": health_config.get("status_code", 200),
-                        "timeout_seconds": health_config.get("timeout", 30),
-                        "namespace": config.get("namespace", "default")
-                    },
-                    dependencies=[f"wait_ready_{service_name}"]
+                    args=verify_args
                 ))
+                action_order.append(action_name)
         
+        # Create ActionList with proper README format
         action_list = ActionList(
-            actions=actions,
+            version="1",
+            steps=action_steps,
             metadata={
                 "generated_from": "ir_conversion",
-                "total_actions": len(actions),
-                "timestamp": "placeholder_for_actual_timestamp"
+                "total_actions": len(action_steps),
+                "action_order": action_order  # Store for dependency tracking
             }
         )
         
         # Validate the generated action list
-        if not action_list.validate_dependencies():
-            raise DependencyError("Generated action list has invalid dependencies")
+        if not _validate_action_list_structure(action_list):
+            raise DependencyError("Generated action list has invalid structure")
         
-        logger.info(f"Successfully converted IR to {len(actions)} actions")
+        logger.info(f"Successfully converted IR to {len(action_steps)} actions")
         return action_list
         
     except Exception as e:
@@ -300,28 +218,23 @@ def validate_action_list(action_list: ActionList) -> bool:
     """
     try:
         if not isinstance(action_list, ActionList):
-            logger.error("Input is not an ActionList instance")
+            logger.error("Input is not a ActionList instance")
             return False
         
-        # Check that all actions are valid
-        for action in action_list.actions:
-            if not isinstance(action, Action):
+        # Check that all actions are valid ActionStep instances
+        for action in action_list.steps:
+            if not isinstance(action, ActionStep):
                 logger.error(f"Invalid action found: {action}")
                 return False
         
         # Check for duplicate action names
-        action_names = [action.name for action in action_list.actions]
+        action_names = [action.name for action in action_list.steps]
         if len(action_names) != len(set(action_names)):
             logger.error("Duplicate action names found")
             return False
         
-        # Validate dependencies
-        if not action_list.validate_dependencies():
-            return False
-        
-        # Check for circular dependencies
-        if _has_circular_dependencies(action_list):
-            logger.error("Circular dependencies detected")
+        # Validate action structure matches README specification
+        if not _validate_action_list_structure(action_list):
             return False
         
         logger.info("ActionList validation passed")
@@ -353,7 +266,7 @@ def optimize_action_list(action_list: ActionList) -> ActionList:
             return action_list
         
         # Create a copy to avoid modifying the original
-        optimized_actions = action_list.actions.copy()
+        optimized_actions = action_list.steps.copy()
         
         # TODO: Implement actual optimization algorithms
         # For now, just return the original list with updated metadata
@@ -365,7 +278,8 @@ def optimize_action_list(action_list: ActionList) -> ActionList:
         })
         
         return ActionList(
-            actions=optimized_actions,
+            version=action_list.version,
+            steps=optimized_actions,
             metadata=optimized_metadata
         )
         
@@ -374,42 +288,82 @@ def optimize_action_list(action_list: ActionList) -> ActionList:
         return action_list
 
 
-def _has_circular_dependencies(action_list: ActionList) -> bool:
+def _validate_action_list_structure(action_list: ActionList) -> bool:
     """
-    Check if the ActionList has circular dependencies using DFS.
+    Validate that the ActionList structure matches README specification.
     
     Args:
-        action_list: The ActionList to check
+        action_list: The ActionList to validate
         
     Returns:
-        bool: True if circular dependencies exist, False otherwise
+        bool: True if structure is valid, False otherwise
     """
-    # Build adjacency list
-    graph = {}
-    for action in action_list.actions:
-        graph[action.name] = action.dependencies
-    
-    # Track visit states: 0=unvisited, 1=visiting, 2=visited
-    visit_state = {name: 0 for name in graph.keys()}
-    
-    def dfs(node: str) -> bool:
-        if visit_state[node] == 1:  # Currently visiting - cycle detected
-            return True
-        if visit_state[node] == 2:  # Already visited
+    try:
+        # Check version field
+        if action_list.version != "1":
+            logger.error(f"Invalid version: {action_list.version}, expected '1'")
             return False
         
-        visit_state[node] = 1  # Mark as visiting
+        # Check that each step has only 'name' and 'args' fields
+        for i, step in enumerate(action_list.steps):
+            if not hasattr(step, 'name') or not hasattr(step, 'args'):
+                logger.error(f"Step {i}: missing required 'name' or 'args' field")
+                return False
+            
+            if not isinstance(step.name, str) or not step.name.strip():
+                logger.error(f"Step {i}: 'name' must be a non-empty string")
+                return False
+            
+            if not isinstance(step.args, dict):
+                logger.error(f"Step {i}: 'args' must be a dictionary")
+                return False
+            
+            # Validate known action patterns
+            if not _validate_action_name_and_args(step.name, step.args):
+                logger.error(f"Step {i}: invalid action name/args combination")
+                return False
         
-        for neighbor in graph.get(node, []):
-            if neighbor in visit_state and dfs(neighbor):
-                return True
+        logger.debug("ActionList structure validation passed")
+        return True
         
-        visit_state[node] = 2  # Mark as visited
+    except Exception as e:
+        logger.error(f"Error during structure validation: {str(e)}")
         return False
+
+
+def _validate_action_name_and_args(name: str, args: Dict[str, Any]) -> bool:
+    """
+    Validate that action name and args match expected patterns.
     
-    # Check all nodes
-    for node in graph.keys():
-        if visit_state[node] == 0 and dfs(node):
-            return True
+    Args:
+        name: Action name
+        args: Action arguments
+        
+    Returns:
+        bool: True if valid, False otherwise
+    """
+    # Define expected argument patterns for common actions
+    action_patterns = {
+        "fetch_repo": ["url", "ref"],
+        "build_image": ["tags"],
+        "ensure_service": ["name"],
+        "verify_http": ["url"],
+        "create_namespace": ["namespace"]
+    }
     
-    return False
+    # Check if the action name matches a known pattern
+    base_name = name
+    for pattern in action_patterns:
+        if name == pattern or name.startswith(f"{pattern}_"):
+            base_name = pattern
+            break
+    
+    # Validate required arguments for known patterns
+    if base_name in action_patterns:
+        required_args = action_patterns[base_name]
+        for req_arg in required_args:
+            if req_arg not in args:
+                logger.warning(f"Action '{name}': missing recommended argument '{req_arg}'")
+                # Don't fail validation for missing args, just warn
+    
+    return True

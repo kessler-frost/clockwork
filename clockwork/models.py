@@ -10,7 +10,7 @@ This module contains the core data models used throughout the Clockwork pipeline
 
 from typing import Dict, List, Any, Optional, Union, Literal
 from pydantic import BaseModel, Field, validator
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 import json
 
@@ -28,6 +28,17 @@ class ActionType(str, Enum):
     EXECUTE_SCRIPT = "execute_script"
     COPY_FILES = "copy_files"
     SET_ENVIRONMENT = "set_environment"
+    CREATE_NAMESPACE = "create_namespace"
+    APPLY_CONFIG = "apply_config"
+    WAIT_FOR_READY = "wait_for_ready"
+    CLEANUP = "cleanup"
+    # Additional types from forge module
+    FILE_OPERATION = "file_operation"
+    NETWORK_REQUEST = "network_request"
+    SYSTEM_COMMAND = "system_command"
+    DATA_PROCESSING = "data_processing"
+    API_CALL = "api_call"
+    CUSTOM = "custom"
 
 
 class ResourceType(str, Enum):
@@ -118,6 +129,12 @@ class IR(BaseModel):
 # Assembly Models (ActionList)
 # =============================================================================
 
+class ActionStep(BaseModel):
+    """Individual step in the ActionList matching README data contract."""
+    name: str
+    args: Dict[str, Any] = Field(default_factory=dict)
+
+
 class Action(BaseModel):
     """Individual action in the execution plan."""
     name: str
@@ -145,21 +162,31 @@ class Action(BaseModel):
 
 
 class ActionList(BaseModel):
-    """Ordered list of actions from assembly phase."""
+    """Ordered list of actions from assembly phase.
+    
+    Matches README data contract format:
+    {
+      "version": "1",
+      "steps": [
+        {"name": "fetch_repo", "args": {"url": "...", "ref": "main"}},
+        {"name": "build_image", "args": {"contextVar": "..."}}
+      ]
+    }
+    """
     version: str = "1"
-    steps: List[Action] = Field(default_factory=list)
+    steps: List[ActionStep] = Field(default_factory=list)
     metadata: Dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=datetime.now)
 
     def to_json(self) -> str:
         """Convert to JSON string for serialization."""
-        return json.dumps(self.dict(), indent=2, default=str)
+        return json.dumps(self.model_dump(), indent=2, default=str)
 
     @classmethod
     def from_json(cls, json_str: str) -> 'ActionList':
         """Create from JSON string."""
         data = json.loads(json_str)
-        return cls(**data)
+        return cls.model_validate(data)
 
 
 # =============================================================================
@@ -184,31 +211,40 @@ class Artifact(BaseModel):
 
 
 class ExecutionStep(BaseModel):
-    """Execution step for artifacts."""
+    """Execution step for artifacts matching README data contract.
+    
+    Example:
+    {"purpose":"fetch_repo", "run":{"cmd":["bash","scripts/01_fetch_repo.sh"]}}
+    """
     purpose: str
-    run: Dict[str, Any]  # command configuration
-    env: Dict[str, str] = Field(default_factory=dict)
-    working_dir: Optional[str] = None
+    run: Dict[str, Any]  # command configuration, must contain "cmd" key
 
 
 class ArtifactBundle(BaseModel):
-    """Complete bundle of artifacts from compiler agent."""
+    """Complete bundle of artifacts from compiler agent.
+    
+    Matches README data contract format:
+    {
+      "version": "1",
+      "artifacts": [{"path":"...","mode":"0755","purpose":"...","lang":"...","content":"..."}],
+      "steps": [{"purpose":"...","run":{"cmd":["..."]}}],
+      "vars": {"KEY":"value"}
+    }
+    """
     version: str = "1"
     artifacts: List[Artifact] = Field(default_factory=list)
     steps: List[ExecutionStep] = Field(default_factory=list)
     vars: Dict[str, Any] = Field(default_factory=dict)
-    metadata: Dict[str, Any] = Field(default_factory=dict)
-    created_at: datetime = Field(default_factory=datetime.now)
 
     def to_json(self) -> str:
         """Convert to JSON string for serialization."""
-        return json.dumps(self.dict(), indent=2, default=str)
+        return json.dumps(self.model_dump(), indent=2, default=str)
 
     @classmethod
     def from_json(cls, json_str: str) -> 'ArtifactBundle':
         """Create from JSON string."""
         data = json.loads(json_str)
-        return cls(**data)
+        return cls.model_validate(data)
 
 
 # =============================================================================
@@ -226,6 +262,29 @@ class ResourceState(BaseModel):
     last_verified: Optional[datetime] = None
     drift_detected: bool = False
     error_message: Optional[str] = None
+    checksum: Optional[str] = None  # For tracking configuration changes
+    
+    def is_stale(self, max_age_hours: int = 1) -> bool:
+        """Check if resource verification is stale."""
+        if not self.last_verified:
+            return True
+        cutoff = datetime.now() - timedelta(hours=max_age_hours)
+        return self.last_verified < cutoff
+    
+    def has_errors(self) -> bool:
+        """Check if resource has error conditions."""
+        return bool(self.error_message) or self.status == ExecutionStatus.FAILED
+    
+    def mark_verified(self, has_drift: bool = False):
+        """Mark resource as verified and update drift status."""
+        self.last_verified = datetime.now()
+        self.drift_detected = has_drift
+    
+    def update_config(self, new_config: Dict[str, Any]):
+        """Update resource configuration and mark as applied."""
+        self.config = new_config
+        self.last_applied = datetime.now()
+        self.drift_detected = False  # Reset drift after applying changes
 
 
 class ExecutionRecord(BaseModel):
@@ -253,11 +312,74 @@ class ClockworkState(BaseModel):
     def update_timestamp(self):
         """Update the last modified timestamp."""
         self.updated_at = datetime.now()
+    
+    def get_resources_with_drift(self) -> List[ResourceState]:
+        """Get all resources that have detected drift."""
+        return [resource for resource in self.current_resources.values() if resource.drift_detected]
+    
+    def get_stale_resources(self, max_age_hours: int = 1) -> List[ResourceState]:
+        """Get all resources with stale verification."""
+        return [resource for resource in self.current_resources.values() if resource.is_stale(max_age_hours)]
+    
+    def get_failed_resources(self) -> List[ResourceState]:
+        """Get all resources in failed state."""
+        return [resource for resource in self.current_resources.values() if resource.status == ExecutionStatus.FAILED]
+    
+    def get_resource_count_by_status(self) -> Dict[str, int]:
+        """Get count of resources by status."""
+        status_counts = {}
+        for resource in self.current_resources.values():
+            status = resource.status.value
+            status_counts[status] = status_counts.get(status, 0) + 1
+        return status_counts
+    
+    def has_any_drift(self) -> bool:
+        """Check if any resource has detected drift."""
+        return any(resource.drift_detected for resource in self.current_resources.values())
+    
+    def get_health_summary(self) -> Dict[str, Any]:
+        """Get overall health summary of the state."""
+        total_resources = len(self.current_resources)
+        drift_count = len(self.get_resources_with_drift())
+        stale_count = len(self.get_stale_resources())
+        failed_count = len(self.get_failed_resources())
+        
+        health_score = 100.0
+        if total_resources > 0:
+            health_score = ((total_resources - drift_count - failed_count) / total_resources) * 100
+        
+        return {
+            "total_resources": total_resources,
+            "resources_with_drift": drift_count,
+            "stale_resources": stale_count,
+            "failed_resources": failed_count,
+            "health_score": round(health_score, 2),
+            "status_breakdown": self.get_resource_count_by_status(),
+            "last_updated": self.updated_at.isoformat()
+        }
 
 
 # =============================================================================
 # Environment and Configuration Models
 # =============================================================================
+
+class EnvFacts(BaseModel):
+    """Environment facts discovered during Intake phase.
+    
+    Contains runtime environment information like available runtimes,
+    system capabilities, networking, etc. that inform the Assembly phase.
+    """
+    os_type: str
+    architecture: str
+    available_runtimes: List[str] = Field(default_factory=list)  # e.g., ["python3", "bash", "deno", "go"]
+    network_interfaces: Dict[str, Any] = Field(default_factory=dict)
+    system_info: Dict[str, Any] = Field(default_factory=dict)
+    docker_available: bool = False
+    podman_available: bool = False
+    kubernetes_available: bool = False
+    working_directory: str
+    discovered_at: datetime = Field(default_factory=datetime.now)
+
 
 class Environment(BaseModel):
     """Environment configuration and facts."""
@@ -320,7 +442,7 @@ __all__ = [
     'Variable', 'Provider', 'Resource', 'Module', 'Output', 'IR',
     
     # Assembly Models  
-    'Action', 'ActionList',
+    'Action', 'ActionStep', 'ActionList',
     
     # Forge Models
     'Artifact', 'ExecutionStep', 'ArtifactBundle',
@@ -329,7 +451,7 @@ __all__ = [
     'ResourceState', 'ExecutionRecord', 'ClockworkState',
     
     # Config Models
-    'Environment', 'ClockworkConfig',
+    'EnvFacts', 'Environment', 'ClockworkConfig',
     
     # Validation Models
     'ValidationIssue', 'ValidationResult',

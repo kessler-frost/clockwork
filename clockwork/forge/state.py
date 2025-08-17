@@ -8,6 +8,7 @@ of resources and maintaining execution history across artifact runs.
 import json
 import logging
 import time
+import shutil
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from enum import Enum
@@ -15,6 +16,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 import threading
 from contextlib import contextmanager
+from ..models import ClockworkState, ResourceState as ModelResourceState, ExecutionRecord
 
 logger = logging.getLogger(__name__)
 
@@ -138,40 +140,56 @@ class StateManagerError(Exception):
 
 class StateManager:
     """
-    JSON-based state manager for tracking resource states and execution history.
+    Enhanced JSON-based state manager for tracking ClockworkState with drift detection.
     
     Provides functionality to:
-    - Track resource states across executions
-    - Maintain execution history
-    - Persist state to disk
-    - Handle concurrent access
-    - Backup and restore state
+    - Track resource states across executions using ClockworkState model
+    - Maintain execution history with versioning
+    - Persist state to .clockwork/state.json
+    - Handle concurrent access with locking
+    - Backup and restore state with migration support
+    - State versioning and automatic migration
+    - Drift detection capabilities
     """
     
-    def __init__(self, state_file: Path, backup_dir: Optional[Path] = None):
+    def __init__(self, state_file: Union[str, Path], backup_dir: Optional[Path] = None):
         """
-        Initialize the state manager.
+        Initialize the enhanced state manager.
         
         Args:
-            state_file: Path to the state file
+            state_file: Path to the state file (supports string or Path)
             backup_dir: Optional directory for state backups
         """
-        self.state_file = Path(state_file)
-        self.backup_dir = Path(backup_dir) if backup_dir else None
+        # Handle string paths for backward compatibility
+        if isinstance(state_file, str):
+            self.state_file = Path(state_file)
+        else:
+            self.state_file = Path(state_file)
+            
+        # Setup backup directory
+        if backup_dir:
+            self.backup_dir = Path(backup_dir)
+        else:
+            self.backup_dir = self.state_file.parent / "backups"
+            
         self._lock = threading.RLock()
         
-        # State data
+        # Current ClockworkState
+        self._clockwork_state: Optional[ClockworkState] = None
+        
+        # Legacy support - keep existing structure for backward compatibility
         self._resources: Dict[str, ResourceState] = {}
         self._execution_history = ExecutionHistory()
         self._metadata: Dict[str, Any] = {
             "created_at": time.time(),
-            "version": "1.0",
-            "last_backup": None
+            "version": "2.0",  # Updated version for ClockworkState support
+            "last_backup": None,
+            "schema_version": "2.0"
         }
         
         # Initialize state
         self._load_state()
-        logger.info(f"Initialized StateManager with state file: {state_file}")
+        logger.info(f"Enhanced StateManager initialized with state file: {state_file}")
     
     @contextmanager
     def transaction(self):
@@ -467,9 +485,10 @@ class StateManager:
             }
     
     def _load_state(self) -> None:
-        """Load state from file."""
+        """Load state from file with automatic migration support."""
         if not self.state_file.exists():
-            logger.info("State file does not exist, starting with empty state")
+            logger.info("State file does not exist, starting with empty ClockworkState")
+            self._initialize_empty_state()
             self._save_state()
             return
         
@@ -477,13 +496,26 @@ class StateManager:
             with open(self.state_file, "r") as f:
                 data = json.load(f)
             
-            # Load resources
+            # Check schema version and migrate if needed
+            schema_version = data.get("metadata", {}).get("schema_version", "1.0")
+            
+            if schema_version == "1.0":
+                logger.info("Migrating state from schema version 1.0 to 2.0")
+                data = self._migrate_from_v1(data)
+            
+            # Load ClockworkState if present
+            if "clockwork_state" in data:
+                self._clockwork_state = ClockworkState.model_validate(data["clockwork_state"])
+                logger.info(f"Loaded ClockworkState with {len(self._clockwork_state.current_resources)} resources")
+            else:
+                self._initialize_empty_state()
+            
+            # Load legacy data for backward compatibility
             self._resources = {
                 k: ResourceState.from_dict(v) 
                 for k, v in data.get("resources", {}).items()
             }
             
-            # Load execution history
             self._execution_history = ExecutionHistory.from_dict(
                 data.get("execution_history", {"entries": []})
             )
@@ -491,21 +523,22 @@ class StateManager:
             # Load metadata
             self._metadata.update(data.get("metadata", {}))
             
-            logger.info(f"Loaded state: {len(self._resources)} resources, "
-                       f"{len(self._execution_history.entries)} history entries")
+            logger.info(f"Loaded state: {len(self._resources)} legacy resources, "
+                       f"{len(self._execution_history.entries)} legacy history entries")
             
         except Exception as e:
             logger.error(f"Failed to load state: {e}")
             raise StateManagerError(f"Could not load state file: {e}")
     
     def _save_state(self) -> None:
-        """Save state to file."""
+        """Save state to file with ClockworkState support."""
         try:
             # Ensure parent directory exists
             self.state_file.parent.mkdir(parents=True, exist_ok=True)
             
-            # Prepare data
+            # Prepare data with ClockworkState
             data = {
+                "clockwork_state": self._clockwork_state.model_dump() if self._clockwork_state else None,
                 "resources": {k: v.to_dict() for k, v in self._resources.items()},
                 "execution_history": self._execution_history.to_dict(),
                 "metadata": self._metadata
@@ -514,22 +547,294 @@ class StateManager:
             # Write to temporary file first, then rename (atomic operation)
             temp_file = self.state_file.with_suffix(".tmp")
             with open(temp_file, "w") as f:
-                json.dump(data, f, indent=2)
+                json.dump(data, f, indent=2, default=str)
             
             temp_file.rename(self.state_file)
-            logger.debug("Saved state to file")
+            logger.debug("Saved enhanced state to file")
             
         except Exception as e:
             logger.error(f"Failed to save state: {e}")
             raise StateManagerError(f"Could not save state file: {e}")
 
 
+    def _initialize_empty_state(self) -> None:
+        """Initialize empty ClockworkState."""
+        self._clockwork_state = ClockworkState()
+        logger.debug("Initialized empty ClockworkState")
+    
+    def _migrate_from_v1(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Migrate state data from version 1.0 to 2.0."""
+        try:
+            # Create new ClockworkState from legacy data
+            clockwork_state = ClockworkState()
+            
+            # Migrate resources
+            legacy_resources = data.get("resources", {})
+            for resource_id, resource_data in legacy_resources.items():
+                # Convert legacy ResourceState to model ResourceState
+                model_resource = ModelResourceState(
+                    resource_id=resource_id,
+                    type=resource_data.get("resource_type", "service"),
+                    status=resource_data.get("status", "unknown"),
+                    config=resource_data.get("properties", {}),
+                    last_applied=datetime.fromtimestamp(resource_data.get("last_updated", time.time())),
+                    last_verified=datetime.fromtimestamp(resource_data.get("last_updated", time.time()))
+                )
+                clockwork_state.current_resources[resource_id] = model_resource
+            
+            # Migrate execution history
+            legacy_history = data.get("execution_history", {}).get("entries", [])
+            for entry_data in legacy_history:
+                execution_record = ExecutionRecord(
+                    run_id=entry_data.get("execution_id", f"migrated_{int(time.time())}"),
+                    started_at=datetime.fromtimestamp(entry_data.get("timestamp", time.time())),
+                    completed_at=datetime.fromtimestamp(entry_data.get("timestamp", time.time())),
+                    status=entry_data.get("phase", "completed"),
+                    action_list_checksum="",
+                    artifact_bundle_checksum="",
+                    logs=[entry_data.get("error_message", "")] if entry_data.get("error_message") else []
+                )
+                clockwork_state.execution_history.append(execution_record)
+            
+            # Update metadata
+            data["metadata"]["schema_version"] = "2.0"
+            data["clockwork_state"] = clockwork_state.model_dump()
+            
+            logger.info("Successfully migrated state from v1.0 to v2.0")
+            return data
+            
+        except Exception as e:
+            logger.error(f"Failed to migrate state: {e}")
+            # Fall back to empty state
+            data["clockwork_state"] = ClockworkState().model_dump()
+            data["metadata"]["schema_version"] = "2.0"
+            return data
+    
+    # =========================================================================
+    # ClockworkState Management Methods
+    # =========================================================================
+    
+    def load_clockwork_state(self) -> Optional[ClockworkState]:
+        """
+        Load the current ClockworkState.
+        
+        Returns:
+            ClockworkState if available, None otherwise
+        """
+        with self._lock:
+            return self._clockwork_state
+    
+    def save_clockwork_state(self, state: ClockworkState) -> None:
+        """
+        Save a ClockworkState.
+        
+        Args:
+            state: ClockworkState to save
+        """
+        with self._lock:
+            state.update_timestamp()
+            self._clockwork_state = state
+            self._save_state()
+            logger.debug("Saved ClockworkState")
+    
+    def update_resource_state(self, resource_id: str, resource_state: ModelResourceState) -> None:
+        """
+        Update a specific resource in the ClockworkState.
+        
+        Args:
+            resource_id: Resource identifier
+            resource_state: New resource state
+        """
+        with self._lock:
+            if not self._clockwork_state:
+                self._initialize_empty_state()
+            
+            self._clockwork_state.current_resources[resource_id] = resource_state
+            self._clockwork_state.update_timestamp()
+            self._save_state()
+            logger.debug(f"Updated resource state: {resource_id}")
+    
+    def add_execution_record(self, execution_record: ExecutionRecord) -> None:
+        """
+        Add an execution record to the ClockworkState.
+        
+        Args:
+            execution_record: Execution record to add
+        """
+        with self._lock:
+            if not self._clockwork_state:
+                self._initialize_empty_state()
+            
+            self._clockwork_state.execution_history.append(execution_record)
+            
+            # Keep only last 100 records
+            if len(self._clockwork_state.execution_history) > 100:
+                self._clockwork_state.execution_history = self._clockwork_state.execution_history[-100:]
+            
+            self._clockwork_state.update_timestamp()
+            self._save_state()
+            logger.debug(f"Added execution record: {execution_record.run_id}")
+    
+    def get_resource_states(self, resource_type: Optional[str] = None) -> List[ModelResourceState]:
+        """
+        Get resource states from ClockworkState.
+        
+        Args:
+            resource_type: Optional filter by resource type
+            
+        Returns:
+            List of resource states
+        """
+        with self._lock:
+            if not self._clockwork_state:
+                return []
+            
+            resources = list(self._clockwork_state.current_resources.values())
+            
+            if resource_type:
+                resources = [r for r in resources if r.type == resource_type]
+            
+            return resources
+    
+    def detect_resource_drift(self, resource_id: str) -> bool:
+        """
+        Check if a resource has detected drift.
+        
+        Args:
+            resource_id: Resource identifier
+            
+        Returns:
+            True if drift detected, False otherwise
+        """
+        with self._lock:
+            if not self._clockwork_state or resource_id not in self._clockwork_state.current_resources:
+                return False
+            
+            return self._clockwork_state.current_resources[resource_id].drift_detected
+    
+    def mark_resource_drift(self, resource_id: str, has_drift: bool = True) -> None:
+        """
+        Mark a resource as having drift or not.
+        
+        Args:
+            resource_id: Resource identifier
+            has_drift: Whether the resource has drift
+        """
+        with self._lock:
+            if not self._clockwork_state:
+                self._initialize_empty_state()
+            
+            if resource_id in self._clockwork_state.current_resources:
+                self._clockwork_state.current_resources[resource_id].drift_detected = has_drift
+                self._clockwork_state.update_timestamp()
+                self._save_state()
+                logger.debug(f"Marked resource drift: {resource_id} = {has_drift}")
+    
+    def get_execution_history_records(self, limit: Optional[int] = None) -> List[ExecutionRecord]:
+        """
+        Get execution history from ClockworkState.
+        
+        Args:
+            limit: Optional limit on number of records
+            
+        Returns:
+            List of execution records
+        """
+        with self._lock:
+            if not self._clockwork_state:
+                return []
+            
+            history = sorted(
+                self._clockwork_state.execution_history,
+                key=lambda r: r.started_at,
+                reverse=True
+            )
+            
+            if limit:
+                history = history[:limit]
+            
+            return history
+    
+    def create_state_snapshot(self) -> Optional[Path]:
+        """
+        Create a snapshot of the current state.
+        
+        Returns:
+            Path to snapshot file if successful, None otherwise
+        """
+        if not self._clockwork_state:
+            return None
+        
+        try:
+            self.backup_dir.mkdir(parents=True, exist_ok=True)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            snapshot_file = self.backup_dir / f"state_snapshot_{timestamp}.json"
+            
+            with open(snapshot_file, "w") as f:
+                json.dump(self._clockwork_state.model_dump(), f, indent=2, default=str)
+            
+            logger.info(f"Created state snapshot: {snapshot_file}")
+            return snapshot_file
+            
+        except Exception as e:
+            logger.error(f"Failed to create state snapshot: {e}")
+            return None
+    
+    def restore_from_snapshot(self, snapshot_file: Path) -> bool:
+        """
+        Restore state from a snapshot file.
+        
+        Args:
+            snapshot_file: Path to snapshot file
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            with open(snapshot_file, "r") as f:
+                snapshot_data = json.load(f)
+            
+            with self._lock:
+                self._clockwork_state = ClockworkState.model_validate(snapshot_data)
+                self._save_state()
+            
+            logger.info(f"Restored state from snapshot: {snapshot_file}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to restore from snapshot: {e}")
+            return False
+
+    # =========================================================================
+    # Core.py Integration Methods
+    # =========================================================================
+    
+    def load_state(self) -> Optional[ClockworkState]:
+        """
+        Load the current ClockworkState - method expected by core.py.
+        
+        Returns:
+            ClockworkState if available, None otherwise
+        """
+        return self.load_clockwork_state()
+    
+    def save_state(self, state: ClockworkState) -> None:
+        """
+        Save a ClockworkState - method expected by core.py.
+        
+        Args:
+            state: ClockworkState to save
+        """
+        self.save_clockwork_state(state)
+
+
 def create_default_state_manager(workspace_dir: Path) -> StateManager:
     """Create a state manager with default configuration."""
     workspace_dir = Path(workspace_dir)
-    workspace_dir.mkdir(parents=True, exist_ok=True)
+    clockwork_dir = workspace_dir / ".clockwork"
+    clockwork_dir.mkdir(parents=True, exist_ok=True)
     
-    state_file = workspace_dir / "state.json"
-    backup_dir = workspace_dir / "backups"
+    state_file = clockwork_dir / "state.json"
+    backup_dir = clockwork_dir / "backups"
     
     return StateManager(state_file, backup_dir)
