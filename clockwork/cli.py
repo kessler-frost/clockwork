@@ -1108,6 +1108,18 @@ output "app_url" {{
         raise typer.Exit(1)
 
 
+def safe_input(prompt: str = "") -> str:
+    """Safely handle input() calls in non-interactive environments."""
+    import sys
+    try:
+        if not sys.stdin.isatty():
+            # Non-interactive environment, return empty string
+            return ""
+        return input(prompt)
+    except EOFError:
+        # Handle EOF gracefully
+        return ""
+
 @app.command()
 def demo(
     output_dir: Optional[Path] = typer.Option(None, "--output", "-o", help="Directory for demo files (default: ./.clockwork-demo)"),
@@ -1128,10 +1140,16 @@ def demo(
     console.print("\nWelcome to Clockwork! This demo will guide you through a complete workflow.")
     console.print("You'll learn how to use .cw files to declare tasks and let Clockwork execute them.\n")
     
-    # Handle text_only mode settings
+    # Handle text_only mode settings and auto-detect non-interactive environments
+    import sys
     if text_only:
         interactive = False
         console.print("[dim]Running in text-only mode with automatic execution...[/dim]")
+    elif not sys.stdin.isatty():
+        # Auto-enable text-only mode in non-interactive environments
+        interactive = False
+        text_only = True
+        console.print("[dim]Non-interactive environment detected, running in text-only mode...[/dim]")
     
     # Setup demo directory
     if output_dir:
@@ -1384,7 +1402,7 @@ output "files_created" {
     
     if interactive and not text_only:
         console.print("\n[dim]Press Enter to continue to the planning phase...[/dim]")
-        input()
+        safe_input()
     elif text_only:
         console.print("\n[green]✓ Step 1 complete - .cw file created[/green]")
 
@@ -1402,7 +1420,7 @@ Running: clockwork plan
     
     if interactive and not text_only:
         console.print("[dim]Press Enter to run the plan command...[/dim]")
-        input()
+        safe_input()
     elif text_only:
         console.print("[blue]► Step 2/7: Running plan command...[/blue]")
     
@@ -1472,7 +1490,7 @@ The Terraform-style output clearly shows the dependency relationships!
     
     if interactive and not text_only:
         console.print("[dim]Press Enter to continue to the build phase...[/dim]")
-        input()
+        safe_input()
     elif text_only:
         console.print("[green]✓ Step 2 complete - Plan generated successfully[/green]")
 
@@ -1489,7 +1507,7 @@ Running: clockwork build
     
     if interactive and not text_only:
         console.print("[dim]Press Enter to run the build command...[/dim]")
-        input()
+        safe_input()
     elif text_only:
         console.print("[blue]► Step 3/7: Running build command...[/blue]")
     
@@ -1547,7 +1565,7 @@ Running: clockwork build
     
     if interactive and not text_only:
         console.print("[dim]Press Enter to continue to verification...[/dim]")
-        input()
+        safe_input()
     elif text_only:
         console.print("[green]✓ Step 3 complete - Artifacts built successfully[/green]")
 
@@ -1573,7 +1591,7 @@ Running: clockwork verify
     
     if interactive and not text_only:
         console.print("[dim]Press Enter to run the verify command...[/dim]")
-        input()
+        safe_input()
     elif text_only:
         step_num = "4" if phase == "pre-apply" else "6"
         console.print(f"[blue]► Step {step_num}/7: Running verify command ({phase})...[/blue]")
@@ -1633,7 +1651,7 @@ Running: clockwork verify
             console.print("[dim]Press Enter to continue to the apply phase...[/dim]")
         else:
             console.print("[dim]Press Enter to see the results...[/dim]")
-        input()
+        safe_input()
     elif text_only:
         if phase == "pre-apply":
             console.print("[green]✓ Step 4 complete - Pre-apply verification done[/green]")
@@ -1654,7 +1672,7 @@ Running: clockwork apply --auto-approve
     
     if interactive and not text_only:
         console.print("[dim]Press Enter to run the apply command...[/dim]")
-        input()
+        safe_input()
     elif text_only:
         console.print("[blue]► Step 5/7: Running apply command...[/blue]")
     
@@ -1742,7 +1760,7 @@ Generated on: 2024-01-15T10:30:00Z
     
     if interactive and not text_only:
         console.print("[dim]Press Enter to verify the results...[/dim]")
-        input()
+        safe_input()
     elif text_only:
         console.print("[green]✓ Step 5 complete - Apply executed successfully[/green]")
 

@@ -389,6 +389,7 @@ class StateManager:
             True if successful, False otherwise
         """
         try:
+            # Try joblib first for new format
             backup_data = joblib.load(backup_file)
             
             with self._lock:
@@ -412,9 +413,39 @@ class StateManager:
             logger.info(f"Restored state from backup: {backup_file}")
             return True
             
-        except Exception as e:
-            logger.error(f"Failed to restore from backup: {e}")
-            return False
+        except Exception as joblib_error:
+            # If joblib fails, try JSON fallback for legacy compatibility
+            try:
+                import json
+                with open(backup_file, "r") as f:
+                    backup_data = json.load(f)
+                logger.info("Loaded legacy JSON backup file")
+                
+                with self._lock:
+                    # Restore resources (same logic as above)
+                    self._resources = {
+                        k: ResourceState.from_dict(v) 
+                        for k, v in backup_data.get("resources", {}).items()
+                    }
+                    
+                    # Restore execution history
+                    self._execution_history = ExecutionHistory.from_dict(
+                        backup_data.get("execution_history", {"entries": []})
+                    )
+                    
+                    # Restore metadata
+                    self._metadata = backup_data.get("metadata", {})
+                    
+                    # Save restored state
+                    self._save_state()
+                
+                logger.info(f"Restored state from legacy backup: {backup_file}")
+                return True
+                
+            except Exception as json_error:
+                logger.error(f"Failed to restore from backup with joblib: {joblib_error}")
+                logger.error(f"Failed to restore from backup with JSON fallback: {json_error}")
+                return False
     
     def cleanup_old_entries(self, max_entries: int = 1000, max_age_days: int = 30) -> int:
         """
@@ -491,6 +522,7 @@ class StateManager:
             return
         
         try:
+            # Try joblib first for new format
             data = joblib.load(self.state_file)
             
             # Check schema version and migrate if needed
@@ -523,9 +555,17 @@ class StateManager:
             logger.info(f"Loaded state: {len(self._resources)} legacy resources, "
                        f"{len(self._execution_history.entries)} legacy history entries")
             
-        except Exception as e:
-            logger.error(f"Failed to load state: {e}")
-            raise StateManagerError(f"Could not load state file: {e}")
+        except Exception as joblib_error:
+            # If joblib fails, try JSON fallback for legacy compatibility
+            try:
+                import json
+                with open(self.state_file, "r") as f:
+                    data = json.load(f)
+                logger.info("Loaded legacy JSON state file, will convert to joblib format on next save")
+            except Exception as json_error:
+                logger.error(f"Failed to load state with joblib: {joblib_error}")
+                logger.error(f"Failed to load state with JSON fallback: {json_error}")
+                raise StateManagerError(f"Could not load state file with either joblib or JSON: joblib={joblib_error}, json={json_error}")
     
     def _save_state(self) -> None:
         """Save state to file with ClockworkState support."""
@@ -786,6 +826,7 @@ class StateManager:
             True if successful, False otherwise
         """
         try:
+            # Try joblib first for new format
             snapshot_data = joblib.load(snapshot_file)
             
             with self._lock:
@@ -795,9 +836,25 @@ class StateManager:
             logger.info(f"Restored state from snapshot: {snapshot_file}")
             return True
             
-        except Exception as e:
-            logger.error(f"Failed to restore from snapshot: {e}")
-            return False
+        except Exception as joblib_error:
+            # If joblib fails, try JSON fallback for legacy compatibility
+            try:
+                import json
+                with open(snapshot_file, "r") as f:
+                    snapshot_data = json.load(f)
+                logger.info("Loaded legacy JSON snapshot file")
+                
+                with self._lock:
+                    self._clockwork_state = ClockworkState.model_validate(snapshot_data)
+                    self._save_state()
+                
+                logger.info(f"Restored state from legacy snapshot: {snapshot_file}")
+                return True
+                
+            except Exception as json_error:
+                logger.error(f"Failed to restore from snapshot with joblib: {joblib_error}")
+                logger.error(f"Failed to restore from snapshot with JSON fallback: {json_error}")
+                return False
 
     # =========================================================================
     # Core.py Integration Methods
