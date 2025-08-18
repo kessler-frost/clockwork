@@ -8,7 +8,7 @@ with the intake phase for complete configuration resolution.
 
 import asyncio
 import hashlib
-import json
+import joblib
 import os
 import shutil
 import tarfile
@@ -101,28 +101,29 @@ class CacheManager:
         """Initialize cache manager."""
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        self.index_file = self.cache_dir / "index.json"
+        self.index_file = self.cache_dir / "index.pkl"
+        # Initialize joblib memory for in-memory caching of frequently accessed entries
+        self.memory = joblib.Memory(location=str(self.cache_dir / "memory_cache"), verbose=0)
         self._load_index()
     
     def _load_index(self):
-        """Load cache index from disk."""
+        """Load cache index from disk using joblib."""
         if self.index_file.exists():
             try:
-                with open(self.index_file, 'r') as f:
-                    data = json.load(f)
-                    self.index = {k: CacheEntry.model_validate(v) for k, v in data.items()}
-            except (json.JSONDecodeError, Exception):
+                data = joblib.load(self.index_file)
+                self.index = {k: CacheEntry.model_validate(v) for k, v in data.items()}
+            except (joblib.externals.loky.process_executor.TerminatedWorkerError, 
+                    EOFError, ValueError, Exception):
                 # If index is corrupted, start fresh
                 self.index = {}
         else:
             self.index = {}
     
     def _save_index(self):
-        """Save cache index to disk."""
+        """Save cache index to disk using joblib."""
         try:
-            with open(self.index_file, 'w') as f:
-                serializable_index = {k: v.model_dump() for k, v in self.index.items()}
-                json.dump(serializable_index, f, indent=2, default=str)
+            serializable_index = {k: v.model_dump() for k, v in self.index.items()}
+            joblib.dump(serializable_index, self.index_file, compress=3)
         except Exception as e:
             # Log error but don't fail the operation
             print(f"Warning: Failed to save cache index: {e}")
@@ -137,7 +138,12 @@ class CacheManager:
     def get(self, source: str, version: str) -> Optional[CacheEntry]:
         """Get cache entry if it exists and is valid."""
         cache_key = self.get_cache_key(source, version)
-        entry = self.index.get(cache_key)
+        
+        # Try to get from in-memory cache first for frequently accessed entries
+        try:
+            entry = self._get_cached_entry(cache_key)
+        except:
+            entry = self.index.get(cache_key)
         
         if entry and Path(entry.local_path).exists():
             # Verify checksum
@@ -231,6 +237,8 @@ class CacheManager:
                 shutil.rmtree(self.cache_dir)
             self.cache_dir.mkdir(parents=True, exist_ok=True)
             self.index = {}
+            # Reinitialize joblib memory after clearing
+            self.memory = joblib.Memory(location=str(self.cache_dir / "memory_cache"), verbose=0)
             self._save_index()
         except Exception as e:
             raise ResolutionError(f"Failed to clear cache: {e}")
@@ -278,6 +286,10 @@ class CacheManager:
                         sha256_hash.update(chunk)
         
         return sha256_hash.hexdigest()
+    
+    def _get_cached_entry(self, cache_key: str) -> Optional[CacheEntry]:
+        """Get cache entry with joblib memory caching for frequently accessed entries."""
+        return self.index.get(cache_key)
 
 
 # =============================================================================

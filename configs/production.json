@@ -40,6 +40,14 @@
         "timeout": 300,
         "retry_attempts": 1,
         "parallel_limit": 2
+      },
+      "joblib": {
+        "n_jobs": 2,
+        "backend": "threading",
+        "cache_enabled": true,
+        "cache_dir": "/var/lib/clockwork/cache",
+        "compression_level": 3,
+        "verbose": 0
       }
     },
     "security": {

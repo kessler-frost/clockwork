@@ -10,8 +10,10 @@ import logging
 import os
 import re
 import stat
+import hashlib
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, Tuple
+from joblib import Parallel, delayed, Memory
 from ..models import ActionStep, ActionList as ModelsActionList, ArtifactBundle, Artifact, ExecutionStep
 from .agno_agent import AgnoCompiler, AgnoCompilerError, create_agno_compiler
 
@@ -101,11 +103,175 @@ class Compiler:
                 logger.warning(f"Failed to initialize Agno compiler: {e}")
                 logger.info("Falling back to placeholder implementation")
         
+        # Initialize joblib caching
+        cache_dir = self.build_dir / "cache"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        self.memory = Memory(location=str(cache_dir), verbose=0)
+        
         logger.info(f"Initialized compiler with model: {model_name}, build_dir: {build_dir}")
+        logger.info(f"Caching enabled with directory: {cache_dir}")
+    
+    def clear_cache(self) -> None:
+        """
+        Clear the compilation cache.
+        
+        This method clears all cached compilation results, forcing fresh compilation
+        of all action steps on the next compile() call.
+        """
+        try:
+            self.memory.clear()
+            logger.info("Compilation cache cleared successfully")
+        except Exception as e:
+            logger.warning(f"Failed to clear cache: {e}")
+    
+    def get_cache_info(self) -> Dict[str, Any]:
+        """
+        Get information about the current cache state.
+        
+        Returns:
+            Dictionary containing cache information
+        """
+        try:
+            cache_dir = Path(self.memory.location)
+            if cache_dir.exists():
+                cache_files = list(cache_dir.rglob("*"))
+                cache_size = sum(f.stat().st_size for f in cache_files if f.is_file())
+                return {
+                    "cache_dir": str(cache_dir),
+                    "cache_files": len([f for f in cache_files if f.is_file()]),
+                    "cache_size_bytes": cache_size,
+                    "cache_size_mb": round(cache_size / (1024 * 1024), 2)
+                }
+            else:
+                return {"cache_dir": str(cache_dir), "cache_files": 0, "cache_size_bytes": 0, "cache_size_mb": 0}
+        except Exception as e:
+            logger.warning(f"Failed to get cache info: {e}")
+            return {"error": str(e)}
+    
+    def _compute_step_hash(self, step: ActionStep) -> str:
+        """
+        Compute a hash for an action step based on its content.
+        
+        Args:
+            step: The action step to hash
+            
+        Returns:
+            SHA256 hash of the step content
+        """
+        step_data = {
+            "name": step.name,
+            "type": step.type.value if hasattr(step.type, 'value') else str(step.type),
+            "args": step.args,
+            "depends_on": sorted(step.depends_on)  # Sort for consistent hashing
+        }
+        step_json = json.dumps(step_data, sort_keys=True)
+        return hashlib.sha256(step_json.encode()).hexdigest()
+    
+    def _analyze_dependencies(self, steps: List[ActionStep]) -> List[List[int]]:
+        """
+        Analyze step dependencies to group independent steps for parallel processing.
+        
+        Args:
+            steps: List of action steps to analyze
+            
+        Returns:
+            List of groups, where each group contains indices of steps that can be run in parallel
+        """
+        # Create a mapping of step names to indices
+        name_to_index = {step.name: i for i, step in enumerate(steps)}
+        
+        # Build dependency graph
+        dependencies = [set() for _ in steps]
+        for i, step in enumerate(steps):
+            for dep in step.depends_on:
+                if dep in name_to_index:
+                    dependencies[i].add(name_to_index[dep])
+        
+        # Group steps into parallel batches using topological ordering
+        groups = []
+        completed = set()
+        
+        while len(completed) < len(steps):
+            # Find steps that can be executed (all dependencies completed)
+            ready_steps = []
+            for i, step_deps in enumerate(dependencies):
+                if i not in completed and step_deps.issubset(completed):
+                    ready_steps.append(i)
+            
+            if not ready_steps:
+                # This shouldn't happen with valid dependencies, but handle it gracefully
+                logger.warning("Circular dependency detected or invalid dependency graph")
+                # Add remaining steps as individual groups
+                remaining = [i for i in range(len(steps)) if i not in completed]
+                groups.extend([[i] for i in remaining])
+                break
+            
+            groups.append(ready_steps)
+            completed.update(ready_steps)
+        
+        logger.info(f"Grouped {len(steps)} steps into {len(groups)} parallel batches")
+        return groups
+    
+    def _compile_single_step_cached(self, step: ActionStep, step_hash: str, action_list_context: Dict[str, Any]) -> Optional[Tuple[List[Artifact], List[ExecutionStep]]]:
+        """
+        Cached compilation of a single action step.
+        
+        Args:
+            step: The action step to compile
+            step_hash: Hash of the step for caching
+            action_list_context: Context from the full action list (metadata, etc.)
+            
+        Returns:
+            Tuple of (artifacts, execution_steps) or None if compilation fails
+        """
+        return self.memory.cache(self._compile_single_step_uncached)(step, step_hash, action_list_context)
+    
+    def _compile_single_step_uncached(self, step: ActionStep, step_hash: str, action_list_context: Dict[str, Any]) -> Optional[Tuple[List[Artifact], List[ExecutionStep]]]:
+        """
+        Compile a single action step without caching.
+        
+        Args:
+            step: The action step to compile
+            step_hash: Hash of the step (for logging/debugging)
+            action_list_context: Context from the full action list
+            
+        Returns:
+            Tuple of (artifacts, execution_steps) or None if compilation fails
+        """
+        try:
+            logger.info(f"Compiling step '{step.name}' (hash: {step_hash[:8]}...)")
+            
+            # Create a temporary action list with just this step for compilation
+            temp_action_list = ModelsActionList(
+                version=action_list_context.get('version', '1'),
+                steps=[step],
+                metadata=action_list_context.get('metadata', {})
+            )
+            
+            # Use Agno compiler if available, otherwise fallback
+            if self.use_agno and self.agno_compiler:
+                try:
+                    bundle = self.agno_compiler.compile_to_artifacts(temp_action_list)
+                except AgnoCompilerError as e:
+                    logger.warning(f"Agno compilation failed for step '{step.name}': {e}")
+                    bundle = self._fallback_compile(temp_action_list)
+            else:
+                bundle = self._fallback_compile(temp_action_list)
+            
+            # Extract artifacts and steps for this specific step
+            artifacts = [artifact for artifact in bundle.artifacts if artifact.purpose == step.name]
+            steps = [exec_step for exec_step in bundle.steps if exec_step.purpose == step.name]
+            
+            logger.info(f"Successfully compiled step '{step.name}' -> {len(artifacts)} artifacts, {len(steps)} execution steps")
+            return (artifacts, steps)
+            
+        except Exception as e:
+            logger.error(f"Failed to compile step '{step.name}': {e}")
+            return None
     
     def compile(self, action_list: ModelsActionList) -> ArtifactBundle:
         """
-        Compile an ActionList into an ArtifactBundle.
+        Compile an ActionList into an ArtifactBundle with parallel processing and caching.
         
         Args:
             action_list: The list of actions to compile
@@ -117,7 +283,95 @@ class Compiler:
             CompilerError: If compilation fails
         """
         try:
-            logger.info(f"Compiling ActionList with {len(action_list.steps)} steps")
+            logger.info(f"Compiling ActionList with {len(action_list.steps)} steps using parallel processing")
+            
+            # If only one step or parallel processing disabled, use original method
+            if len(action_list.steps) <= 1:
+                logger.info("Single step detected, using non-parallel compilation")
+                return self._compile_sequential(action_list)
+            
+            # Analyze dependencies and group steps for parallel processing
+            step_groups = self._analyze_dependencies(action_list.steps)
+            
+            # Prepare context for step compilation
+            action_list_context = {
+                'version': action_list.version,
+                'metadata': action_list.metadata
+            }
+            
+            # Compile steps in parallel batches
+            all_artifacts = []
+            all_execution_steps = []
+            bundle_vars = {}
+            
+            for group_idx, step_indices in enumerate(step_groups):
+                logger.info(f"Processing parallel group {group_idx + 1}/{len(step_groups)} with {len(step_indices)} steps")
+                
+                if len(step_indices) == 1:
+                    # Single step in group - compile directly
+                    step = action_list.steps[step_indices[0]]
+                    step_hash = self._compute_step_hash(step)
+                    result = self._compile_single_step_cached(step, step_hash, action_list_context)
+                    if result:
+                        artifacts, exec_steps = result
+                        all_artifacts.extend(artifacts)
+                        all_execution_steps.extend(exec_steps)
+                else:
+                    # Multiple steps in group - compile in parallel
+                    steps_to_compile = [(action_list.steps[i], self._compute_step_hash(action_list.steps[i]), action_list_context) 
+                                      for i in step_indices]
+                    
+                    # Use joblib.Parallel with threading backend for I/O-bound operations
+                    parallel_results = Parallel(n_jobs=-1, backend='threading')(
+                        delayed(self._compile_single_step_cached)(step, step_hash, context) 
+                        for step, step_hash, context in steps_to_compile
+                    )
+                    
+                    # Collect results from parallel compilation
+                    for result in parallel_results:
+                        if result:
+                            artifacts, exec_steps = result
+                            all_artifacts.extend(artifacts)
+                            all_execution_steps.extend(exec_steps)
+            
+            # Create the final artifact bundle
+            artifact_bundle = ArtifactBundle(
+                version=action_list.version,
+                artifacts=all_artifacts,
+                steps=all_execution_steps,
+                vars=bundle_vars
+            )
+            
+            # Comprehensive validation
+            self._validate_artifact_bundle(artifact_bundle, action_list)
+            
+            logger.info(f"Successfully compiled {len(artifact_bundle.artifacts)} artifacts using parallel processing")
+            return artifact_bundle
+            
+        except Exception as e:
+            logger.error(f"Parallel compilation failed: {e}")
+            logger.info("Falling back to sequential compilation")
+            try:
+                return self._compile_sequential(action_list)
+            except Exception as fallback_error:
+                logger.error(f"Fallback compilation also failed: {fallback_error}")
+                raise CompilerError(f"Failed to compile ActionList: {e}")
+    
+    def _compile_sequential(self, action_list: ModelsActionList) -> ArtifactBundle:
+        """
+        Sequential compilation fallback method.
+        
+        Args:
+            action_list: The list of actions to compile
+            
+        Returns:
+            ArtifactBundle containing executable artifacts
+            
+        Raises:
+            CompilerError: If compilation fails
+        """
+        try:
+            logger.info("Using sequential compilation")
             
             # Use Agno AI compiler if available
             if self.use_agno and self.agno_compiler:
@@ -131,14 +385,10 @@ class Compiler:
                 logger.info("Using fallback compilation (no Agno compiler available)")
                 artifact_bundle = self._fallback_compile(action_list)
             
-            # Comprehensive validation
-            self._validate_artifact_bundle(artifact_bundle, action_list)
-            
-            logger.info(f"Successfully compiled {len(artifact_bundle.artifacts)} artifacts")
             return artifact_bundle
             
         except Exception as e:
-            logger.error(f"Compilation failed: {e}")
+            logger.error(f"Sequential compilation failed: {e}")
             raise CompilerError(f"Failed to compile ActionList: {e}")
     
     def _fallback_compile(self, action_list: ModelsActionList) -> ArtifactBundle:

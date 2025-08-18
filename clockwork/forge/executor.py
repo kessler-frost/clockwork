@@ -27,12 +27,34 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union, Tuple
 import shutil
+import joblib
 
 from ..models import ArtifactBundle, Artifact, ExecutionStep
 from .runner import Runner, RunnerFactory, RunnerType, select_runner
 from ..errors import ValidationError
 
 logger = logging.getLogger(__name__)
+
+
+def load_parallel_limit_from_config() -> int:
+    """Load parallel_limit from development.json configuration."""
+    config_paths = [
+        "configs/development.json",
+        "../configs/development.json", 
+        "../../configs/development.json"
+    ]
+    
+    for config_path in config_paths:
+        try:
+            if os.path.exists(config_path):
+                with open(config_path, 'r') as f:
+                    config = json.load(f)
+                    return config.get("clockwork", {}).get("forge", {}).get("execution", {}).get("parallel_limit", 4)
+        except (json.JSONDecodeError, FileNotFoundError, KeyError):
+            continue
+    
+    # Fallback to environment variable or default
+    return int(os.environ.get("CLOCKWORK_PARALLEL_LIMIT", 4))
 
 
 class ExecutionStatus(Enum):
@@ -145,6 +167,7 @@ class SandboxConfig:
         "max_file_size_mb": 100
     })
     build_directory: str = ".clockwork/build"
+    parallel_limit: int = 4  # Maximum number of parallel executions
 
 
 class ArtifactPathValidator:
@@ -503,7 +526,7 @@ class ArtifactExecutor:
     
     def execute_bundle(self, bundle: ArtifactBundle) -> List[ExecutionResult]:
         """
-        Execute an entire artifact bundle using the configured runner.
+        Execute an entire artifact bundle using parallel execution for independent steps.
         
         Args:
             bundle: The bundle to execute
@@ -517,7 +540,6 @@ class ArtifactExecutor:
         try:
             logger.info(f"Starting execution of ArtifactBundle version {bundle.version}")
             logger.info(f"Bundle contains {len(bundle.artifacts)} artifacts and {len(bundle.steps)} steps")
-            logger.info(f"Using runner: {self.runner.__class__.__name__}")
             
             # Validate runner environment first
             if not self.runner.validate_environment():
@@ -536,35 +558,21 @@ class ArtifactExecutor:
                 if warnings:
                     logger.warning(f"Validation warnings for {artifact.path}: {warnings}")
             
-            # Use the runner to execute the bundle
-            results = self.runner.execute_bundle(bundle)
+            # Prepare environment variables
+            env_vars = {}
+            env_vars.update(self.sandbox_config.environment_vars)
+            env_vars.update(bundle.vars)
             
-            # Convert runner results to our ExecutionResult format if needed
-            converted_results = []
-            for result in results:
-                if hasattr(result, 'to_dict'):
-                    # It's already our ExecutionResult format
-                    converted_results.append(result)
-                else:
-                    # Convert from runner's result format
-                    exec_result = ExecutionResult(
-                        artifact_name=result.artifact_name,
-                        status=ExecutionStatus(result.status) if isinstance(result.status, str) else result.status
-                    )
-                    # Copy other attributes
-                    for attr in ['exit_code', 'stdout', 'stderr', 'execution_time', 'start_time', 
-                                'end_time', 'error_message', 'metadata', 'retry_count', 'timeout_occurred',
-                                'resource_usage', 'command', 'working_directory', 'environment_vars']:
-                        if hasattr(result, attr):
-                            setattr(exec_result, attr, getattr(result, attr))
-                    converted_results.append(exec_result)
+            # Use our new parallel execution method
+            logger.info("Using parallel execution for artifact bundle")
+            results = self.execute_steps(bundle.steps, bundle.artifacts, env_vars)
             
             # Generate execution summary
-            successful_steps = sum(1 for r in converted_results if r.is_success())
-            total_time = sum(r.execution_time for r in converted_results)
+            successful_steps = sum(1 for r in results if r.is_success())
+            total_time = sum(r.execution_time for r in results)
             
-            logger.info(f"Bundle execution completed: {successful_steps}/{len(converted_results)} steps successful, total time: {total_time:.2f}s")
-            return converted_results
+            logger.info(f"Bundle execution completed: {successful_steps}/{len(results)} steps successful, total time: {total_time:.2f}s")
+            return results
             
         except Exception as e:
             logger.error(f"Bundle execution failed: {e}", exc_info=True)
@@ -878,10 +886,210 @@ class ArtifactExecutor:
         if self.temp_dir and self.temp_dir.exists():
             shutil.rmtree(self.temp_dir)
             logger.debug("Cleaned up temporary directory")
+    
+    def _analyze_step_dependencies(self, steps: List[ExecutionStep], artifacts: List[Artifact]) -> Dict[str, List[str]]:
+        """
+        Analyze dependencies between execution steps.
+        
+        Args:
+            steps: List of execution steps
+            artifacts: List of artifacts
+            
+        Returns:
+            Dictionary mapping step names to their dependencies
+        """
+        dependencies = {}
+        artifact_map = {artifact.path: artifact for artifact in artifacts}
+        
+        for step in steps:
+            step_deps = []
+            
+            # Check if step command references outputs from other steps
+            if "cmd" in step.run and isinstance(step.run["cmd"], list):
+                for arg in step.run["cmd"]:
+                    if isinstance(arg, str):
+                        # Look for file references that might be outputs from other steps
+                        for other_step in steps:
+                            if other_step != step and other_step.purpose in arg:
+                                step_deps.append(other_step.purpose)
+                        
+                        # Check for artifact dependencies
+                        for artifact_path in artifact_map:
+                            if artifact_path in arg:
+                                # Find which step creates this artifact
+                                for other_step in steps:
+                                    if other_step != step and other_step.purpose in artifact_path:
+                                        step_deps.append(other_step.purpose)
+            
+            # Check explicit dependencies if defined in step metadata
+            if hasattr(step, 'depends_on') and step.depends_on:
+                step_deps.extend(step.depends_on)
+            
+            dependencies[step.purpose] = list(set(step_deps))  # Remove duplicates
+        
+        return dependencies
+    
+    def _group_independent_steps(self, steps: List[ExecutionStep], dependencies: Dict[str, List[str]]) -> List[List[ExecutionStep]]:
+        """
+        Group steps into batches of independent steps that can run in parallel.
+        
+        Args:
+            steps: List of execution steps
+            dependencies: Dictionary of step dependencies
+            
+        Returns:
+            List of step batches, where each batch can be executed in parallel
+        """
+        step_map = {step.purpose: step for step in steps}
+        remaining_steps = set(step.purpose for step in steps)
+        completed_steps = set()
+        batches = []
+        
+        while remaining_steps:
+            # Find steps that have no unmet dependencies
+            ready_steps = []
+            for step_name in remaining_steps:
+                deps = dependencies.get(step_name, [])
+                if all(dep in completed_steps for dep in deps):
+                    ready_steps.append(step_map[step_name])
+            
+            if not ready_steps:
+                # Circular dependency or unresolvable dependency
+                logger.warning(f"Circular or unresolvable dependencies detected. Remaining steps: {remaining_steps}")
+                # Add remaining steps as a single batch to avoid infinite loop
+                ready_steps = [step_map[name] for name in remaining_steps]
+            
+            batches.append(ready_steps)
+            
+            # Mark these steps as completed
+            for step in ready_steps:
+                completed_steps.add(step.purpose)
+                remaining_steps.remove(step.purpose)
+        
+        return batches
+    
+    def execute_steps(self, steps: List[ExecutionStep], artifacts: List[Artifact], 
+                     env_vars: Optional[Dict[str, str]] = None) -> List[ExecutionResult]:
+        """
+        Execute steps with parallel processing for independent steps.
+        
+        Args:
+            steps: List of execution steps to execute
+            artifacts: List of artifacts needed for execution
+            env_vars: Environment variables for execution
+            
+        Returns:
+            List of execution results
+        """
+        if not steps:
+            return []
+        
+        env_vars = env_vars or {}
+        results = []
+        
+        # Load parallel limit from configuration
+        parallel_limit = load_parallel_limit_from_config()
+        self.sandbox_config.parallel_limit = parallel_limit
+        
+        logger.info(f"Executing {len(steps)} steps with parallel limit: {parallel_limit}")
+        
+        # Setup temporary directory
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self.temp_dir = Path(temp_dir)
+            
+            try:
+                # Prepare all artifacts
+                artifact_paths = self._prepare_all_artifacts(artifacts)
+                
+                # Analyze dependencies
+                dependencies = self._analyze_step_dependencies(steps, artifacts)
+                logger.debug(f"Step dependencies: {dependencies}")
+                
+                # Group steps into independent batches
+                step_batches = self._group_independent_steps(steps, dependencies)
+                logger.info(f"Grouped steps into {len(step_batches)} batches for parallel execution")
+                
+                # Execute each batch in parallel
+                for batch_idx, batch in enumerate(step_batches):
+                    logger.info(f"Executing batch {batch_idx + 1}/{len(step_batches)} with {len(batch)} steps")
+                    
+                    if len(batch) == 1:
+                        # Single step - execute directly
+                        result = self._execute_step(batch[0], artifact_paths, env_vars)
+                        results.append(result)
+                    else:
+                        # Multiple steps - execute in parallel
+                        batch_results = self._execute_steps_parallel(batch, artifact_paths, env_vars)
+                        results.extend(batch_results)
+                    
+                    # Check if any critical steps failed
+                    failed_steps = [r for r in results[-len(batch):] if not r.is_success()]
+                    if failed_steps:
+                        logger.warning(f"Batch {batch_idx + 1} had {len(failed_steps)} failed steps")
+                        # Continue with remaining batches unless it's a critical failure
+                
+                logger.info(f"Completed execution of all steps. Success rate: {sum(1 for r in results if r.is_success())}/{len(results)}")
+                
+            finally:
+                # Reset temp_dir
+                self.temp_dir = None
+        
+        return results
+    
+    def _execute_steps_parallel(self, steps: List[ExecutionStep], artifact_paths: Dict[str, Path], 
+                               env_vars: Dict[str, str]) -> List[ExecutionResult]:
+        """
+        Execute multiple steps in parallel using joblib.
+        
+        Args:
+            steps: List of execution steps to run in parallel
+            artifact_paths: Map of artifact paths
+            env_vars: Environment variables
+            
+        Returns:
+            List of execution results
+        """
+        parallel_limit = min(self.sandbox_config.parallel_limit, len(steps))
+        
+        logger.debug(f"Executing {len(steps)} steps in parallel (limit: {parallel_limit})")
+        
+        # Use joblib.Parallel with threading backend for I/O-bound operations
+        try:
+            results = joblib.Parallel(
+                n_jobs=parallel_limit,
+                backend='threading',
+                verbose=0
+            )(
+                joblib.delayed(self._execute_step)(step, artifact_paths, env_vars)
+                for step in steps
+            )
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"Parallel execution failed: {e}")
+            # Fallback to sequential execution
+            logger.info("Falling back to sequential execution")
+            results = []
+            for step in steps:
+                try:
+                    result = self._execute_step(step, artifact_paths, env_vars)
+                    results.append(result)
+                except Exception as step_error:
+                    logger.error(f"Step {step.purpose} failed: {step_error}")
+                    error_result = ExecutionResult(
+                        artifact_name=step.purpose,
+                        status=ExecutionStatus.FAILED
+                    )
+                    error_result.error_message = str(step_error)
+                    results.append(error_result)
+            
+            return results
 
 
 def create_secure_executor(runner_type: Optional[str] = None, execution_context: Optional[Dict[str, Any]] = None) -> ArtifactExecutor:
     """Create a secure executor with restrictive sandbox configuration."""
+    parallel_limit = load_parallel_limit_from_config()
     config = SandboxConfig(
         max_memory_mb=256,
         max_cpu_percent=25.0,
@@ -900,7 +1108,8 @@ def create_secure_executor(runner_type: Optional[str] = None, execution_context:
             "max_open_files": 512,
             "max_processes": 16,
             "max_file_size_mb": 50
-        }
+        },
+        parallel_limit=parallel_limit
     )
     
     # Setup execution context for secure environments
@@ -914,6 +1123,7 @@ def create_secure_executor(runner_type: Optional[str] = None, execution_context:
 
 def create_development_executor(runner_type: Optional[str] = None, execution_context: Optional[Dict[str, Any]] = None) -> ArtifactExecutor:
     """Create a development executor with more permissive settings."""
+    parallel_limit = load_parallel_limit_from_config()
     config = SandboxConfig(
         max_memory_mb=1024,
         max_cpu_percent=75.0,
@@ -927,7 +1137,8 @@ def create_development_executor(runner_type: Optional[str] = None, execution_con
             "max_open_files": 2048,
             "max_processes": 64,
             "max_file_size_mb": 200
-        }
+        },
+        parallel_limit=parallel_limit
     )
     
     # Setup execution context

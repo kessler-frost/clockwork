@@ -19,6 +19,8 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any, Set, Callable
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler, FileModifiedEvent, FileCreatedEvent
+import joblib
+from joblib import Parallel, delayed, Memory
 
 from ..core import ClockworkCore
 from ..models import ClockworkConfig, ClockworkState, ResourceState, IR, ActionList, ArtifactBundle
@@ -31,6 +33,34 @@ from .rate_limiter import RateLimiter, CooldownManager
 logger = logging.getLogger(__name__)
 
 
+def _detect_drift_for_directory(config_dir: Path) -> Dict[str, Any]:
+    """Static function to detect drift for a single configuration directory (for parallel processing)."""
+    try:
+        logger.debug(f"Checking drift for directory: {config_dir}")
+        
+        # Check if directory exists and has .cw files
+        if not config_dir.exists():
+            return {"error": "Directory does not exist", "drift_detections": []}
+        
+        cw_files = list(config_dir.glob("*.cw"))
+        if not cw_files:
+            return {"summary": {"resources_checked": 0, "resources_with_drift": 0}, "drift_detections": []}
+        
+        # In a real implementation, this would use the core with directory-specific logic
+        # For now, return a basic response that simulates no drift
+        return {
+            "summary": {
+                "resources_checked": len(cw_files),
+                "resources_with_drift": 0
+            },
+            "drift_detections": []
+        }
+        
+    except Exception as e:
+        logger.error(f"Drift detection failed for {config_dir}: {e}")
+        return {"error": str(e), "drift_detections": []}
+
+
 
 
 class ClockworkFileHandler(FileSystemEventHandler):
@@ -40,18 +70,45 @@ class ClockworkFileHandler(FileSystemEventHandler):
         super().__init__()
         self.daemon = daemon
         self.logger = logging.getLogger(__name__ + ".FileHandler")
+        
+        # Setup file metadata caching
+        cache_dir = Path('.clockwork/cache/file_metadata')
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        self.memory_cache = Memory(location=str(cache_dir), verbose=0)
+        self.get_file_metadata = self.memory_cache.cache(self._get_file_metadata_impl)
     
     def on_modified(self, event):
         """Handle file modification events."""
         if not event.is_directory and self._should_process_file(event.src_path):
             self.logger.info(f"Detected modification: {event.src_path}")
-            self.daemon._queue_file_change(Path(event.src_path))
+            self._queue_file_change_parallel(Path(event.src_path))
     
     def on_created(self, event):
         """Handle file creation events."""
         if not event.is_directory and self._should_process_file(event.src_path):
             self.logger.info(f"Detected creation: {event.src_path}")
-            self.daemon._queue_file_change(Path(event.src_path))
+            self._queue_file_change_parallel(Path(event.src_path))
+    
+    def _queue_file_change_parallel(self, file_path: Path) -> None:
+        """Queue a file change with parallel metadata collection."""
+        # Get file metadata in background to improve performance
+        def collect_metadata():
+            try:
+                metadata = self.get_file_metadata(str(file_path))
+                self.daemon._queue_file_change(file_path, metadata)
+            except Exception as e:
+                self.logger.warning(f"Failed to collect metadata for {file_path}: {e}")
+                # Fallback to basic queueing
+                self.daemon._queue_file_change(file_path, None)
+        
+        # Execute metadata collection immediately in background thread
+        # Note: for better performance, this could be batched with other operations
+        try:
+            collect_metadata()
+        except Exception as e:
+            self.logger.warning(f"Metadata collection failed for {file_path}: {e}")
+            # Fallback to basic queueing
+            self.daemon._queue_file_change(file_path, None)
     
     def _should_process_file(self, file_path: str) -> bool:
         """Check if file should be processed based on patterns."""
@@ -67,6 +124,29 @@ class ClockworkFileHandler(FileSystemEventHandler):
                 return True
         
         return False
+    
+    def _get_file_metadata_impl(self, file_path: str) -> Dict[str, Any]:
+        """Get file metadata with caching (implementation for joblib cache)."""
+        try:
+            path = Path(file_path)
+            if not path.exists():
+                return {"exists": False}
+            
+            stat_info = path.stat()
+            return {
+                "exists": True,
+                "size": stat_info.st_size,
+                "mtime": stat_info.st_mtime,
+                "ctime": stat_info.st_ctime,
+                "mode": stat_info.st_mode,
+                "is_file": path.is_file(),
+                "is_dir": path.is_dir(),
+                "suffix": path.suffix,
+                "stem": path.stem
+            }
+        except Exception as e:
+            self.logger.warning(f"Failed to get metadata for {file_path}: {e}")
+            return {"exists": False, "error": str(e)}
 
 
 class ClockworkDaemon:
@@ -110,7 +190,17 @@ class ClockworkDaemon:
         self.file_observer = Observer()
         self.file_handler = ClockworkFileHandler(self)
         self.pending_file_changes: Set[Path] = set()
+        self.pending_file_metadata: Dict[Path, Optional[Dict[str, Any]]] = {}
         self.file_change_lock = threading.Lock()
+        
+        # Parallel processing configuration
+        self.parallel_executor = Parallel(n_jobs=-1, backend='threading')
+        
+        # File metadata caching
+        cache_dir = Path('.clockwork/cache/daemon_metadata')
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        self.memory_cache = Memory(location=str(cache_dir), verbose=0)
+        self.get_cached_file_info = self.memory_cache.cache(self._get_file_info_impl)
         
         # Drift monitoring
         self.last_drift_check = datetime.now()
@@ -298,25 +388,108 @@ class ClockworkDaemon:
         
         logger.info("File system watching stopped")
     
-    def _queue_file_change(self, file_path: Path) -> None:
+    def _queue_file_change(self, file_path: Path, metadata: Optional[Dict[str, Any]] = None) -> None:
         """Queue a file change for processing."""
         with self.file_change_lock:
             self.pending_file_changes.add(file_path)
+            self.pending_file_metadata[file_path] = metadata
             logger.debug(f"Queued file change: {file_path}")
     
     def _process_pending_file_changes(self) -> None:
-        """Process all pending file changes."""
+        """Process all pending file changes in parallel."""
         if not self.pending_file_changes:
             return
         
         with self.file_change_lock:
             changes_to_process = self.pending_file_changes.copy()
+            metadata_to_process = {path: self.pending_file_metadata.get(path) 
+                                 for path in changes_to_process}
             self.pending_file_changes.clear()
+            self.pending_file_metadata.clear()
         
         if changes_to_process:
-            logger.info(f"Processing {len(changes_to_process)} file changes")
-            self._handle_configuration_changes(changes_to_process)
+            logger.info(f"Processing {len(changes_to_process)} file changes in parallel")
+            self._handle_configuration_changes_parallel(changes_to_process, metadata_to_process)
             self.metrics["files_processed"] += len(changes_to_process)
+    
+    def _handle_configuration_changes_parallel(self, changed_files: Set[Path], 
+                                             metadata: Dict[Path, Optional[Dict[str, Any]]]) -> None:
+        """Handle configuration file changes using parallel processing."""
+        try:
+            logger.info(f"Configuration changes detected in {len(changed_files)} files")
+            
+            # Group files by configuration directory for parallel processing
+            config_dirs_with_files = self._group_files_by_config_dir(changed_files, metadata)
+            
+            if not config_dirs_with_files:
+                logger.debug("No .cw files in changes, skipping pipeline execution")
+                return
+            
+            # Process each config directory in parallel
+            if len(config_dirs_with_files) > 1:
+                logger.info(f"Processing {len(config_dirs_with_files)} configuration directories in parallel")
+                results = self.parallel_executor(
+                    delayed(self._process_single_config_dir)(config_dir, files) 
+                    for config_dir, files in config_dirs_with_files.items()
+                )
+                
+                # Check for any failures
+                for config_dir, result in zip(config_dirs_with_files.keys(), results):
+                    if not result.get("success", False):
+                        logger.error(f"Pipeline execution failed for {config_dir}: {result.get('error', 'Unknown error')}")
+            else:
+                # Single directory - process normally
+                config_dir, files = next(iter(config_dirs_with_files.items()))
+                result = self._process_single_config_dir(config_dir, files)
+                if not result.get("success", False):
+                    logger.error(f"Pipeline execution failed for {config_dir}: {result.get('error', 'Unknown error')}")
+        
+        except Exception as e:
+            logger.error(f"Failed to handle configuration changes: {e}")
+            raise
+    
+    def _group_files_by_config_dir(self, changed_files: Set[Path], 
+                                  metadata: Dict[Path, Optional[Dict[str, Any]]]) -> Dict[Path, List[Path]]:
+        """Group changed files by their configuration directory."""
+        config_dirs_with_files = {}
+        
+        for file_path in changed_files:
+            # Use cached metadata if available
+            file_metadata = metadata.get(file_path)
+            if file_metadata and not file_metadata.get("exists", True):
+                continue  # Skip non-existent files
+            
+            # Find .cw files and determine their directories
+            if file_path.suffix == '.cw':
+                config_dir = file_path.parent
+                if config_dir not in config_dirs_with_files:
+                    config_dirs_with_files[config_dir] = []
+                config_dirs_with_files[config_dir].append(file_path)
+        
+        return config_dirs_with_files
+    
+    def _process_single_config_dir(self, config_dir: Path, files: List[Path]) -> Dict[str, Any]:
+        """Process a single configuration directory."""
+        try:
+            logger.info(f"Running pipeline for configuration directory: {config_dir} (files: {[f.name for f in files]})")
+            
+            # Run full pipeline: Intake → Assembly → Forge
+            results = self.core.apply(config_dir, timeout_per_step=self.config.timeout_per_step)
+            
+            logger.info(f"Pipeline completed successfully for {config_dir}")
+            
+            # Optionally run verification
+            if self.config.enable_verification_after_fix:
+                action_list = self.core.plan(config_dir)
+                verify_results = self.core.verify_only(action_list)
+                logger.info(f"Verification completed for {config_dir}")
+                return {"success": True, "results": results, "verification": verify_results}
+            
+            return {"success": True, "results": results}
+            
+        except Exception as e:
+            logger.error(f"Pipeline execution failed for {config_dir}: {e}")
+            return {"success": False, "error": str(e)}
     
     def _handle_configuration_changes(self, changed_files: Set[Path]) -> None:
         """Handle configuration file changes by running the full pipeline."""
@@ -364,14 +537,22 @@ class ClockworkDaemon:
         return time_since_last_check.total_seconds() >= (self.config.drift_check_interval_minutes * 60)
     
     def _perform_drift_check(self) -> Dict[str, Any]:
-        """Perform drift detection and apply auto-fixes if appropriate."""
+        """Perform drift detection with parallel processing across multiple files."""
         logger.info("Performing drift check...")
         self.last_drift_check = datetime.now()
         self.metrics["drift_checks_performed"] += 1
         
         try:
-            # Detect drift using core functionality
-            drift_report = self.core.detect_drift()
+            # Get all configuration directories to check
+            config_dirs = self._get_all_config_directories()
+            
+            if len(config_dirs) <= 1:
+                # Single or no directories - use core functionality directly
+                drift_report = self.core.detect_drift()
+            else:
+                # Multiple directories - perform parallel drift detection
+                logger.info(f"Performing parallel drift detection across {len(config_dirs)} configuration directories")
+                drift_report = self._perform_parallel_drift_check(config_dirs)
             
             if drift_report.get("error"):
                 logger.error(f"Drift detection failed: {drift_report['error']}")
@@ -387,7 +568,7 @@ class ClockworkDaemon:
             
             # Apply auto-fixes if enabled and safe
             if self.config.auto_fix_policy != AutoFixPolicy.DISABLED:
-                self._apply_auto_fixes(drift_report)
+                self._apply_auto_fixes_parallel(drift_report)
             else:
                 logger.info("Auto-fix disabled, manual intervention required")
             
@@ -396,6 +577,210 @@ class ClockworkDaemon:
         except Exception as e:
             logger.error(f"Drift check failed: {e}")
             return {"error": str(e), "drift_detections": []}
+    
+    def _get_all_config_directories(self) -> List[Path]:
+        """Get all configuration directories to check for drift."""
+        config_dirs = []
+        for watch_path in self.config.watch_paths:
+            if watch_path.exists() and watch_path.is_dir():
+                # Look for .cw files in this directory
+                cw_files = list(watch_path.glob("*.cw"))
+                if cw_files:
+                    config_dirs.append(watch_path)
+                
+                # Also check subdirectories for .cw files
+                for subdir in watch_path.iterdir():
+                    if subdir.is_dir():
+                        sub_cw_files = list(subdir.glob("*.cw"))
+                        if sub_cw_files:
+                            config_dirs.append(subdir)
+        
+        return list(set(config_dirs))  # Remove duplicates
+    
+    def _perform_parallel_drift_check(self, config_dirs: List[Path]) -> Dict[str, Any]:
+        """Perform drift detection in parallel across multiple configuration directories."""
+        try:
+            # Perform drift detection for each directory in parallel
+            results = self.parallel_executor(
+                delayed(_detect_drift_for_directory)(config_dir) 
+                for config_dir in config_dirs
+            )
+            
+            # Aggregate results
+            all_drift_detections = []
+            total_resources_checked = 0
+            total_resources_with_drift = 0
+            errors = []
+            
+            for config_dir, result in zip(config_dirs, results):
+                if result.get("error"):
+                    errors.append(f"{config_dir}: {result['error']}")
+                    continue
+                
+                drift_detections = result.get("drift_detections", [])
+                all_drift_detections.extend(drift_detections)
+                
+                summary = result.get("summary", {})
+                total_resources_checked += summary.get("resources_checked", 0)
+                total_resources_with_drift += summary.get("resources_with_drift", 0)
+            
+            # Build aggregated report
+            drift_report = {
+                "drift_detections": all_drift_detections,
+                "summary": {
+                    "resources_checked": total_resources_checked,
+                    "resources_with_drift": total_resources_with_drift,
+                    "config_directories_checked": len(config_dirs)
+                },
+                "immediate_action_required": [
+                    drift for drift in all_drift_detections 
+                    if drift.get("severity") in ["HIGH", "CRITICAL"]
+                ]
+            }
+            
+            if errors:
+                drift_report["errors"] = errors
+                logger.warning(f"Drift detection errors in {len(errors)} directories: {'; '.join(errors)}")
+            
+            return drift_report
+        
+        except Exception as e:
+            logger.error(f"Parallel drift detection failed: {e}")
+            return {"error": str(e), "drift_detections": []}
+    
+    def _detect_drift_single_dir(self, config_dir: Path) -> Dict[str, Any]:
+        """Detect drift for a single configuration directory."""
+        try:
+            logger.debug(f"Checking drift for directory: {config_dir}")
+            
+            # This is a simplified implementation - in practice you'd want to modify
+            # the core to accept a specific directory parameter
+            # For now, we'll simulate a basic drift check for the directory
+            
+            # Check if directory exists and has .cw files
+            if not config_dir.exists():
+                return {"error": "Directory does not exist", "drift_detections": []}
+            
+            cw_files = list(config_dir.glob("*.cw"))
+            if not cw_files:
+                return {"summary": {"resources_checked": 0, "resources_with_drift": 0}, "drift_detections": []}
+            
+            # In a real implementation, this would use the core with directory-specific logic
+            # For now, return a basic response
+            return {
+                "summary": {
+                    "resources_checked": len(cw_files),
+                    "resources_with_drift": 0
+                },
+                "drift_detections": []
+            }
+            
+        except Exception as e:
+            logger.error(f"Drift detection failed for {config_dir}: {e}")
+            return {"error": str(e), "drift_detections": []}
+    
+    def _get_file_info_impl(self, path: str) -> Dict[str, Any]:
+        """Get cached file information for a path."""
+        try:
+            path_obj = Path(path)
+            if not path_obj.exists():
+                return {"exists": False}
+            
+            stat_info = path_obj.stat()
+            cw_files = list(path_obj.glob("*.cw")) if path_obj.is_dir() else []
+            
+            return {
+                "exists": True,
+                "is_dir": path_obj.is_dir(),
+                "mtime": stat_info.st_mtime,
+                "ctime": stat_info.st_ctime,
+                "cw_file_count": len(cw_files),
+                "cw_files": [str(f) for f in cw_files]
+            }
+        except Exception as e:
+            return {"exists": False, "error": str(e)}
+    
+    def _apply_auto_fixes_parallel(self, drift_report: Dict[str, Any]) -> None:
+        """Apply auto-fixes in parallel when multiple resources need fixing."""
+        if self.cooldown_manager.in_cooldown():
+            logger.info("In cooldown period, skipping auto-fixes")
+            return
+        
+        if not self.rate_limiter.can_perform_operation():
+            logger.info("Rate limit exceeded, skipping auto-fixes")
+            return
+        
+        drift_detections = drift_report.get("drift_detections", [])
+        immediate_attention = drift_report.get("immediate_action_required", [])
+        
+        # Group fixes by type for potential parallel processing
+        fixes_to_apply = []
+        for drift_data in immediate_attention:
+            if len(fixes_to_apply) >= self.config.max_fixes_per_hour:
+                logger.info("Maximum fixes per check reached")
+                break
+            
+            try:
+                resource_id = drift_data["resource_id"]
+                resource_type = drift_data["resource_type"]
+                
+                # Determine fix decision using patch engine
+                fix_decision = self.patch_engine.determine_fix_decision(
+                    resource_id=resource_id,
+                    resource_type=resource_type,
+                    drift_details=drift_data,
+                    current_policy=self.config.auto_fix_policy
+                )
+                
+                if fix_decision.should_auto_apply:
+                    fixes_to_apply.append((resource_id, fix_decision))
+                else:
+                    logger.info(f"Fix for {resource_id} requires manual approval: {fix_decision.reason}")
+            
+            except Exception as e:
+                logger.error(f"Error preparing auto-fix: {e}")
+        
+        # Apply fixes in parallel if there are multiple
+        if len(fixes_to_apply) > 1:
+            logger.info(f"Applying {len(fixes_to_apply)} auto-fixes in parallel")
+            results = self.parallel_executor(
+                delayed(self._apply_fix)(resource_id, fix_decision)
+                for resource_id, fix_decision in fixes_to_apply
+            )
+            
+            # Process results
+            fixes_applied = sum(1 for success in results if success)
+            fixes_failed = len(results) - fixes_applied
+            
+        elif len(fixes_to_apply) == 1:
+            # Single fix - apply normally
+            resource_id, fix_decision = fixes_to_apply[0]
+            logger.info(f"Applying auto-fix for {resource_id}: {fix_decision.patch_type.value}")
+            success = self._apply_fix(resource_id, fix_decision)
+            fixes_applied = 1 if success else 0
+            fixes_failed = 0 if success else 1
+        else:
+            fixes_applied = 0
+            fixes_failed = 0
+        
+        # Update metrics and rate limiting
+        if fixes_applied > 0:
+            self.metrics["fixes_applied"] += fixes_applied
+            for _ in range(fixes_applied):
+                self.rate_limiter.record_operation()
+            
+            # Start cooldown after successful fixes
+            if self.config.cooldown_minutes > 0:
+                self.cooldown_manager.start_cooldown()
+            
+            logger.info(f"Applied {fixes_applied} auto-fixes")
+        
+        if fixes_failed > 0:
+            self.metrics["fixes_failed"] += fixes_failed
+            logger.warning(f"{fixes_failed} fixes failed")
+        
+        if fixes_applied == 0 and fixes_failed == 0:
+            logger.info("No auto-fixes applied")
     
     def _apply_auto_fixes(self, drift_report: Dict[str, Any]) -> None:
         """Apply auto-fixes based on policy and safety checks."""

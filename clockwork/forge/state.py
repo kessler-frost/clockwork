@@ -1,11 +1,11 @@
 """
 State management module for tracking resource states and execution history.
 
-This module provides simple JSON-based state management for tracking the state
+This module provides fast joblib-based state management for tracking the state
 of resources and maintaining execution history across artifact runs.
 """
 
-import json
+import joblib
 import logging
 import time
 import shutil
@@ -140,12 +140,12 @@ class StateManagerError(Exception):
 
 class StateManager:
     """
-    Enhanced JSON-based state manager for tracking ClockworkState with drift detection.
+    Enhanced joblib-based state manager for tracking ClockworkState with drift detection.
     
     Provides functionality to:
     - Track resource states across executions using ClockworkState model
     - Maintain execution history with versioning
-    - Persist state to .clockwork/state.json
+    - Persist state to .clockwork/state.json (using joblib for fast serialization)
     - Handle concurrent access with locking
     - Backup and restore state with migration support
     - State versioning and automatic migration
@@ -367,8 +367,7 @@ class StateManager:
                     "backup_timestamp": time.time()
                 }
                 
-                with open(backup_file, "w") as f:
-                    json.dump(backup_data, f, indent=2)
+                joblib.dump(backup_data, backup_file)
                 
                 self._metadata["last_backup"] = time.time()
             
@@ -390,8 +389,7 @@ class StateManager:
             True if successful, False otherwise
         """
         try:
-            with open(backup_file, "r") as f:
-                backup_data = json.load(f)
+            backup_data = joblib.load(backup_file)
             
             with self._lock:
                 # Restore resources
@@ -493,8 +491,7 @@ class StateManager:
             return
         
         try:
-            with open(self.state_file, "r") as f:
-                data = json.load(f)
+            data = joblib.load(self.state_file)
             
             # Check schema version and migrate if needed
             schema_version = data.get("metadata", {}).get("schema_version", "1.0")
@@ -546,8 +543,7 @@ class StateManager:
             
             # Write to temporary file first, then rename (atomic operation)
             temp_file = self.state_file.with_suffix(".tmp")
-            with open(temp_file, "w") as f:
-                json.dump(data, f, indent=2, default=str)
+            joblib.dump(data, temp_file)
             
             temp_file.rename(self.state_file)
             logger.debug("Saved enhanced state to file")
@@ -770,8 +766,7 @@ class StateManager:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             snapshot_file = self.backup_dir / f"state_snapshot_{timestamp}.json"
             
-            with open(snapshot_file, "w") as f:
-                json.dump(self._clockwork_state.model_dump(), f, indent=2, default=str)
+            joblib.dump(self._clockwork_state.model_dump(), snapshot_file)
             
             logger.info(f"Created state snapshot: {snapshot_file}")
             return snapshot_file
@@ -791,8 +786,7 @@ class StateManager:
             True if successful, False otherwise
         """
         try:
-            with open(snapshot_file, "r") as f:
-                snapshot_data = json.load(f)
+            snapshot_data = joblib.load(snapshot_file)
             
             with self._lock:
                 self._clockwork_state = ClockworkState.model_validate(snapshot_data)

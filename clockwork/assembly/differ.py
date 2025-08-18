@@ -11,10 +11,70 @@ from typing import Any, Dict, List, Optional, Set, Union, Tuple
 import logging
 from copy import deepcopy
 from datetime import datetime, timedelta
+from joblib import Parallel, delayed, Memory
+import tempfile
+import os
 from ..models import ClockworkState, ResourceState as ModelResourceState, ExecutionStatus
 
 
 logger = logging.getLogger(__name__)
+
+# Set up caching for drift detection with joblib.Memory
+# Use a temporary directory for cache storage
+_cache_dir = os.path.join(tempfile.gettempdir(), 'clockwork_drift_cache')
+memory = Memory(_cache_dir, verbose=0)
+
+
+def clear_drift_cache() -> bool:
+    """
+    Clear the drift detection cache to force fresh calculations.
+    
+    Returns:
+        bool: True if cache was cleared successfully, False otherwise
+    """
+    try:
+        memory.clear()
+        logger.info("Drift detection cache cleared successfully")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to clear drift detection cache: {e}")
+        return False
+
+
+def get_cache_info() -> Dict[str, Any]:
+    """
+    Get information about the drift detection cache.
+    
+    Returns:
+        Dict containing cache information
+    """
+    try:
+        cache_info = {
+            "cache_location": memory.location,
+            "cache_exists": os.path.exists(memory.location),
+            "cache_size_bytes": 0
+        }
+        
+        # Calculate cache size if directory exists
+        if cache_info["cache_exists"]:
+            cache_size = 0
+            for dirpath, dirnames, filenames in os.walk(memory.location):
+                for filename in filenames:
+                    filepath = os.path.join(dirpath, filename)
+                    if os.path.isfile(filepath):
+                        cache_size += os.path.getsize(filepath)
+            cache_info["cache_size_bytes"] = cache_size
+            cache_info["cache_size_mb"] = round(cache_size / (1024 * 1024), 2)
+        
+        return cache_info
+        
+    except Exception as e:
+        logger.error(f"Failed to get cache info: {e}")
+        return {
+            "cache_location": memory.location,
+            "cache_exists": False,
+            "error": str(e)
+        }
 
 
 class DiffType(Enum):
@@ -548,18 +608,44 @@ def _set_nested_field(obj: Dict[str, Any], field_path: str, value: Any) -> None:
 # Comprehensive Drift Detection Functions
 # =============================================================================
 
-def detect_resource_drift(
+@memory.cache
+def _cached_detect_configuration_drift(
+    resource_id: str,
+    current_config_hash: str,
+    desired_config_hash: str,
+    current_config: Dict[str, Any],
+    desired_config: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Cached version of configuration drift detection for unchanged resources.
+    
+    Args:
+        resource_id: Resource identifier for logging
+        current_config_hash: Hash of current configuration for cache key
+        desired_config_hash: Hash of desired configuration for cache key
+        current_config: Current resource configuration
+        desired_config: Desired resource configuration
+        
+    Returns:
+        Dict containing configuration drift details
+    """
+    return _detect_configuration_drift(current_config, desired_config)
+
+
+def _detect_resource_drift_parallel(
     current_resource: ModelResourceState,
     desired_config: Dict[str, Any],
-    max_age_minutes: int = 60
+    max_age_minutes: int = 60,
+    use_cache: bool = True
 ) -> DriftDetection:
     """
-    Detect drift for a specific resource by comparing current state with desired configuration.
+    Parallel-safe version of detect_resource_drift for use with joblib.
     
     Args:
         current_resource: Current resource state from ClockworkState
         desired_config: Desired configuration for the resource
         max_age_minutes: Maximum age before drift detection is considered stale
+        use_cache: Whether to use caching for unchanged resources
         
     Returns:
         DriftDetection: Comprehensive drift analysis
@@ -571,8 +657,21 @@ def detect_resource_drift(
         cutoff_time = datetime.now() - timedelta(minutes=max_age_minutes)
         is_stale = current_resource.last_verified < cutoff_time
         
-        # Perform configuration drift detection
-        config_drift_details = _detect_configuration_drift(current_resource.config, desired_config)
+        # Perform configuration drift detection with optional caching
+        if use_cache:
+            # Create hashes for caching
+            current_config_hash = str(hash(str(sorted(current_resource.config.items()))))
+            desired_config_hash = str(hash(str(sorted(desired_config.items()))))
+            
+            config_drift_details = _cached_detect_configuration_drift(
+                current_resource.resource_id,
+                current_config_hash,
+                desired_config_hash,
+                current_resource.config,
+                desired_config
+            )
+        else:
+            config_drift_details = _detect_configuration_drift(current_resource.config, desired_config)
         
         # Perform runtime drift detection
         runtime_drift_details = _detect_runtime_drift(current_resource)
@@ -620,10 +719,32 @@ def detect_resource_drift(
         )
 
 
+def detect_resource_drift(
+    current_resource: ModelResourceState,
+    desired_config: Dict[str, Any],
+    max_age_minutes: int = 60
+) -> DriftDetection:
+    """
+    Detect drift for a specific resource by comparing current state with desired configuration.
+    
+    Args:
+        current_resource: Current resource state from ClockworkState
+        desired_config: Desired configuration for the resource
+        max_age_minutes: Maximum age before drift detection is considered stale
+        
+    Returns:
+        DriftDetection: Comprehensive drift analysis
+    """
+    # Use the parallel-safe version with caching enabled
+    return _detect_resource_drift_parallel(current_resource, desired_config, max_age_minutes, use_cache=True)
+
+
 def detect_state_drift(
     current_state: Dict[str, ModelResourceState],
     desired_state: Dict[str, Any],
-    check_interval_minutes: int = 60
+    check_interval_minutes: int = 60,
+    parallel: bool = True,
+    n_jobs: int = -1
 ) -> List[DriftDetection]:
     """
     Perform comprehensive drift detection across all resources in the state.
@@ -632,25 +753,49 @@ def detect_state_drift(
         current_state: Dictionary of current resource states
         desired_state: Dictionary of desired resource configurations
         check_interval_minutes: Interval for drift checking
+        parallel: Whether to use parallel processing (default: True)
+        n_jobs: Number of parallel jobs (-1 for all cores, default: -1)
         
     Returns:
         List[DriftDetection]: List of drift detections for all resources
     """
     try:
-        logger.info(f"Starting comprehensive drift detection for {len(current_state)} resources")
-        drift_detections = []
+        logger.info(f"Starting comprehensive drift detection for {len(current_state)} resources "
+                   f"(parallel={parallel}, n_jobs={n_jobs})")
         
-        # Check for drift in existing resources
+        # Prepare tasks for existing resources
+        existing_resource_tasks = []
         for resource_id, current_resource in current_state.items():
-            # Find corresponding desired configuration
             desired_config = _find_desired_resource_config(resource_id, desired_state)
-            
             if desired_config:
-                drift_detection = detect_resource_drift(
-                    current_resource, desired_config, check_interval_minutes
+                existing_resource_tasks.append((current_resource, desired_config, check_interval_minutes))
+            else:
+                # Handle orphaned resources separately as they don't need computation
+                pass
+        
+        # Perform drift detection in parallel for existing resources
+        if parallel and existing_resource_tasks:
+            logger.debug(f"Processing {len(existing_resource_tasks)} existing resources in parallel")
+            drift_detections = Parallel(n_jobs=n_jobs, backend='threading')(
+                delayed(_detect_resource_drift_parallel)(
+                    current_resource, desired_config, check_interval_minutes, use_cache=True
+                )
+                for current_resource, desired_config, check_interval_minutes in existing_resource_tasks
+            )
+        else:
+            # Sequential processing
+            logger.debug(f"Processing {len(existing_resource_tasks)} existing resources sequentially")
+            drift_detections = []
+            for current_resource, desired_config, check_interval_minutes in existing_resource_tasks:
+                drift_detection = _detect_resource_drift_parallel(
+                    current_resource, desired_config, check_interval_minutes, use_cache=True
                 )
                 drift_detections.append(drift_detection)
-            else:
+        
+        # Handle orphaned resources (no parallel processing needed)
+        for resource_id, current_resource in current_state.items():
+            desired_config = _find_desired_resource_config(resource_id, desired_state)
+            if not desired_config:
                 # Resource exists but is not in desired state - orphaned resource
                 drift_detection = DriftDetection(
                     resource_id=resource_id,
@@ -663,6 +808,7 @@ def detect_state_drift(
                 drift_detections.append(drift_detection)
         
         # Check for missing resources (in desired state but not current)
+        missing_resource_detections = []
         for resource_type, resources in desired_state.items():
             if isinstance(resources, dict):
                 for resource_name, config in resources.items():
@@ -676,7 +822,10 @@ def detect_state_drift(
                             config_drift_details={"issue": "missing_resource", "description": "Resource in desired state but not deployed"},
                             suggested_actions=["Deploy missing resource", "Run clockwork apply"]
                         )
-                        drift_detections.append(drift_detection)
+                        missing_resource_detections.append(drift_detection)
+        
+        # Combine all drift detections
+        drift_detections.extend(missing_resource_detections)
         
         # Filter out NO_DRIFT detections for cleaner output
         significant_drifts = [d for d in drift_detections if d.drift_type != DriftType.NO_DRIFT]
@@ -786,6 +935,124 @@ def generate_drift_report(drift_detections: List[DriftDetection]) -> Dict[str, A
             "error": str(e),
             "summary": {"total_resources_checked": 0, "resources_with_drift": 0},
             "generated_at": datetime.now().isoformat()
+        }
+
+
+def analyze_drift_summary(
+    current_state: Dict[str, ModelResourceState],
+    desired_state: Dict[str, Any],
+    parallel: bool = True,
+    n_jobs: int = -1
+) -> Dict[str, Any]:
+    """
+    Perform parallel analysis of drift across all resources and generate summary statistics.
+    
+    Args:
+        current_state: Dictionary of current resource states
+        desired_state: Dictionary of desired resource configurations
+        parallel: Whether to use parallel processing (default: True)
+        n_jobs: Number of parallel jobs (-1 for all cores, default: -1)
+        
+    Returns:
+        Dict containing comprehensive drift analysis summary
+    """
+    try:
+        logger.info(f"Starting parallel drift summary analysis for {len(current_state)} resources")
+        
+        # Prepare tasks for drift summary calculation
+        summary_tasks = []
+        for resource_id, current_resource in current_state.items():
+            desired_config = _find_desired_resource_config(resource_id, desired_state)
+            if desired_config:
+                summary_tasks.append((current_resource, desired_config))
+        
+        # Perform parallel drift summary calculations
+        if parallel and summary_tasks:
+            logger.debug(f"Processing {len(summary_tasks)} resource summaries in parallel")
+            resource_summaries = Parallel(n_jobs=n_jobs, backend='threading')(
+                delayed(get_resource_drift_summary)(current_resource, desired_config)
+                for current_resource, desired_config in summary_tasks
+            )
+        else:
+            # Sequential processing
+            logger.debug(f"Processing {len(summary_tasks)} resource summaries sequentially")
+            resource_summaries = []
+            for current_resource, desired_config in summary_tasks:
+                summary = get_resource_drift_summary(current_resource, desired_config)
+                resource_summaries.append(summary)
+        
+        # Calculate aggregate statistics
+        total_resources = len(resource_summaries)
+        resources_with_config_drift = sum(1 for s in resource_summaries if s.get("has_config_drift", False))
+        resources_with_runtime_drift = sum(1 for s in resource_summaries if s.get("has_runtime_drift", False))
+        
+        # Calculate drift score statistics
+        drift_scores = [s.get("drift_score", 0) for s in resource_summaries]
+        avg_drift_score = sum(drift_scores) / len(drift_scores) if drift_scores else 0
+        max_drift_score = max(drift_scores) if drift_scores else 0
+        min_drift_score = min(drift_scores) if drift_scores else 0
+        
+        # Categorize resources by drift severity
+        high_drift_resources = [s for s in resource_summaries if s.get("drift_score", 0) >= 70]
+        medium_drift_resources = [s for s in resource_summaries if 30 <= s.get("drift_score", 0) < 70]
+        low_drift_resources = [s for s in resource_summaries if 0 < s.get("drift_score", 0) < 30]
+        no_drift_resources = [s for s in resource_summaries if s.get("drift_score", 0) == 0]
+        
+        # Find resources requiring immediate attention
+        critical_resources = [
+            s for s in resource_summaries 
+            if s.get("has_runtime_drift", False) or s.get("drift_score", 0) >= 80
+        ]
+        
+        analysis_summary = {
+            "overview": {
+                "total_resources_analyzed": total_resources,
+                "resources_with_config_drift": resources_with_config_drift,
+                "resources_with_runtime_drift": resources_with_runtime_drift,
+                "config_drift_percentage": (resources_with_config_drift / total_resources * 100) if total_resources > 0 else 0,
+                "runtime_drift_percentage": (resources_with_runtime_drift / total_resources * 100) if total_resources > 0 else 0
+            },
+            "drift_scores": {
+                "average": round(avg_drift_score, 2),
+                "maximum": max_drift_score,
+                "minimum": min_drift_score,
+                "distribution": {
+                    "high_drift": len(high_drift_resources),
+                    "medium_drift": len(medium_drift_resources), 
+                    "low_drift": len(low_drift_resources),
+                    "no_drift": len(no_drift_resources)
+                }
+            },
+            "critical_resources": [
+                {
+                    "resource_id": r["resource_id"],
+                    "resource_type": r["resource_type"],
+                    "drift_score": r["drift_score"],
+                    "has_config_drift": r.get("has_config_drift", False),
+                    "has_runtime_drift": r.get("has_runtime_drift", False),
+                    "status": r.get("status", "unknown")
+                }
+                for r in critical_resources
+            ],
+            "resource_summaries": resource_summaries,
+            "analysis_metadata": {
+                "parallel_processing": parallel,
+                "analyzed_at": datetime.now().isoformat(),
+                "processing_time_optimized": parallel
+            }
+        }
+        
+        logger.info(f"Drift summary analysis completed: {resources_with_config_drift}/{total_resources} "
+                   f"resources with config drift, {resources_with_runtime_drift}/{total_resources} with runtime drift")
+        
+        return analysis_summary
+        
+    except Exception as e:
+        logger.error(f"Failed to analyze drift summary: {e}")
+        return {
+            "error": str(e),
+            "overview": {"total_resources_analyzed": 0},
+            "analysis_metadata": {"analyzed_at": datetime.now().isoformat()}
         }
 
 
@@ -1076,8 +1343,99 @@ def _find_desired_resource_config(resource_id: str, desired_state: Dict[str, Any
 
 
 # =============================================================================
-# State Comparison Utilities
+# State Comparison Utilities  
 # =============================================================================
+
+def compare_multiple_resource_states(
+    resource_pairs: List[Tuple[ModelResourceState, ModelResourceState]],
+    compare_timestamps: bool = False,
+    parallel: bool = True,
+    n_jobs: int = -1
+) -> List[Dict[str, Any]]:
+    """
+    Compare multiple pairs of ResourceState objects in parallel.
+    
+    Args:
+        resource_pairs: List of tuples containing (resource1, resource2) pairs to compare
+        compare_timestamps: Whether to include timestamp comparisons
+        parallel: Whether to use parallel processing (default: True)
+        n_jobs: Number of parallel jobs (-1 for all cores, default: -1)
+        
+    Returns:
+        List of comparison results, one for each resource pair
+    """
+    try:
+        if not resource_pairs:
+            return []
+        
+        logger.info(f"Comparing {len(resource_pairs)} resource pairs "
+                   f"(parallel={parallel}, n_jobs={n_jobs})")
+        
+        if parallel:
+            logger.debug(f"Processing {len(resource_pairs)} resource comparisons in parallel")
+            comparisons = Parallel(n_jobs=n_jobs, backend='threading')(
+                delayed(compare_resource_states)(resource1, resource2, compare_timestamps)
+                for resource1, resource2 in resource_pairs
+            )
+        else:
+            # Sequential processing
+            logger.debug(f"Processing {len(resource_pairs)} resource comparisons sequentially")
+            comparisons = []
+            for resource1, resource2 in resource_pairs:
+                comparison = compare_resource_states(resource1, resource2, compare_timestamps)
+                comparisons.append(comparison)
+        
+        logger.info(f"Resource comparison completed for {len(resource_pairs)} pairs")
+        return comparisons
+        
+    except Exception as e:
+        logger.error(f"Failed to compare multiple resource states: {e}")
+        return []
+
+
+def parallel_state_diff_analysis(
+    state_pairs: List[Tuple[Dict[str, ModelResourceState], Dict[str, Any]]],
+    parallel: bool = True,
+    n_jobs: int = -1
+) -> List[Dict[str, Any]]:
+    """
+    Perform parallel state diff score calculations for multiple state pairs.
+    
+    Args:
+        state_pairs: List of (current_state, desired_state) tuples to analyze
+        parallel: Whether to use parallel processing (default: True)
+        n_jobs: Number of parallel jobs (-1 for all cores, default: -1)
+        
+    Returns:
+        List of state diff analysis results
+    """
+    try:
+        if not state_pairs:
+            return []
+        
+        logger.info(f"Analyzing {len(state_pairs)} state pairs for diff scores "
+                   f"(parallel={parallel}, n_jobs={n_jobs})")
+        
+        if parallel:
+            logger.debug(f"Processing {len(state_pairs)} state diff analyses in parallel")
+            analyses = Parallel(n_jobs=n_jobs, backend='threading')(
+                delayed(calculate_state_diff_score)(current_state, desired_state)
+                for current_state, desired_state in state_pairs
+            )
+        else:
+            # Sequential processing
+            logger.debug(f"Processing {len(state_pairs)} state diff analyses sequentially")
+            analyses = []
+            for current_state, desired_state in state_pairs:
+                analysis = calculate_state_diff_score(current_state, desired_state)
+                analyses.append(analysis)
+        
+        logger.info(f"State diff analysis completed for {len(state_pairs)} pairs")
+        return analyses
+        
+    except Exception as e:
+        logger.error(f"Failed to perform parallel state diff analysis: {e}")
+        return []
 
 def compare_resource_states(
     resource1: ModelResourceState, 
