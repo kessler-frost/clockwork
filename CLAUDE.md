@@ -1,0 +1,1 @@
+- "I'm using uv in this repo so run the scripts and cli by keeping that in mind"
