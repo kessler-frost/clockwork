@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from datetime import datetime
+from joblib import Parallel, delayed
 
 from .models import (
     IR, ActionList, ArtifactBundle, ClockworkState, ClockworkConfig,
@@ -759,19 +760,50 @@ class ClockworkCore:
         """Save artifact bundle to build directory."""
         build_dir.mkdir(parents=True, exist_ok=True)
         
-        # Save each artifact
-        for artifact in artifact_bundle.artifacts:
-            artifact_path = build_dir / artifact.path
-            artifact_path.parent.mkdir(parents=True, exist_ok=True)
-            
-            # Write content
-            artifact_path.write_text(artifact.content)
-            
-            # Set permissions
-            if artifact.mode:
-                import stat
-                mode = int(artifact.mode, 8)  # Convert octal string to int
-                artifact_path.chmod(mode)
+        def _save_single_artifact(artifact):
+            """Save a single artifact - used for parallel processing."""
+            try:
+                artifact_path = build_dir / artifact.path
+                artifact_path.parent.mkdir(parents=True, exist_ok=True)
+                
+                # Write content
+                artifact_path.write_text(artifact.content)
+                
+                # Set permissions
+                if artifact.mode:
+                    import stat
+                    mode = int(artifact.mode, 8)  # Convert octal string to int
+                    artifact_path.chmod(mode)
+                    
+                return {"success": True, "path": str(artifact_path)}
+            except Exception as e:
+                logger.error(f"Failed to save artifact {artifact.path}: {e}")
+                return {"success": False, "path": artifact.path, "error": str(e)}
+        
+        # Parallelize artifact saving when there are multiple artifacts
+        if len(artifact_bundle.artifacts) > 1:
+            logger.debug(f"Saving {len(artifact_bundle.artifacts)} artifacts in parallel")
+            try:
+                results = Parallel(n_jobs=-1, backend='threading')(
+                    delayed(_save_single_artifact)(artifact)
+                    for artifact in artifact_bundle.artifacts
+                )
+                
+                # Check for any failures
+                failed_saves = [r for r in results if not r["success"]]
+                if failed_saves:
+                    logger.warning(f"Failed to save {len(failed_saves)} artifacts")
+                    for failure in failed_saves:
+                        logger.error(f"Artifact save failed: {failure['path']} - {failure['error']}")
+            except Exception as e:
+                logger.warning(f"Parallel artifact saving failed, falling back to sequential: {e}")
+                # Fallback to sequential processing
+                for artifact in artifact_bundle.artifacts:
+                    _save_single_artifact(artifact)
+        else:
+            # For single artifact, save directly
+            if artifact_bundle.artifacts:
+                _save_single_artifact(artifact_bundle.artifacts[0])
         
         # Save bundle metadata
         bundle_file = build_dir / "bundle.json"
@@ -796,21 +828,58 @@ class ClockworkCore:
                 logs=[str(r) for r in results]
             )
             
-            # Update resource states based on results
-            for i, result in enumerate(results):
-                if i < len(artifact_bundle.steps):
-                    step = artifact_bundle.steps[i]
-                    resource_id = step.purpose
-                    
-                    resource_state = ResourceState(
-                        resource_id=resource_id,
-                        type="service",  # TODO: Determine actual type
-                        status="success" if result.get("success") else "failed",
-                        last_applied=datetime.now(),
-                        last_verified=datetime.now()
+            def _create_resource_state(result_data):
+                """Create resource state from result data - used for parallel processing."""
+                i, result = result_data
+                try:
+                    if i < len(artifact_bundle.steps):
+                        step = artifact_bundle.steps[i]
+                        resource_id = step.purpose
+                        
+                        resource_state = ResourceState(
+                            resource_id=resource_id,
+                            type="service",  # TODO: Determine actual type
+                            status="success" if result.get("success") else "failed",
+                            last_applied=datetime.now(),
+                            last_verified=datetime.now()
+                        )
+                        
+                        return (resource_id, resource_state)
+                    return None
+                except Exception as e:
+                    logger.error(f"Failed to create resource state for result {i}: {e}")
+                    return None
+            
+            # Parallelize resource state updates when there are multiple results
+            if len(results) > 1:
+                logger.debug(f"Processing {len(results)} resource state updates in parallel")
+                try:
+                    resource_states = Parallel(n_jobs=-1, backend='threading')(
+                        delayed(_create_resource_state)((i, result))
+                        for i, result in enumerate(results)
                     )
                     
-                    state.current_resources[resource_id] = resource_state
+                    # Update state with results
+                    for resource_data in resource_states:
+                        if resource_data:
+                            resource_id, resource_state = resource_data
+                            state.current_resources[resource_id] = resource_state
+                            
+                except Exception as e:
+                    logger.warning(f"Parallel state update failed, falling back to sequential: {e}")
+                    # Fallback to sequential processing
+                    for i, result in enumerate(results):
+                        resource_data = _create_resource_state((i, result))
+                        if resource_data:
+                            resource_id, resource_state = resource_data
+                            state.current_resources[resource_id] = resource_state
+            else:
+                # For single result, process directly
+                if results:
+                    resource_data = _create_resource_state((0, results[0]))
+                    if resource_data:
+                        resource_id, resource_state = resource_data
+                        state.current_resources[resource_id] = resource_state
             
             # Add execution record
             state.execution_history.append(execution_record)
@@ -846,81 +915,157 @@ class ClockworkCore:
         if ir.metadata.get("namespace"):
             ir_dict["config"]["namespace"] = ir.metadata["namespace"]
         
-        # Convert resources by type
-        logger.debug(f"Converting {len(ir.resources)} resources from IR")
-        for resource_name, resource in ir.resources.items():
-            resource_type = resource.type.value if hasattr(resource.type, 'value') else str(resource.type)
-            logger.debug(f"Processing resource {resource_name} of type {resource_type}")
-            
-            if resource_type == "service":
-                service_config = {
-                    "name": resource.name,
-                    "image": resource.config.get("image", "nginx:latest"),
-                }
+        def _process_single_resource(resource_item):
+            """Process a single resource - used for parallel processing."""
+            resource_name, resource = resource_item
+            try:
+                resource_type = resource.type.value if hasattr(resource.type, 'value') else str(resource.type)
+                logger.debug(f"Processing resource {resource_name} of type {resource_type}")
                 
-                # Add ports if specified
-                if "ports" in resource.config:
-                    service_config["ports"] = resource.config["ports"]
-                elif "port" in resource.config:
-                    # Convert single port to ports array
-                    service_config["ports"] = [{"external": resource.config["port"], "internal": 80}]
-                
-                # Add environment variables
-                if "environment" in resource.config:
-                    service_config["environment"] = resource.config["environment"]
-                
-                # Add health check if specified (handle both dict and list[dict] from HCL parsing)
-                if "health_check" in resource.config:
-                    health_check = resource.config["health_check"]
-                    if isinstance(health_check, list) and len(health_check) > 0:
-                        # HCL parser returns list, take first item
-                        service_config["health_check"] = health_check[0]
-                    else:
-                        service_config["health_check"] = health_check
-                
-                # Add dependencies if specified
-                if resource.depends_on:
-                    service_config["depends_on"] = resource.depends_on
-                
-                ir_dict["services"][resource.name] = service_config
-                
-            elif resource_type == "file":
-                file_config = {
-                    "name": resource.name,
-                    "path": resource.config.get("path", ""),
-                    "type": resource.config.get("type", "file"),  # file, directory
-                    "mode": resource.config.get("mode", "644"),
-                }
-                
-                # Add content if specified
-                if "content" in resource.config:
-                    file_config["content"] = resource.config["content"]
-                
-                # Add dependencies if specified
-                if resource.depends_on:
-                    file_config["depends_on"] = resource.depends_on
-                
-                ir_dict["files"][resource.name] = file_config
-                
-            elif resource_type == "verification":
-                verification_config = {
-                    "name": resource.config.get("name", resource.name),
-                    "checks": resource.config.get("checks", []),
-                }
-                
-                # Add dependencies if specified
-                if resource.depends_on:
-                    verification_config["depends_on"] = resource.depends_on
-                
-                ir_dict["verifications"][resource.name] = verification_config
+                if resource_type == "service":
+                    service_config = {
+                        "name": resource.name,
+                        "image": resource.config.get("image", "nginx:latest"),
+                    }
+                    
+                    # Add ports if specified
+                    if "ports" in resource.config:
+                        service_config["ports"] = resource.config["ports"]
+                    elif "port" in resource.config:
+                        # Convert single port to ports array
+                        service_config["ports"] = [{"external": resource.config["port"], "internal": 80}]
+                    
+                    # Add environment variables
+                    if "environment" in resource.config:
+                        service_config["environment"] = resource.config["environment"]
+                    
+                    # Add health check if specified (handle both dict and list[dict] from HCL parsing)
+                    if "health_check" in resource.config:
+                        health_check = resource.config["health_check"]
+                        if isinstance(health_check, list) and len(health_check) > 0:
+                            # HCL parser returns list, take first item
+                            service_config["health_check"] = health_check[0]
+                        else:
+                            service_config["health_check"] = health_check
+                    
+                    # Add dependencies if specified
+                    if resource.depends_on:
+                        service_config["depends_on"] = resource.depends_on
+                    
+                    return ("services", resource.name, service_config)
+                    
+                elif resource_type == "file":
+                    file_config = {
+                        "name": resource.name,
+                        "path": resource.config.get("path", ""),
+                        "type": resource.config.get("type", "file"),  # file, directory
+                        "mode": resource.config.get("mode", "644"),
+                    }
+                    
+                    # Add content if specified
+                    if "content" in resource.config:
+                        file_config["content"] = resource.config["content"]
+                    
+                    # Add dependencies if specified
+                    if resource.depends_on:
+                        file_config["depends_on"] = resource.depends_on
+                    
+                    return ("files", resource.name, file_config)
+                    
+                elif resource_type == "verification":
+                    verification_config = {
+                        "name": resource.config.get("name", resource.name),
+                        "checks": resource.config.get("checks", []),
+                    }
+                    
+                    # Add dependencies if specified
+                    if resource.depends_on:
+                        verification_config["depends_on"] = resource.depends_on
+                    
+                    return ("verifications", resource.name, verification_config)
+                    
+                return None
+            except Exception as e:
+                logger.error(f"Failed to process resource {resource_name}: {e}")
+                return None
         
-        # Convert modules to repositories if any
-        for module_name, module in ir.modules.items():
-            if module.source.startswith(("http", "git")):
-                ir_dict["repositories"][module_name] = {
-                    "url": module.source,
-                    "branch": module.inputs.get("branch", "main")
-                }
+        def _process_single_module(module_item):
+            """Process a single module - used for parallel processing."""
+            module_name, module = module_item
+            try:
+                if module.source.startswith(("http", "git")):
+                    return (module_name, {
+                        "url": module.source,
+                        "branch": module.inputs.get("branch", "main")
+                    })
+                return None
+            except Exception as e:
+                logger.error(f"Failed to process module {module_name}: {e}")
+                return None
+        
+        # Parallelize resource conversion when there are multiple resources
+        if len(ir.resources) > 1:
+            logger.debug(f"Converting {len(ir.resources)} resources from IR in parallel")
+            try:
+                resource_results = Parallel(n_jobs=-1, backend='threading')(
+                    delayed(_process_single_resource)(item)
+                    for item in ir.resources.items()
+                )
+                
+                # Add processed resources to ir_dict
+                for result in resource_results:
+                    if result:
+                        resource_category, resource_name, resource_config = result
+                        ir_dict[resource_category][resource_name] = resource_config
+                        
+            except Exception as e:
+                logger.warning(f"Parallel resource processing failed, falling back to sequential: {e}")
+                # Fallback to sequential processing
+                for resource_name, resource in ir.resources.items():
+                    result = _process_single_resource((resource_name, resource))
+                    if result:
+                        resource_category, resource_name, resource_config = result
+                        ir_dict[resource_category][resource_name] = resource_config
+        else:
+            # For single resource, process directly
+            if ir.resources:
+                resource_name, resource = next(iter(ir.resources.items()))
+                result = _process_single_resource((resource_name, resource))
+                if result:
+                    resource_category, resource_name, resource_config = result
+                    ir_dict[resource_category][resource_name] = resource_config
+        
+        # Parallelize module conversion when there are multiple modules
+        if len(ir.modules) > 1:
+            logger.debug(f"Converting {len(ir.modules)} modules from IR in parallel")
+            try:
+                module_results = Parallel(n_jobs=-1, backend='threading')(
+                    delayed(_process_single_module)(item)
+                    for item in ir.modules.items()
+                )
+                
+                # Add processed modules to ir_dict
+                for result in module_results:
+                    if result:
+                        module_name, module_config = result
+                        ir_dict["repositories"][module_name] = module_config
+                        
+            except Exception as e:
+                logger.warning(f"Parallel module processing failed, falling back to sequential: {e}")
+                # Fallback to sequential processing
+                for module_name, module in ir.modules.items():
+                    result = _process_single_module((module_name, module))
+                    if result:
+                        module_name, module_config = result
+                        ir_dict["repositories"][module_name] = module_config
+        else:
+            # For single module, process directly
+            if ir.modules:
+                module_name, module = next(iter(ir.modules.items()))
+                result = _process_single_module((module_name, module))
+                if result:
+                    module_name, module_config = result
+                    ir_dict["repositories"][module_name] = module_config
         
         return ir_dict
 
