@@ -170,238 +170,6 @@ class SandboxConfig:
     parallel_limit: int = 4  # Maximum number of parallel executions
 
 
-class ArtifactPathValidator:
-    """Enhanced validator for artifact paths and security."""
-    
-    def __init__(self, build_directory: str = ".clockwork/build"):
-        self.build_directory = Path(build_directory).resolve()
-        self.dangerous_patterns = {
-            "python": [
-                "__import__", "exec(", "eval(", "compile(",
-                "os.system", "subprocess.call", "subprocess.run",
-                "open(", "file(", "input(", "raw_input(",
-                "import os", "import sys", "import subprocess"
-            ],
-            "bash": [
-                "rm -rf", ":(){ :|:& };:", "dd if=", "mkfs",
-                "> /dev/zero", "> /dev/random", 
-                "chmod 777", "sudo", "su -", "/etc/passwd"
-            ],
-            "javascript": [
-                "require(", "import(", "eval(", "Function(",
-                "document.", "window.", "global.", "process.exit",
-                "fs.unlink", "child_process"
-            ],
-            "sh": [
-                "rm -rf", "dd if=", "mkfs", "> /dev/",
-                "chmod 777", "chown", "sudo", "su"
-            ]
-        }
-        
-    def validate_artifact_path(self, artifact_path: str) -> Tuple[bool, List[str]]:
-        """Validate artifact path for security compliance.
-        
-        Args:
-            artifact_path: Path to validate
-            
-        Returns:
-            Tuple of (is_valid, list_of_violations)
-        """
-        violations = []
-        
-        try:
-            # Resolve the path and check if it's within build directory
-            resolved_path = Path(artifact_path).resolve()
-            
-            # Check for directory traversal attacks
-            if ".." in str(artifact_path) or "../" in str(artifact_path):
-                violations.append("Directory traversal attack detected: contains '..'")
-            
-            # Ensure path is within build directory
-            try:
-                resolved_path.relative_to(self.build_directory)
-            except ValueError:
-                violations.append(f"Path outside allowed directory: {artifact_path} not in {self.build_directory}")
-            
-            # Check for dangerous path components
-            dangerous_components = ["/etc/", "/usr/", "/bin/", "/sbin/", "/root/", "/home/", "/var/", "/tmp/"]
-            for component in dangerous_components:
-                if component in str(resolved_path):
-                    violations.append(f"Dangerous path component detected: {component}")
-            
-            # Check for special files
-            if resolved_path.exists():
-                if resolved_path.is_symlink():
-                    violations.append("Symbolic links not allowed for security")
-                # Check if it's a device file (requires stat module)
-                file_stat = resolved_path.stat()
-                if stat.S_ISBLK(file_stat.st_mode) or stat.S_ISCHR(file_stat.st_mode):
-                    violations.append("Device files not allowed")
-                    
-        except Exception as e:
-            violations.append(f"Path validation error: {str(e)}")
-            
-        return len(violations) == 0, violations
-    
-    def validate_file_permissions(self, file_path: Path, expected_mode: str) -> Tuple[bool, List[str]]:
-        """Validate file permissions match expected mode.
-        
-        Args:
-            file_path: Path to file
-            expected_mode: Expected mode in format '0755'
-            
-        Returns:
-            Tuple of (is_valid, list_of_violations)
-        """
-        violations = []
-        
-        if not file_path.exists():
-            violations.append(f"File does not exist: {file_path}")
-            return False, violations
-            
-        try:
-            # Get current file mode
-            current_mode = oct(file_path.stat().st_mode)[-3:]
-            expected_mode_digits = expected_mode[-3:] if expected_mode.startswith('0') else expected_mode
-            
-            if current_mode != expected_mode_digits:
-                violations.append(f"File mode mismatch: expected {expected_mode_digits}, got {current_mode}")
-                
-            # Check for overly permissive permissions
-            mode_int = int(expected_mode_digits, 8)
-            if mode_int & 0o002:  # World writable
-                violations.append("World-writable permissions detected - security risk")
-            if mode_int & 0o001 and mode_int & 0o004:  # World readable and executable
-                violations.append("World-executable permissions on readable file - potential security risk")
-                
-        except Exception as e:
-            violations.append(f"Permission validation error: {str(e)}")
-            
-        return len(violations) == 0, violations
-    
-    def validate_artifact_content(self, artifact: Artifact) -> Tuple[List[str], List[str]]:
-        """
-        Enhanced validation of artifact content for security issues.
-        
-        Args:
-            artifact: The artifact to validate
-            
-        Returns:
-            Tuple of (warnings, security_violations)
-        """
-        warnings = []
-        violations = []
-        
-        # Check for dangerous patterns
-        language = artifact.lang.lower() if hasattr(artifact, 'lang') else 'unknown'
-        dangerous_patterns = self.dangerous_patterns.get(language, [])
-        
-        for pattern in dangerous_patterns:
-            if pattern in artifact.content:
-                violations.append(f"Dangerous pattern detected: {pattern}")
-        
-        # Check content length
-        if len(artifact.content) > 1000000:  # 1MB limit
-            warnings.append("Artifact content is unusually large (>1MB)")
-        elif len(artifact.content) > 100000:  # 100KB warning
-            warnings.append("Artifact content is large (>100KB)")
-        
-        # Check for empty content
-        if not artifact.content.strip():
-            violations.append("Artifact content is empty")
-        
-        # Language-specific validation
-        if language == "python":
-            warnings.extend(self._validate_python_content(artifact.content))
-        elif language in ["bash", "sh"]:
-            warnings.extend(self._validate_bash_content(artifact.content))
-        elif language in ["javascript", "js"]:
-            warnings.extend(self._validate_js_content(artifact.content))
-        
-        # Check for potential injection patterns (but exclude legitimate template substitutions)
-        injection_patterns = [
-            r'`[^`]*`',      # Backticks (but not template strings)
-            r';\s*rm\s',     # Dangerous commands
-            r'\|\s*sh\s',    # Pipe to shell
-            r'eval\s*\(',    # Eval functions
-        ]
-        
-        # Only check for dangerous command substitution, not template variables
-        dangerous_substitution_patterns = [
-            r'\$\(\s*rm\s',    # Command substitution with rm
-            r'\$\(\s*dd\s',    # Command substitution with dd
-            r'\$\(\s*curl\s.*\|\s*sh\)',  # Pipe curl to shell
-        ]
-        
-        for pattern in injection_patterns + dangerous_substitution_patterns:
-            if re.search(pattern, artifact.content):
-                violations.append(f"Potential injection pattern: {pattern}")
-        
-        return warnings, violations
-    
-    def _validate_python_content(self, content: str) -> List[str]:
-        """Validate Python-specific security concerns."""
-        warnings = []
-        
-        # Check for dangerous imports
-        dangerous_imports = [
-            "os", "sys", "subprocess", "socket", "urllib", "requests",
-            "shutil", "tempfile", "pickle", "marshal", "importlib"
-        ]
-        for imp in dangerous_imports:
-            if re.search(rf'\bimport\s+{imp}\b', content) or re.search(rf'\bfrom\s+{imp}\b', content):
-                warnings.append(f"Potentially dangerous import: {imp}")
-        
-        # Check for dangerous functions
-        dangerous_funcs = ["exec", "eval", "compile", "__import__", "getattr", "setattr"]
-        for func in dangerous_funcs:
-            if re.search(rf'\b{func}\s*\(', content):
-                warnings.append(f"Dangerous function call: {func}()")
-        
-        return warnings
-    
-    def _validate_bash_content(self, content: str) -> List[str]:
-        """Validate Bash-specific security concerns."""
-        warnings = []
-        
-        # Check for dangerous commands
-        dangerous_commands = [
-            r"rm\s+-rf", r"dd\s+if=", "mkfs", "format", "fdisk",
-            r"chmod\s+777", "chown", "sudo", r"su\s+", "passwd"
-        ]
-        for cmd in dangerous_commands:
-            if re.search(cmd, content):
-                warnings.append(f"Dangerous command detected: {cmd}")
-        
-        # Check for network operations - only warn for potentially dangerous patterns
-        # curl and wget are common and generally safe, only warn for dangerous usage
-        dangerous_network_patterns = [
-            r"telnet\s",  # Telnet is generally insecure
-            r"nc\s.*-e",  # Netcat with execute flag
-            r"ssh\s.*-o\s*StrictHostKeyChecking=no",  # SSH with disabled host key checking
-            r"curl\s.*\|\s*sh",  # Curl piped to shell (dangerous)
-            r"wget\s.*-O-\s*\|\s*sh",  # Wget piped to shell (dangerous)
-        ]
-        for pattern in dangerous_network_patterns:
-            if re.search(pattern, content, re.IGNORECASE):
-                warnings.append(f"Potentially dangerous network pattern detected: {pattern}")
-        
-        return warnings
-    
-    def _validate_js_content(self, content: str) -> List[str]:
-        """Validate JavaScript-specific security concerns."""
-        warnings = []
-        
-        # Check for dangerous functions
-        dangerous_patterns = [
-            r"eval\s*\(", r"Function\s*\(", r"setTimeout\s*\(", r"setInterval\s*\(",
-            r"document\.", r"window\.", r"global\.", r"process\."
-        ]
-        for pattern in dangerous_patterns:
-            if re.search(pattern, content):
-                warnings.append(f"Potentially dangerous JS pattern: {pattern}")
-        
-        return warnings
 
 
 class RetryManager:
@@ -487,7 +255,6 @@ class ArtifactExecutor:
             execution_context: Context for runner selection
         """
         self.sandbox_config = sandbox_config or SandboxConfig()
-        self.validator = ArtifactPathValidator(self.sandbox_config.build_directory)
         self.retry_manager = RetryManager(
             self.sandbox_config.max_retries,
             self.sandbox_config.retry_delay_base,
@@ -515,25 +282,17 @@ class ArtifactExecutor:
     
     def validate_bundle(self, bundle: ArtifactBundle) -> None:
         """
-        Validate an artifact bundle before execution.
+        Validate an artifact bundle before execution - simplified for Docker execution.
         
         Args:
             bundle: The bundle to validate
-            
-        Raises:
-            ValidationError: If validation fails
         """
         logger.debug(f"Validating artifact bundle with {len(bundle.artifacts)} artifacts")
         
         for artifact in bundle.artifacts:
-            # Validate artifact content
-            warnings, security_violations = self.validator.validate_artifact_content(artifact)
-            
-            if security_violations:
-                raise ValidationError(f"Artifact {artifact.path} validation failed: {'; '.join(security_violations)}")
-            
-            if warnings:
-                logger.warning(f"Artifact {artifact.path} validation warnings: {'; '.join(warnings)}")
+            # Only check for empty content
+            if not artifact.content.strip():
+                raise ValidationError(f"Artifact {artifact.path} has empty content")
         
         logger.debug("Artifact bundle validation completed successfully")
     
@@ -558,18 +317,10 @@ class ArtifactExecutor:
             if not self.runner.validate_environment():
                 raise ExecutionError(f"Runner environment validation failed for {self.runner.__class__.__name__}")
             
-            # Validate artifacts first
+            # Basic validation - just check for empty artifacts
             for artifact in bundle.artifacts:
-                is_valid, violations = self.validator.validate_artifact_path(artifact.path)
-                if not is_valid:
-                    raise ExecutionError(f"Artifact path validation failed for {artifact.path}: {violations}")
-                
-                warnings, security_violations = self.validator.validate_artifact_content(artifact)
-                if security_violations:
-                    raise ExecutionError(f"Security violations in artifact {artifact.path}: {security_violations}")
-                
-                if warnings:
-                    logger.warning(f"Validation warnings for {artifact.path}: {warnings}")
+                if not artifact.content.strip():
+                    raise ExecutionError(f"Artifact {artifact.path} has empty content")
             
             # Prepare environment variables
             env_vars = {}
@@ -665,12 +416,7 @@ class ArtifactExecutor:
             result.error_message = "Step command must be a list"
             return result
         
-        # Validate runtime
-        runtime = base_command[0] if base_command else None
-        if not self._validate_runtime(runtime):
-            result.status = ExecutionStatus.FAILED
-            result.error_message = f"Runtime '{runtime}' not allowed"
-            return result
+        # Skip runtime validation - Docker provides isolation
         
         # Replace artifact paths in command
         command = self._resolve_command_paths(base_command, artifact_paths)
@@ -743,16 +489,6 @@ class ArtifactExecutor:
         
         return result
     
-    def _validate_runtime(self, runtime: str) -> bool:
-        """Validate that the runtime is allowed."""
-        if not runtime:
-            return False
-        
-        # Handle 'uv run python' case
-        if runtime == "uv":
-            return True
-        
-        return runtime in self.sandbox_config.allowed_runtimes
     
     def _resolve_command_paths(self, command: List[str], artifact_paths: Dict[str, Path]) -> List[str]:
         """Resolve artifact paths in command arguments."""
@@ -773,95 +509,113 @@ class ArtifactExecutor:
         return resolved_command
     
     def _run_command_monitored(self, command: List[str], env: Dict[str, str], result: ExecutionResult) -> subprocess.CompletedProcess:
-        """Run command with resource monitoring and security controls."""
-        logger.debug(f"Executing command: {' '.join(command)}")
+        """Run command in Docker container for isolation."""
+        logger.debug(f"Executing command in Docker: {' '.join(command)}")
         
-        # Set resource limits (only on Linux, as macOS has different behavior)
-        def preexec_fn():
-            try:
-                # Set file descriptor limit (usually works on most systems)
-                max_files = self.sandbox_config.resource_limits.get("max_open_files", 1024)
-                resource.setrlimit(resource.RLIMIT_NOFILE, (max_files, max_files))
-                
-                # Set process limit (may not work on all systems)
-                try:
-                    max_processes = self.sandbox_config.resource_limits.get("max_processes", 32)
-                    resource.setrlimit(resource.RLIMIT_NPROC, (max_processes, max_processes))
-                except (OSError, ValueError):
-                    pass  # Ignore if not supported
-                
-                # Memory limit (may not work on macOS)
-                try:
-                    memory_limit = self.sandbox_config.max_memory_mb * 1024 * 1024
-                    resource.setrlimit(resource.RLIMIT_AS, (memory_limit, memory_limit))
-                except (OSError, ValueError):
-                    pass  # Ignore if not supported
-                    
-            except Exception:
-                pass  # Continue execution even if resource limits fail
+        # Choose appropriate Docker image based on command
+        docker_image = self._select_docker_image(command)
         
-        # Set working directory and environment
+        # Wrap command in Docker execution
+        docker_command = self._wrap_command_in_docker(command, env, docker_image)
+        
+        # Set working directory and environment for result tracking
         result.working_directory = str(self.temp_dir)
         result.environment_vars = {k: v for k, v in env.items() if not k.startswith("_")}
         
-        # Ensure all environment variables are strings (required by subprocess)
-        string_env = {}
-        for k, v in env.items():
-            if isinstance(v, (list, dict)):
-                # Convert complex types to JSON strings
-                import json
-                string_env[k] = json.dumps(v)
-            else:
-                string_env[k] = str(v)
-        env = string_env
-        
-        # Execute with timeout and monitoring
+        # Execute Docker command
         process = subprocess.Popen(
-            command,
+            docker_command,
             cwd=str(self.temp_dir),
-            env=env,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True,
-            preexec_fn=preexec_fn if platform.system() != "Windows" else None
+            text=True
         )
         
         try:
-            # Monitor resource usage
-            with resource_monitor(process.pid) as monitor:
-                stdout, stderr = process.communicate(timeout=self.sandbox_config.max_execution_time)
-                result.resource_usage = monitor or {}
+            stdout, stderr = process.communicate(timeout=self.sandbox_config.max_execution_time)
+            result.resource_usage = {}  # Docker handles resource monitoring
             
             return subprocess.CompletedProcess(
-                args=command,
+                args=command,  # Return original command for logging
                 returncode=process.returncode,
                 stdout=stdout,
                 stderr=stderr
             )
             
         except subprocess.TimeoutExpired:
-            # Kill process tree on timeout
+            # Kill Docker container
             try:
-                parent = psutil.Process(process.pid)
-                children = parent.children(recursive=True)
-                for child in children:
-                    child.terminate()
-                parent.terminate()
-                
-                # Wait for graceful termination
-                time.sleep(1)
-                
-                # Force kill if still running
-                for child in children:
-                    if child.is_running():
-                        child.kill()
-                if parent.is_running():
-                    parent.kill()
-                    
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                process.terminate()
+                time.sleep(2)
+                if process.poll() is None:
+                    process.kill()
+            except:
                 pass
-            
             raise
+    
+    def _select_docker_image(self, command: List[str]) -> str:
+        """Select appropriate Docker image based on command."""
+        if not command:
+            return "alpine:latest"
+        
+        runtime = command[0].lower()
+        
+        # Map runtime to appropriate Docker images
+        image_map = {
+            "python": "python:3.11-alpine",
+            "python3": "python:3.11-alpine", 
+            "bash": "alpine:latest",
+            "sh": "alpine:latest",
+            "node": "node:18-alpine",
+            "npm": "node:18-alpine",
+            "go": "golang:1.21-alpine",
+            "java": "openjdk:17-alpine",
+            "uv": "python:3.11-alpine"  # UV uses Python
+        }
+        
+        return image_map.get(runtime, "alpine:latest")
+    
+    def _wrap_command_in_docker(self, command: List[str], env: Dict[str, str], image: str) -> List[str]:
+        """Wrap command in Docker execution."""
+        # Build Docker command
+        docker_cmd = [
+            "docker", "run", "--rm",
+            "--network", "none",  # No network access for security
+            "--user", "1000:1000",  # Non-root user
+            "--workdir", "/workspace",
+            "-v", f"{self.temp_dir}:/workspace"
+        ]
+        
+        # Add environment variables
+        for k, v in env.items():
+            if not k.startswith("_"):
+                docker_cmd.extend(["-e", f"{k}={v}"])
+        
+        # Add resource limits
+        memory_limit = self.sandbox_config.resource_limits.get("max_memory_mb", 512)
+        docker_cmd.extend(["--memory", f"{memory_limit}m"])
+        docker_cmd.extend(["--cpus", "1.0"])
+        
+        # Add image and command
+        docker_cmd.append(image)
+        
+        # Handle special cases for different runtimes
+        if command[0] == "uv":
+            # Install uv in the container first, then run command
+            docker_cmd.extend([
+                "sh", "-c", 
+                f"pip install uv && {' '.join(command)}"
+            ])
+        elif command[0] in ["python", "python3"] and image.startswith("python"):
+            docker_cmd.extend(command)
+        elif command[0] in ["bash", "sh"]:
+            docker_cmd.extend(command)
+        else:
+            # For other commands, try to run them directly
+            docker_cmd.extend(command)
+        
+        logger.debug(f"Docker command: {' '.join(docker_cmd)}")
+        return docker_cmd
     
     def save_results(self, results: List[ExecutionResult], output_file: Path) -> None:
         """

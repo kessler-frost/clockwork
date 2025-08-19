@@ -6,11 +6,7 @@ Commands: plan, build, apply, verify
 """
 
 import typer
-import sys
-import subprocess
 import shutil
-import tempfile
-import time
 import json
 from pathlib import Path
 from typing import Optional, List, Dict, Any
@@ -21,12 +17,11 @@ from rich import print as rich_print
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 
 from .core import ClockworkCore
-from .models import ClockworkConfig, Environment, ActionType
+from .models import ClockworkConfig, ActionType
 from .__init__ import __version__
 from .daemon.cli import daemon_app
 from .formatters import TerraformStyleFormatter
 from datetime import datetime
-import json
 
 
 # Initialize Rich console for beautiful output
@@ -37,19 +32,6 @@ app = typer.Typer(
     add_completion=False,
 )
 
-# Global progress indicator
-def show_progress(description: str, total: Optional[int] = None):
-    """Create a progress indicator for long-running operations."""
-    import os
-    if os.environ.get('CLOCKWORK_VERBOSE') == 'True':
-        return Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn() if total else "",
-            TaskProgressColumn() if total else "",
-            console=console
-        )
-    return None
 
 # Add daemon subcommand
 app.add_typer(daemon_app, name="daemon", help="Daemon commands for continuous reconciliation")
@@ -703,51 +685,6 @@ def parse_variables(var_list: List[str], load_cwvars: bool = True, config_path: 
     
     return variables
 
-def get_resolver_cache_stats(config_path: Path) -> Dict[str, Any]:
-    """
-    Get resolver cache statistics.
-    
-    Args:
-        config_path: Path to configuration directory
-        
-    Returns:
-        Dictionary with cache statistics
-    """
-    cache_dir = config_path / ".clockwork" / "cache"
-    
-    if not cache_dir.exists():
-        return {
-            "cache_exists": False,
-            "cache_path": str(cache_dir)
-        }
-    
-    # Calculate cache statistics
-    total_size = 0
-    file_count = 0
-    module_count = 0
-    provider_count = 0
-    
-    for item in cache_dir.rglob("*"):
-        if item.is_file():
-            file_count += 1
-            total_size += item.stat().st_size
-            
-            # Count modules and providers based on directory structure
-            if "modules" in item.parts:
-                module_count += 1
-            elif "providers" in item.parts:
-                provider_count += 1
-    
-    return {
-        "cache_exists": True,
-        "cache_path": str(cache_dir),
-        "total_size_bytes": total_size,
-        "total_size_mb": round(total_size / (1024 * 1024), 2),
-        "file_count": file_count,
-        "cached_modules": module_count,
-        "cached_providers": provider_count,
-        "last_modified": cache_dir.stat().st_mtime
-    }
 
 def display_enhanced_status(clockwork_state, status_data: Dict[str, Any], detailed: bool = False):
     """
@@ -893,13 +830,6 @@ def status(
                 health_summary = core.get_state_health()
                 status_data["health"] = health_summary
                 
-                # Get resolver cache statistics if available
-                try:
-                    cache_stats = get_resolver_cache_stats(path)
-                    status_data["cache_stats"] = cache_stats
-                except Exception as e:
-                    if detailed:
-                        console.print(f"[dim]Cache stats unavailable: {e}[/dim]")
             
             # Perform drift detection if requested
             if drift_check or detailed:
@@ -1008,7 +938,7 @@ def safe_input(prompt: str = "") -> str:
 def demo(
     output_dir: Optional[Path] = typer.Option(None, "--output", "-o", help="Directory for demo files (default: ./.clockwork-demo)"),
     interactive: bool = typer.Option(True, "--interactive/--no-interactive", help="Enable interactive mode with pauses"),
-    cleanup: bool = typer.Option(True, "--cleanup/--no-cleanup", help="Clean up demo files at the end"),
+    cleanup: bool = typer.Option(True, "--cleanup/--no-cleanup", help="Clean up demo files at the end (default: True)"),
     text_only: bool = typer.Option(False, "--text-only", help="Run demo in non-interactive mode with automatic error fixing"),
 ):
     """
@@ -1098,83 +1028,81 @@ def demo(
 
 
 def run_clockwork_command(demo_dir: Path, command_args: List[str], timeout: int = 90, text_only: bool = False, show_spinner: bool = True) -> tuple[bool, str, str]:
-    """Helper function to run clockwork commands with fallback and error handling for text_only mode."""
+    """Helper function to run real Clockwork commands for the demo."""
+    import subprocess
+    import sys
     import os
-    original_cwd = os.getcwd()
     
     # Initialize spinner variables
     progress = None
     spinner_task = None
     
-    try:
-        # Try different ways to invoke clockwork
-        clockwork_cmd = None
-        for cmd in [["uv", "run", "clockwork"], ["clockwork"], ["python", "-m", "clockwork.cli"]]:
-            try:
-                test_result = subprocess.run(cmd + ["--help"], capture_output=True, timeout=10)
-                if test_result.returncode == 0:
-                    clockwork_cmd = cmd
-                    break
-            except:
-                continue
-        
-        if clockwork_cmd:
-            # Add the demo directory path to the command args if it's a plan/build/verify/apply command
-            if len(command_args) > 0 and command_args[0] in ["plan", "build", "verify", "apply"]:
-                # Insert the demo directory path as the last argument
-                full_command = clockwork_cmd + command_args + [str(demo_dir)]
-            else:
-                full_command = clockwork_cmd + command_args
-            
-            # For text_only mode, add auto-approve to apply commands
-            if text_only and len(command_args) > 0 and command_args[0] == "apply":
-                if "--auto-approve" not in command_args:
-                    full_command.insert(-1, "--auto-approve")  # Insert before path
-            
-            # Show spinner during command execution
-            if show_spinner:
-                command_name = command_args[0] if command_args else "command"
-                progress = Progress(
-                    SpinnerColumn(),
-                    TextColumn(f"[cyan]► Running {command_name} command...[/cyan]"),
-                    console=console,
-                    transient=True
-                )
-                progress.start()
-                spinner_task = progress.add_task("running", total=None)
-            
-            result = subprocess.run(
-                full_command,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                cwd=original_cwd  # Stay in original directory
-            )
-            
-            # Stop spinner
-            if progress:
-                progress.stop()
-            
-            # Check if command succeeded
-            success = result.returncode == 0
-            
-            # In text_only mode, show warning but continue demo with actual result
-            if text_only and not success:
-                console.print(f"[yellow]⚠ Command failed, attempting auto-fix...[/yellow]")
-                # Could add specific error handling patterns here
-                # For now, we'll return the actual result and let steps handle failures
-                
-            return success, result.stdout, result.stderr
-        else:
-            return False, "", "Clockwork command not available"
+    # Show spinner during command execution
+    if show_spinner:
+        command_name = command_args[0] if command_args else "command"
+        progress = Progress(
+            SpinnerColumn(),
+            TextColumn(f"[cyan]► Running {command_name} command...[/cyan]"),
+            console=console,
+            transient=True
+        )
+        progress.start()
+        spinner_task = progress.add_task("running", total=None)
     
+    try:
+        # Build the actual command to run - use uv run to ensure dependencies are available
+        # The path argument should come after the command but before options
+        cmd = ["uv", "run", "clockwork"] + command_args + [str(demo_dir)]
+        
+        # Stop spinner before running subprocess to avoid interference
+        if progress:
+            progress.stop()
+            progress = None
+            
+        # Run the actual Clockwork command with the working directory set to the main project
+        result = subprocess.run(
+            cmd,
+            cwd=demo_dir.parent,  # Run from the main clockwork directory
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            env=os.environ.copy()
+        )
+        
+        success = result.returncode == 0
+        stdout = result.stdout or ""
+        stderr = result.stderr or ""
+        
+        # Debug output if command fails
+        if not success:
+            console.print(f"[dim]Command failed: {' '.join(cmd)}[/dim]")
+            console.print(f"[dim]Return code: {result.returncode}[/dim]")
+            console.print(f"[dim]Stdout: {stdout}[/dim]")
+            console.print(f"[dim]Stderr: {stderr}[/dim]")
+        
+        return success, stdout, stderr
+        
+    except subprocess.TimeoutExpired:
+        # Stop spinner on timeout
+        if progress:
+            progress.stop()
+        
+        error_msg = f"Command timed out after {timeout} seconds"
+        console.print(f"[red]❌ {error_msg}[/red]")
+        return False, "", error_msg
+        
     except Exception as e:
         # Stop spinner on error
         if progress:
             progress.stop()
         
-        console.print(f"[red]❌ Error executing command: {e}[/red]")
-        return False, "", str(e)
+        error_msg = f"Error executing command: {e}"
+        console.print(f"[red]❌ {error_msg}[/red]")
+        return False, "", error_msg
+
+
+
+
 
 
 def step_explain_clockwork(demo_dir: Path, interactive: bool, text_only: bool = False):
@@ -1196,40 +1124,75 @@ The Terraform-style output clearly shows these relationships.
 Let's create a .cw file that starts a service, lets it run for 30 seconds, captures output, and then shuts it down:
 """)
     
-    # Create sample .cw file with simple, declarative service management
-    sample_cw_content = '''# Clockwork Demo - Simple Web Service
+    # Create sample .cw file with simple, declarative file management
+    sample_cw_content = '''# Clockwork Demo - File and Directory Management
 
-# I want a demo web service that serves a "Hello World" page
-resource "webapp" "demo" {
-  name        = "clockwork-demo"
-  description = "A simple demo web service for showcasing Clockwork"
-  
-  # What the service should do
-  content = "Hello from Clockwork! This demo service is running successfully."
-  
-  # How long it should stay alive
-  lifetime = "30s"
-  
-  # Basic service settings
-  port = 8080
-  
-  # I want to capture what happened
-  capture_logs = true
+variable "project_name" {
+  type    = "string"
+  default = "clockwork-demo"
 }
 
-# I want to verify the service worked
-resource "check" "demo_works" {
-  description = "Verify the demo service responded correctly"
-  target      = webapp.demo
+variable "message" {
+  type    = "string" 
+  default = "Hello from Clockwork! This demonstrates declarative task automation."
+}
+
+# I want a directory to organize my demo files
+resource "directory" "demo_output" {
+  path = "./demo-output"
+  description = "Output directory for demo files"
+}
+
+# I want a configuration file with project settings
+resource "file" "config" {
+  path = "./demo-output/config.json"
+  content = jsonencode({
+    name        = var.project_name
+    message     = var.message
+    created_at  = timestamp()
+    version     = "1.0"
+  })
+  depends_on = ["directory.demo_output"]
+}
+
+# I want a README file explaining what this is
+resource "file" "readme" {
+  path = "./demo-output/README.md"
+  content = <<-EOF
+# ${var.project_name}
+
+${var.message}
+
+## Created Files
+
+- `config.json` - Project configuration
+- `README.md` - This file
+
+Generated by Clockwork at ${timestamp()}
+  EOF
+  depends_on = ["directory.demo_output"]
+}
+
+# I want to verify all files were created
+resource "check" "files_exist" {
+  description = "Verify all demo files were created successfully"
+  depends_on = ["file.config", "file.readme"]
 }
 
 # Tell me what happened
-output "demo_url" {
-  value = webapp.demo.url
+output "demo_directory" {
+  value = directory.demo_output.path
+}
+
+output "files_created" {
+  value = [
+    file.config.path,
+    file.readme.path
+  ]
 }
 
 output "demo_status" {
-  value = check.demo_works.result
+  value = "Demo completed successfully - check the demo-output directory!"
 }'''
     
     demo_cw_file = demo_dir / "demo.cw"
@@ -1487,6 +1450,8 @@ Running: clockwork apply --auto-approve
         safe_input()
     elif text_only:
         console.print("[green]✓ Step 5 complete - Apply executed successfully[/green]")
+
+
 
 
 def step_show_results(demo_dir: Path, interactive: bool, text_only: bool, cleanup: bool):

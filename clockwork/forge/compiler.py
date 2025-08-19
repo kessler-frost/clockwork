@@ -19,23 +19,6 @@ from .agno_agent import AgnoCompiler, AgnoCompilerError, create_agno_compiler
 
 logger = logging.getLogger(__name__)
 
-# Allowlisted runtimes for security validation
-ALLOWED_RUNTIMES = {
-    "bash", "python3", "python", "deno", "go", "node", "npm", "npx", 
-    "java", "mvn", "gradle", "dotnet", "cargo", "rustc", "env"
-}
-
-# Allowed build directory patterns
-ALLOWED_BUILD_PATHS = [
-    ".clockwork/build",
-    "scripts",
-    "artifacts"
-]
-
-
-class SecurityValidationError(Exception):
-    """Exception raised when security validation fails."""
-    pass
 
 
 class CompilerError(Exception):
@@ -335,8 +318,7 @@ class Compiler:
                 vars=bundle_vars
             )
             
-            # Comprehensive validation
-            self._validate_artifact_bundle(artifact_bundle, action_list)
+            # Skip validation - Docker provides isolation
             
             logger.info(f"Successfully compiled {len(artifact_bundle.artifacts)} artifacts using parallel processing")
             return artifact_bundle
@@ -424,154 +406,3 @@ class Compiler:
         
         logger.info(f"Saved bundle with {len(bundle.artifacts)} artifacts to {output_dir}")
     
-    def _validate_artifact_bundle(self, bundle: ArtifactBundle, action_list: ModelsActionList) -> None:
-        """
-        Comprehensive validation of the ArtifactBundle.
-        
-        Args:
-            bundle: The bundle to validate
-            action_list: Original action list for reference
-            
-        Raises:
-            SecurityValidationError: If validation fails
-        """
-        logger.info("Validating artifact bundle security and compliance")
-        
-        # Validate bundle structure using Pydantic validation
-        try:
-            bundle.model_validate(bundle.model_dump())
-        except Exception as e:
-            raise SecurityValidationError(f"Bundle structure validation failed: {e}")
-        
-        # Validate artifact paths are confined to allowed directories
-        for artifact in bundle.artifacts:
-            self._validate_artifact_path(artifact.path)
-            self._validate_artifact_content(artifact)
-        
-        # Validate execution steps
-        for step in bundle.steps:
-            self._validate_execution_step(step)
-        
-        # Validate that all action steps have corresponding artifacts/steps
-        self._validate_step_completeness(bundle, action_list)
-        
-        logger.info("Bundle validation completed successfully")
-    
-    def _validate_artifact_path(self, path: str) -> None:
-        """
-        Validate that artifact path is within allowed directories.
-        
-        Args:
-            path: The artifact path to validate
-            
-        Raises:
-            SecurityValidationError: If path is invalid
-        """
-        # Check if path starts with any allowed pattern (don't resolve to avoid filesystem access)
-        allowed = any(path.startswith(allowed_path) for allowed_path in ALLOWED_BUILD_PATHS)
-        
-        if not allowed:
-            raise SecurityValidationError(
-                f"Artifact path '{path}' is not within allowed directories: {ALLOWED_BUILD_PATHS}"
-            )
-        
-        # Additional security checks
-        if ".." in path:
-            raise SecurityValidationError(f"Artifact path '{path}' contains directory traversal")
-        
-        if path.startswith("/"):
-            raise SecurityValidationError(f"Artifact path '{path}' is absolute (must be relative)")
-    
-    def _validate_artifact_content(self, artifact: Artifact) -> None:
-        """
-        Validate artifact content for security issues.
-        
-        Args:
-            artifact: The artifact to validate
-            
-        Raises:
-            SecurityValidationError: If content is unsafe
-        """
-        # Validate file permissions
-        try:
-            mode = int(artifact.mode, 8)
-            if mode > 0o777:
-                raise SecurityValidationError(f"Invalid file mode: {artifact.mode}")
-        except ValueError:
-            raise SecurityValidationError(f"Invalid file mode format: {artifact.mode}")
-        
-        # Validate shebang lines if executable
-        if artifact.mode.endswith(("5", "7")):  # executable permissions
-            lines = artifact.content.split("\n")
-            if lines and lines[0].startswith("#!"):
-                shebang = lines[0][2:].strip()
-                runtime = shebang.split()[0] if shebang.split() else ""
-                runtime_name = Path(runtime).name
-                
-                if runtime_name not in ALLOWED_RUNTIMES:
-                    raise SecurityValidationError(
-                        f"Shebang runtime '{runtime_name}' not in allowed list: {sorted(ALLOWED_RUNTIMES)}"
-                    )
-        
-        # Basic content security checks
-        dangerous_patterns = [
-            r"rm\s+-rf\s+/",  # Dangerous deletions
-            r"dd\s+if=/dev/zero",  # Disk wiping
-            r":\(\)\{\s*:\|:\s*&\s*\}\s*;",  # Fork bombs
-            r"sudo\s+chmod\s+777",  # Dangerous permissions
-        ]
-        
-        for pattern in dangerous_patterns:
-            if re.search(pattern, artifact.content, re.IGNORECASE):
-                raise SecurityValidationError(
-                    f"Artifact '{artifact.path}' contains potentially dangerous pattern: {pattern}"
-                )
-    
-    def _validate_execution_step(self, step: ExecutionStep) -> None:
-        """
-        Validate execution step for allowed runtimes.
-        
-        Args:
-            step: The execution step to validate
-            
-        Raises:
-            SecurityValidationError: If step uses disallowed runtime
-        """
-        if "cmd" not in step.run:
-            raise SecurityValidationError(f"Execution step '{step.purpose}' missing 'cmd' field")
-        
-        cmd = step.run["cmd"]
-        if not isinstance(cmd, list) or not cmd:
-            raise SecurityValidationError(f"Execution step '{step.purpose}' cmd must be non-empty list")
-        
-        runtime = cmd[0]
-        if runtime not in ALLOWED_RUNTIMES:
-            raise SecurityValidationError(
-                f"Runtime '{runtime}' in step '{step.purpose}' not allowed. Allowed: {sorted(ALLOWED_RUNTIMES)}"
-            )
-    
-    def _validate_step_completeness(self, bundle: ArtifactBundle, action_list: ModelsActionList) -> None:
-        """
-        Validate that all ActionList steps are covered by the bundle.
-        
-        Args:
-            bundle: The artifact bundle
-            action_list: The original action list
-            
-        Raises:
-            SecurityValidationError: If steps are missing
-        """
-        action_step_names = {step.name for step in action_list.steps}
-        bundle_step_purposes = {step.purpose for step in bundle.steps}
-        
-        missing_steps = action_step_names - bundle_step_purposes
-        if missing_steps:
-            # Convert to warning instead of error - this is common when step names are transformed
-            logger.warning(
-                f"ActionList steps not directly covered by bundle: {sorted(missing_steps)}. "
-                "This may be normal if step names are transformed during compilation."
-            )
-        
-        extra_steps = bundle_step_purposes - action_step_names
-        if extra_steps:
-            logger.warning(f"Bundle contains extra steps not in ActionList: {sorted(extra_steps)}")
