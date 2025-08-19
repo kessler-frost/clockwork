@@ -7,7 +7,7 @@ executable artifacts and managing their execution in sandboxed environments.
 
 from .compiler import ArtifactBundle, Compiler
 from .executor import ArtifactExecutor, ExecutionResult, ExecutionError
-from .state import StateManager, ResourceState, ExecutionHistory
+from .state import StateManager
 from .runner import (
     Runner, RunnerFactory, RunnerType, ExecutionResult as RunnerExecutionResult,
     LocalRunner, DockerRunner, PodmanRunner, SSHRunner, KubernetesRunner,
@@ -21,8 +21,6 @@ __all__ = [
     "ExecutionResult",
     "ExecutionError",
     "StateManager",
-    "ResourceState",
-    "ExecutionHistory",
     "Runner",
     "RunnerFactory",
     "RunnerType", 

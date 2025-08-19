@@ -16,6 +16,9 @@ from datetime import datetime
 # Import IR models
 from ..models import IR, Variable, Provider, Resource, Module, Output, ResourceType
 
+# Import simple parser
+from .simple_parser import SimpleParser, SimpleParseError
+
 logger = logging.getLogger(__name__)
 
 
@@ -53,6 +56,7 @@ class Parser:
         self.parsed_files = {}
         self.resolve_references = resolve_references
         self._resolver = None
+        self.simple_parser = SimpleParser()
     
     @property
     def resolver(self):
@@ -97,9 +101,22 @@ class Parser:
         try:
             with open(file_path, 'r', encoding='utf-8') as file:
                 content = file.read()
-                
-            # Parse HCL content using python-hcl2
-            parsed_data = hcl2.loads(content)
+            
+            # Detect syntax type and route to appropriate parser
+            if self.simple_parser.is_simple_syntax(content):
+                logger.info(f"Detected simple syntax in {file_path}")
+                try:
+                    parsed_data = self.simple_parser.parse_string(content, str(file_path))
+                    # Mark as simple syntax for later IR conversion
+                    parsed_data["_clockwork_syntax_type"] = "simple"
+                except SimpleParseError as e:
+                    # Fallback to traditional HCL parsing if simple parsing fails
+                    logger.warning(f"Simple parsing failed for {file_path}, falling back to HCL: {e}")
+                    parsed_data = hcl2.loads(content)
+            else:
+                logger.debug(f"Using traditional HCL parsing for {file_path}")
+                # Parse HCL content using python-hcl2
+                parsed_data = hcl2.loads(content)
             
             # Cache the parsed result
             self.parsed_files[str(file_path)] = parsed_data
@@ -129,7 +146,20 @@ class Parser:
             ParseError: If the content cannot be parsed
         """
         try:
-            return hcl2.loads(hcl_content)
+            # Detect syntax type and route to appropriate parser
+            if self.simple_parser.is_simple_syntax(hcl_content):
+                logger.info("Detected simple syntax in string content")
+                try:
+                    parsed_data = self.simple_parser.parse_string(hcl_content)
+                    # Mark as simple syntax for later IR conversion
+                    parsed_data["_clockwork_syntax_type"] = "simple"
+                    return parsed_data
+                except SimpleParseError as e:
+                    # Fallback to traditional HCL parsing if simple parsing fails
+                    logger.warning(f"Simple parsing failed, falling back to HCL: {e}")
+                    return hcl2.loads(hcl_content)
+            else:
+                return hcl2.loads(hcl_content)
         except Exception as e:
             # Check if it's an HCL parsing error (lark UnexpectedToken or similar)
             if hasattr(e, 'token') or 'UnexpectedToken' in str(type(e).__name__):
@@ -246,8 +276,13 @@ class Parser:
             
             metadata = {
                 "source_file": file_path,
-                "parsed_at": datetime.now().isoformat()
+                "parsed_at": datetime.now().isoformat(),
+                "syntax_type": parsed_data.get("_clockwork_syntax_type", "traditional")
             }
+            
+            # Remove the internal marker
+            if "_clockwork_syntax_type" in parsed_data:
+                del parsed_data["_clockwork_syntax_type"]
             
             # Extract different HCL block types
             for block_type, blocks in parsed_data.items():

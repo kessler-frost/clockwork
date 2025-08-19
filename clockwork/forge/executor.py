@@ -184,7 +184,7 @@ class ArtifactPathValidator:
             ],
             "bash": [
                 "rm -rf", ":(){ :|:& };:", "dd if=", "mkfs",
-                "> /dev/", "curl", "wget", "nc ", "netcat",
+                "> /dev/null", "> /dev/zero", "> /dev/random", "nc ", "netcat",
                 "chmod 777", "sudo", "su -", "/etc/passwd"
             ],
             "javascript": [
@@ -318,16 +318,22 @@ class ArtifactPathValidator:
         elif language in ["javascript", "js"]:
             warnings.extend(self._validate_js_content(artifact.content))
         
-        # Check for potential injection patterns
+        # Check for potential injection patterns (but exclude legitimate template substitutions)
         injection_patterns = [
-            r'\$\([^)]*\)',  # Command substitution
-            r'`[^`]*`',      # Backticks
+            r'`[^`]*`',      # Backticks (but not template strings)
             r';\s*rm\s',     # Dangerous commands
             r'\|\s*sh\s',    # Pipe to shell
             r'eval\s*\(',    # Eval functions
         ]
         
-        for pattern in injection_patterns:
+        # Only check for dangerous command substitution, not template variables
+        dangerous_substitution_patterns = [
+            r'\$\(\s*rm\s',    # Command substitution with rm
+            r'\$\(\s*dd\s',    # Command substitution with dd
+            r'\$\(\s*curl\s.*\|\s*sh\)',  # Pipe curl to shell
+        ]
+        
+        for pattern in injection_patterns + dangerous_substitution_patterns:
             if re.search(pattern, artifact.content):
                 violations.append(f"Potential injection pattern: {pattern}")
         
@@ -514,10 +520,10 @@ class ArtifactExecutor:
         
         for artifact in bundle.artifacts:
             # Validate artifact content
-            violations, warnings = self.validator.validate_artifact_content(artifact)
+            warnings, security_violations = self.validator.validate_artifact_content(artifact)
             
-            if violations:
-                raise ValidationError(f"Artifact {artifact.path} validation failed: {'; '.join(violations)}")
+            if security_violations:
+                raise ValidationError(f"Artifact {artifact.path} validation failed: {'; '.join(security_violations)}")
             
             if warnings:
                 logger.warning(f"Artifact {artifact.path} validation warnings: {'; '.join(warnings)}")

@@ -3,3 +3,5 @@
 - "when generating a plan, keep in mind to allocate spawning separate agents for tasks in the plan that can be parallelized"
 - "don't worry about backward's compatibility and fallback mechanisms"
 - "Always test whether the demo command is broken or not"
+
+- "Always do cleanup after final testing and demoing is finished"

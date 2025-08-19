@@ -9,6 +9,7 @@ This module contains the ClockworkCore class that coordinates the three main pha
 
 import logging
 import json
+import hashlib
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from datetime import datetime
@@ -24,7 +25,8 @@ from .errors import (
     format_error_chain, wrap_external_error, create_user_friendly_error,
     create_error_context
 )
-from .intake import Parser, Validator
+from .intake import Parser
+from .intake.validator import EnhancedValidator
 from .intake.resolver import Resolver, resolve_references, ResolutionError
 from .assembly import convert_ir_to_actions, compute_state_diff
 from .assembly.differ import detect_state_drift, generate_drift_report, calculate_state_diff_score
@@ -59,10 +61,10 @@ class ClockworkCore:
         
         # Initialize core components
         self.parser = Parser(resolve_references=True)
-        self.validator = Validator()
+        self.validator = EnhancedValidator()
         self.resolver = Resolver(cache_dir=str(self.config_path / ".clockwork" / "cache"))
         self.state_manager = StateManager(self.config.state_file)
-        self.compiler = Compiler(self.config.agent_config)
+        self.compiler = Compiler(**self.config.agent_config)
         self.executor = ArtifactExecutor()
         
         # Initialize runner factory and get available runners
@@ -158,16 +160,10 @@ class ClockworkCore:
             logger.debug("Validating IR...")
             validation_result = self.validator.validate_ir(ir)
             
-            # Handle both legacy and new validation result formats
-            if hasattr(validation_result, 'valid'):
-                is_valid = validation_result.valid
-                errors = validation_result.errors if hasattr(validation_result, 'errors') else []
-                warnings = validation_result.warnings if hasattr(validation_result, 'warnings') else []
-            else:
-                # Legacy format
-                is_valid = validation_result.is_valid
-                errors = validation_result.errors
-                warnings = validation_result.warnings
+            # Extract validation results using current format
+            is_valid = validation_result.valid
+            errors = validation_result.errors if hasattr(validation_result, 'errors') else []
+            warnings = validation_result.warnings if hasattr(validation_result, 'warnings') else []
             
             if not is_valid:
                 if errors and hasattr(errors[0], 'message'):
@@ -818,13 +814,20 @@ class ClockworkCore:
             state = self.state_manager.load_state() or ClockworkState()
             
             # Create execution record
+            # Calculate checksums
+            action_list_str = json.dumps([step.model_dump() for step in action_list.steps], sort_keys=True)
+            action_list_checksum = hashlib.sha256(action_list_str.encode()).hexdigest()
+            
+            artifact_bundle_str = json.dumps([step.model_dump() for step in artifact_bundle.steps], sort_keys=True)
+            artifact_bundle_checksum = hashlib.sha256(artifact_bundle_str.encode()).hexdigest()
+            
             execution_record = ExecutionRecord(
                 run_id=f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
                 started_at=datetime.now(),
                 completed_at=datetime.now(),
                 status="success" if all(r.get("success", False) for r in results) else "failed",
-                action_list_checksum="",  # TODO: Calculate actual checksums
-                artifact_bundle_checksum="",
+                action_list_checksum=action_list_checksum,
+                artifact_bundle_checksum=artifact_bundle_checksum,
                 logs=[str(r) for r in results]
             )
             
@@ -836,9 +839,27 @@ class ClockworkCore:
                         step = artifact_bundle.steps[i]
                         resource_id = step.purpose
                         
+                        # Determine resource type from action step type
+                        from .models import ResourceType, ActionType
+                        step_type = getattr(step, 'type', ActionType.CUSTOM)
+                        if isinstance(step_type, str):
+                            step_type = ActionType(step_type) if step_type in [e.value for e in ActionType] else ActionType.CUSTOM
+                        
+                        # Map action types to resource types
+                        action_to_resource_mapping = {
+                            ActionType.ENSURE_SERVICE: ResourceType.SERVICE,
+                            ActionType.BUILD_IMAGE: ResourceType.IMAGE,
+                            ActionType.CREATE_NAMESPACE: ResourceType.CONFIG,
+                            ActionType.APPLY_CONFIG: ResourceType.CONFIG,
+                            ActionType.COPY_FILES: ResourceType.FILE,
+                            ActionType.VERIFY_HTTP: ResourceType.VERIFICATION,
+                            ActionType.FILE_OPERATION: ResourceType.FILE,
+                        }
+                        resource_type = action_to_resource_mapping.get(step_type, ResourceType.CUSTOM)
+                        
                         resource_state = ResourceState(
                             resource_id=resource_id,
-                            type="service",  # TODO: Determine actual type
+                            type=resource_type.value,
                             status="success" if result.get("success") else "failed",
                             last_applied=datetime.now(),
                             last_verified=datetime.now()

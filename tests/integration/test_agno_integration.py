@@ -11,7 +11,7 @@ from clockwork.forge.agno_agent import (
     AgnoCompiler, AgnoCompilerError, AgentArtifact, 
     AgentExecutionStep, AgentArtifactBundle, create_agno_compiler
 )
-from clockwork.forge.compiler import Compiler
+from clockwork.forge.compiler import Compiler, CompilerError
 
 
 class TestAgnoCompiler:
@@ -218,28 +218,15 @@ class TestCompilerAgnoIntegration:
             mock_agno_compiler.compile_to_artifacts.assert_called_once_with(action_list)
     
     @patch('clockwork.forge.compiler.create_agno_compiler')
-    def test_compile_agno_fallback(self, mock_create_agno):
-        """Test compilation fallback when Agno fails."""
-        # Mock Agno compiler that fails
-        mock_agno_compiler = Mock()
+    def test_compile_agno_initialization_failure_no_fallback(self, mock_create_agno):
+        """Test that compilation fails hard when Agno compiler initialization fails (no fallback)."""
+        # Mock Agno compiler initialization that fails
         from clockwork.forge.agno_agent import AgnoCompilerError
-        mock_agno_compiler.compile_to_artifacts.side_effect = AgnoCompilerError("Agno failed")
-        mock_create_agno.return_value = mock_agno_compiler
+        mock_create_agno.side_effect = AgnoCompilerError("Cannot connect to LM Studio")
         
-        # Mock fallback compilation
-        with patch.object(Compiler, '_fallback_compile') as mock_fallback:
-            with patch.object(Compiler, '_validate_artifact_bundle'):
-                mock_bundle = Mock()
-                mock_bundle.artifacts = []  # Add artifacts attribute for len() check
-                mock_fallback.return_value = mock_bundle
-                
-                compiler = Compiler(use_agno=True)
-                action_list = ActionList(version="1", steps=[])
-                
-                result = compiler.compile(action_list)
-                
-                assert result == mock_bundle
-                mock_fallback.assert_called_once_with(action_list)
+        # Should raise CompilerError during initialization without any fallback
+        with pytest.raises(CompilerError, match="LM Studio connection required but failed"):
+            Compiler(use_agno=True)
 
 
 if __name__ == "__main__":

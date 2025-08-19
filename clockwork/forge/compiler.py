@@ -54,12 +54,8 @@ class Compiler:
     
     def __init__(
         self, 
-        agent_endpoint: Optional[str] = None,
-        api_key: Optional[str] = None,
-        model_name: str = "gpt-4",
         timeout: int = 300,
         build_dir: str = ".clockwork/build",
-        # New LM Studio / Agno parameters
         use_agno: bool = True,
         lm_studio_url: Optional[str] = None,
         agno_model_id: Optional[str] = None
@@ -68,28 +64,21 @@ class Compiler:
         Initialize the compiler.
         
         Args:
-            agent_endpoint: URL of the AI agent endpoint (legacy)
-            api_key: API key for authentication (legacy)
-            model_name: Name of the AI model to use (legacy)
             timeout: Request timeout in seconds
             build_dir: Base directory for artifact output
             use_agno: Whether to use Agno/LM Studio integration (default: True)
             lm_studio_url: LM Studio server URL (default: http://localhost:1234)
             agno_model_id: Model ID for Agno agent (default: qwen/qwen3-4b-2507)
         """
-        # Legacy parameters
-        self.agent_endpoint = agent_endpoint
-        self.api_key = api_key
-        self.model_name = model_name
         self.timeout = timeout
         self.build_dir = Path(build_dir)
         
-        # New Agno integration parameters
+        # Agno integration parameters
         self.use_agno = use_agno
-        self.lm_studio_url = lm_studio_url or "http://localhost:1234"
+        self.lm_studio_url = lm_studio_url or os.getenv('CLOCKWORK_LM_STUDIO_URL', "http://localhost:1234")
         self.agno_model_id = agno_model_id or "qwen/qwen3-4b-2507"
         
-        # Initialize Agno compiler if enabled
+        # Initialize Agno compiler if enabled - fail fast if not available
         self.agno_compiler = None
         if self.use_agno:
             try:
@@ -99,16 +88,19 @@ class Compiler:
                     timeout=timeout
                 )
                 logger.info(f"Initialized Agno AI compiler with model: {self.agno_model_id}")
+            except AgnoCompilerError as e:
+                logger.error(f"Failed to initialize Agno compiler: {e}")
+                raise CompilerError(f"LM Studio connection required but failed: {e}")
             except Exception as e:
-                logger.warning(f"Failed to initialize Agno compiler: {e}")
-                logger.info("Falling back to placeholder implementation")
+                logger.error(f"Unexpected error initializing Agno compiler: {e}")
+                raise CompilerError(f"Failed to initialize AI compiler: {e}")
         
         # Initialize joblib caching
         cache_dir = self.build_dir / "cache"
         cache_dir.mkdir(parents=True, exist_ok=True)
         self.memory = Memory(location=str(cache_dir), verbose=0)
         
-        logger.info(f"Initialized compiler with model: {model_name}, build_dir: {build_dir}")
+        logger.info(f"Initialized compiler with agno_model: {self.agno_model_id}, build_dir: {build_dir}")
         logger.info(f"Caching enabled with directory: {cache_dir}")
     
     def clear_cache(self) -> None:
@@ -248,15 +240,15 @@ class Compiler:
                 metadata=action_list_context.get('metadata', {})
             )
             
-            # Use Agno compiler if available, otherwise fallback
+            # Use Agno compiler - no fallback for individual steps
             if self.use_agno and self.agno_compiler:
-                try:
-                    bundle = self.agno_compiler.compile_to_artifacts(temp_action_list)
-                except AgnoCompilerError as e:
-                    logger.warning(f"Agno compilation failed for step '{step.name}': {e}")
-                    bundle = self._fallback_compile(temp_action_list)
+                bundle = self.agno_compiler.compile_to_artifacts(temp_action_list)
             else:
-                bundle = self._fallback_compile(temp_action_list)
+                logger.error(f"Cannot compile step '{step.name}' - no AI compiler available")
+                raise CompilerError(
+                    f"AI compilation required for step '{step.name}' but Agno compiler not available. "
+                    "Please ensure LM Studio is running with a loaded model."
+                )
             
             # Extract artifacts and steps for this specific step
             artifacts = [artifact for artifact in bundle.artifacts if artifact.purpose == step.name]
@@ -373,17 +365,16 @@ class Compiler:
         try:
             logger.info("Using sequential compilation")
             
-            # Use Agno AI compiler if available
+            # Use Agno AI compiler - no fallback
             if self.use_agno and self.agno_compiler:
                 logger.info("Using Agno AI compiler for artifact generation")
-                try:
-                    artifact_bundle = self.agno_compiler.compile_to_artifacts(action_list)
-                except AgnoCompilerError as e:
-                    logger.warning(f"Agno compilation failed: {e}, falling back to placeholder")
-                    artifact_bundle = self._fallback_compile(action_list)
+                artifact_bundle = self.agno_compiler.compile_to_artifacts(action_list)
             else:
-                logger.info("Using fallback compilation (no Agno compiler available)")
-                artifact_bundle = self._fallback_compile(action_list)
+                logger.error("No AI compiler available - Agno compiler initialization failed")
+                raise CompilerError(
+                    "AI compilation is required but Agno compiler is not available. "
+                    "Please ensure LM Studio is running with a loaded model."
+                )
             
             return artifact_bundle
             
@@ -391,190 +382,9 @@ class Compiler:
             logger.error(f"Sequential compilation failed: {e}")
             raise CompilerError(f"Failed to compile ActionList: {e}")
     
-    def _fallback_compile(self, action_list: ModelsActionList) -> ArtifactBundle:
-        """
-        Fallback compilation method using placeholder implementation.
-        
-        Args:
-            action_list: The list of actions to compile
-            
-        Returns:
-            ArtifactBundle containing placeholder artifacts
-            
-        Raises:
-            CompilerError: If compilation fails
-        """
-        # Generate prompt for AI agent
-        prompt = self._generate_compilation_prompt(action_list)
-        
-        # Call AI agent (placeholder implementation)
-        response = self._call_agent(prompt)
-        
-        # Parse response into ArtifactBundle
-        artifact_bundle = self._parse_agent_response(response, action_list)
-        
-        return artifact_bundle
     
-    def _generate_compilation_prompt(self, action_list: ModelsActionList) -> str:
-        """Generate prompt for the AI agent."""
-        prompt = f"""
-You are an expert software engineer tasked with converting a declarative ActionList 
-into an ArtifactBundle with executable scripts in various languages.
-
-ActionList Details:
-Version: {action_list.version}
-Metadata: {json.dumps(action_list.metadata, indent=2)}
-
-Steps to implement:
-"""
-        
-        for i, step in enumerate(action_list.steps):
-            prompt += f"""
-Step {i + 1}:
-  Name: {step.name}
-  Arguments: {json.dumps(step.args, indent=2)}
-"""
-        
-        prompt += f"""
-
-Requirements:
-1. Generate production-ready executable scripts
-2. Use appropriate languages: bash, python3, deno, go, etc.
-3. Include proper error handling and logging
-4. Respect step dependencies and ordering
-5. Ensure all paths are under .clockwork/build/ or scripts/
-6. Use only allowlisted runtimes: {', '.join(sorted(ALLOWED_RUNTIMES))}
-7. Add appropriate file permissions (0755 for executables, 0644 for data)
-
-Respond with a JSON object exactly matching this ArtifactBundle format:
-{{
-  "version": "1",
-  "artifacts": [
-    {{
-      "path": "scripts/01_step_name.sh",
-      "mode": "0755",
-      "purpose": "step_name",
-      "lang": "bash",
-      "content": "#!/bin/bash\\n# Script content here"
-    }}
-  ],
-  "steps": [
-    {{
-      "purpose": "step_name",
-      "run": {{"cmd": ["bash", "scripts/01_step_name.sh"]}}
-    }}
-  ],
-  "vars": {{
-    "KEY": "value"
-  }}
-}}
-"""
-        return prompt
     
-    def _call_agent(self, prompt: str) -> str:
-        """
-        Call the AI agent with the given prompt.
-        
-        Args:
-            prompt: The prompt to send to the agent
-            
-        Returns:
-            The agent's response
-            
-        Raises:
-            CompilerError: If the agent call fails
-        """
-        # TODO: Replace with actual AI agent implementation
-        # This is a placeholder that should be replaced with real API calls
-        # to OpenAI, Claude, or other LLM services
-        
-        logger.warning("Using placeholder AI agent - replace with real implementation")
-        logger.debug(f"Agent prompt: {prompt[:200]}...")
-        
-        if not self.agent_endpoint:
-            raise CompilerError("No agent endpoint configured. Set agent_endpoint to use real AI agent.")
-        
-        if not self.api_key:
-            raise CompilerError("No API key configured. Set api_key to authenticate with AI agent.")
-        
-        # Placeholder implementation - would make HTTP request in real version
-        try:
-            # This would be replaced with actual HTTP client code:
-            # import httpx
-            # response = httpx.post(
-            #     self.agent_endpoint,
-            #     headers={"Authorization": f"Bearer {self.api_key}"},
-            #     json={
-            #         "model": self.model_name,
-            #         "messages": [{"role": "user", "content": prompt}],
-            #         "temperature": 0.1
-            #     },
-            #     timeout=self.timeout
-            # )
-            # return response.json()["choices"][0]["message"]["content"]
-            
-            logger.info("AI agent integration point - implement actual API call here")
-            raise CompilerError("Real AI agent integration not implemented yet. Please implement _call_agent method.")
-            
-        except Exception as e:
-            logger.error(f"AI agent call failed: {e}")
-            raise CompilerError(f"Failed to call AI agent: {e}")
     
-    def _parse_agent_response(self, response: str, action_list: ModelsActionList) -> ArtifactBundle:
-        """
-        Parse the agent's response into an ArtifactBundle.
-        
-        Args:
-            response: JSON response from the agent
-            action_list: Original action list for context
-            
-        Returns:
-            Parsed ArtifactBundle
-            
-        Raises:
-            CompilerError: If parsing fails
-        """
-        try:
-            data = json.loads(response)
-            
-            # Validate response structure
-            required_fields = ["version", "artifacts", "steps", "vars"]
-            for field in required_fields:
-                if field not in data:
-                    raise CompilerError(f"Agent response missing required field: {field}")
-            
-            # Parse artifacts using the new models
-            artifacts = []
-            for artifact_data in data["artifacts"]:
-                try:
-                    artifact = Artifact(**artifact_data)
-                    artifacts.append(artifact)
-                except Exception as e:
-                    raise CompilerError(f"Invalid artifact in response: {e}")
-            
-            # Parse execution steps
-            steps = []
-            for step_data in data["steps"]:
-                try:
-                    step = ExecutionStep(**step_data)
-                    steps.append(step)
-                except Exception as e:
-                    raise CompilerError(f"Invalid execution step in response: {e}")
-            
-            # Create bundle using the updated model
-            bundle = ArtifactBundle(
-                version=data["version"],
-                artifacts=artifacts,
-                steps=steps,
-                vars=data["vars"]
-            )
-            
-            return bundle
-            
-        except json.JSONDecodeError as e:
-            raise CompilerError(f"Agent response is not valid JSON: {e}")
-        except Exception as e:
-            raise CompilerError(f"Failed to parse agent response: {e}")
     
     def save_bundle(self, bundle: ArtifactBundle, output_dir: Optional[Path] = None) -> None:
         """

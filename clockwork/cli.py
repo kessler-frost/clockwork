@@ -179,7 +179,7 @@ def plan(
         if json_output:
             console.print(json.dumps(plan_data, indent=2))
         else:
-            display_enhanced_plan(action_list, plan_data, detailed)
+            display_enhanced_plan(ir, action_list, plan_data, detailed)
         
         # Save to file if requested
         if output:
@@ -273,7 +273,7 @@ def build(
         if json_output:
             console.print(json.dumps(build_data, indent=2))
         else:
-            display_enhanced_build_results(artifact_bundle, build_dir, build_data)
+            display_enhanced_build_results(action_list, artifact_bundle, build_dir, build_data)
         
         if not json_output:
             console.print("[green]✅ Build completed successfully[/green]")
@@ -335,7 +335,7 @@ def apply(
         # Show plan and ask for confirmation
         if not json_output:
             console.print("\n[bold yellow]📋 Execution Plan:[/bold yellow]")
-            display_enhanced_plan(action_list, {}, detailed=False)
+            display_enhanced_plan(ir, action_list, {}, detailed=False)
             
             if not auto_approve:
                 confirm = typer.confirm("\nDo you want to apply these changes?")
@@ -482,38 +482,11 @@ def verify(
 # =============================================================================
 
 
-def display_enhanced_plan(action_list, plan_data: Dict[str, Any], detailed: bool = False):
+def display_enhanced_plan(ir, action_list, plan_data: Dict[str, Any], detailed: bool = False):
     """Display enhanced execution plan using Terraform-style formatting."""
     formatter = TerraformStyleFormatter(console)
     
-    # Create a mock IR for the formatter
-    # Note: This is a temporary adaptation - in a full refactor, we'd pass the actual IR
-    from .models import IR, Resource, ResourceType
-    
-    # Convert action_list to IR format for formatter
-    ir = IR()
-    for action in action_list.steps:
-        # Create resource from action
-        resource_type = getattr(action, 'type', ResourceType.CUSTOM)
-        if isinstance(resource_type, str):
-            # Map string types to ResourceType enum
-            type_mapping = {
-                'file': ResourceType.FILE,
-                'service': ResourceType.SERVICE,
-                'verification': ResourceType.VERIFICATION,
-                'custom': ResourceType.CUSTOM
-            }
-            resource_type = type_mapping.get(resource_type.lower(), ResourceType.CUSTOM)
-        
-        resource = Resource(
-            type=resource_type,
-            name=action.name,
-            config=action.args,
-            depends_on=getattr(action, 'depends_on', [])
-        )
-        ir.resources[action.name] = resource
-    
-    # Use formatter to display plan
+    # Use formatter to display plan with actual IR
     plan_output = formatter.format_plan(ir)
     console.print(plan_output)
     
@@ -545,26 +518,9 @@ def display_enhanced_plan(action_list, plan_data: Dict[str, Any], detailed: bool
 
 
 
-def display_enhanced_build_results(artifact_bundle, build_dir, build_data: Dict[str, Any]):
+def display_enhanced_build_results(action_list, artifact_bundle, build_dir, build_data: Dict[str, Any]):
     """Display enhanced build results using Terraform-style formatting."""
     formatter = TerraformStyleFormatter(console)
-    
-    # Create a mock action list for the formatter
-    from .models import ActionList, ActionStep
-    
-    action_list = ActionList()
-    for artifact in artifact_bundle.artifacts:
-        # Create action step from artifact
-        step = ActionStep(
-            name=artifact.path.split('/')[-1].replace('.sh', '').replace('.py', ''),
-            args={
-                'path': artifact.path,
-                'lang': artifact.lang,
-                'purpose': artifact.purpose,
-                'mode': artifact.mode
-            }
-        )
-        action_list.steps.append(step)
     
     # Prepare artifacts info for formatter
     artifacts_info = {
@@ -601,41 +557,25 @@ def display_enhanced_execution_results(results, execution_data: Dict[str, Any]):
     success_count = 0
     failed_count = 0
     
-    # If results is empty or malformed, create demo success results
-    if not results or all(result.get("step", "unknown") == "unknown" for result in results):
-        # Demo successful execution simulation
-        demo_resources = [
-            "file_operation_demo_directory",
-            "file_operation_config_file", 
-            "file_operation_readme",
-            "verification"
-        ]
-        
-        for resource in demo_resources:
-            execution_results.append({
-                'resource_name': resource,
-                'operation': 'apply',
-                'status': 'success',
-                'error': None
-            })
+    # Process actual results - fail if no valid results
+    if not results:
+        raise ValueError("No execution results provided - execution may have failed")
+    
+    for result in results:
+        success = result.get("success", False)
+        if success:
             success_count += 1
-    else:
-        # Process actual results
-        for result in results:
-            success = result.get("success", False)
-            if success:
-                success_count += 1
-                status = "success"
-            else:
-                failed_count += 1
-                status = "failed"
-            
-            execution_results.append({
-                'resource_name': result.get("step", "unknown"),
-                'operation': 'apply',
-                'status': status,
-                'error': result.get("error", result.get("output", "")) if not success else None
-            })
+            status = "success"
+        else:
+            failed_count += 1
+            status = "failed"
+        
+        execution_results.append({
+            'resource_name': result.get("step", "unknown"),
+            'operation': 'apply',
+            'status': status,
+            'error': result.get("error", result.get("output", "")) if not success else None
+        })
     
     # Use formatter to display apply results
     apply_output = formatter.format_apply(execution_results, success_count, failed_count)
@@ -809,11 +749,12 @@ def get_resolver_cache_stats(config_path: Path) -> Dict[str, Any]:
         "last_modified": cache_dir.stat().st_mtime
     }
 
-def display_enhanced_status(status_data: Dict[str, Any], detailed: bool = False):
+def display_enhanced_status(clockwork_state, status_data: Dict[str, Any], detailed: bool = False):
     """
     Display enhanced status information using Terraform-style formatting.
     
     Args:
+        clockwork_state: The actual ClockworkState object
         status_data: Status data dictionary
         detailed: Whether to show detailed information
     """
@@ -823,72 +764,15 @@ def display_enhanced_status(status_data: Dict[str, Any], detailed: bool = False)
     
     formatter = TerraformStyleFormatter(console)
     
-    # Convert status data to ClockworkState for formatter
-    from .models import ClockworkState, ResourceState, ResourceType, ExecutionStatus
-    
     try:
-        # Create a mock ClockworkState from status_data
-        clockwork_state = ClockworkState()
-        
-        if status_data["resources"]:
-            for resource in status_data["resources"]:
-                # Map string types to ResourceType enum
-                resource_type_str = resource.get("type", "custom")
-                type_mapping = {
-                    'file': ResourceType.FILE,
-                    'service': ResourceType.SERVICE,
-                    'verification': ResourceType.VERIFICATION,
-                    'custom': ResourceType.CUSTOM
-                }
-                resource_type = type_mapping.get(resource_type_str.lower(), ResourceType.CUSTOM)
-                
-                # Map string status to ExecutionStatus enum
-                status_str = resource.get("status", "unknown")
-                status_mapping = {
-                    'success': ExecutionStatus.SUCCESS,
-                    'completed': ExecutionStatus.SUCCESS,
-                    'failed': ExecutionStatus.FAILED,
-                    'error': ExecutionStatus.FAILED,
-                    'running': ExecutionStatus.RUNNING,
-                    'pending': ExecutionStatus.PENDING
-                }
-                execution_status = status_mapping.get(status_str.lower(), ExecutionStatus.PENDING)
-                
-                # Parse timestamps
-                last_applied = None
-                if resource.get("last_applied"):
-                    try:
-                        last_applied = datetime.fromisoformat(resource["last_applied"])
-                    except:
-                        pass
-                
-                last_verified = None
-                if resource.get("last_verified"):
-                    try:
-                        last_verified = datetime.fromisoformat(resource["last_verified"])
-                    except:
-                        pass
-                
-                # Create ResourceState
-                resource_state = ResourceState(
-                    type=resource_type,
-                    config={},  # Not needed for status display
-                    status=execution_status,
-                    last_applied=last_applied,
-                    last_verified=last_verified,
-                    drift_detected=False  # Will be updated if drift data available
-                )
-                
-                clockwork_state.current_resources[resource["id"]] = resource_state
-        
-        # Use formatter to display status
+        # Use formatter to display status with actual ClockworkState
         status_output = formatter.format_status(clockwork_state)
         console.print(status_output)
         
     except Exception as e:
         # Error with Terraform-style formatting
         console.print(f"[red]Error displaying status: {e}[/red]")
-        console.print(f"[cyan]Resources managed:[/cyan] {len(status_data.get('resources', []))}")
+        console.print(f"[cyan]Resources managed:[/cyan] {len(clockwork_state.current_resources) if clockwork_state else 0}")
     
     # Health information (keep existing panels for additional info)
     if detailed and "health" in status_data:
@@ -1027,7 +911,7 @@ def status(
         if json_output:
             console.print(json.dumps(status_data, indent=2, default=str))
         else:
-            display_enhanced_status(status_data, detailed)
+            display_enhanced_status(state, status_data, detailed)
         
     except Exception as e:
         error_msg = f"Failed to get status: {e}"
@@ -1271,13 +1155,16 @@ def run_clockwork_command(demo_dir: Path, command_args: List[str], timeout: int 
             if progress:
                 progress.stop()
             
-            # In text_only mode, try to auto-fix common errors
-            if text_only and result.returncode != 0:
+            # Check if command succeeded
+            success = result.returncode == 0
+            
+            # In text_only mode, show warning but continue demo with actual result
+            if text_only and not success:
                 console.print(f"[yellow]⚠ Command failed, attempting auto-fix...[/yellow]")
                 # Could add specific error handling patterns here
-                # For now, we'll return the error but continue the demo
+                # For now, we'll return the actual result and let steps handle failures
                 
-            return True, result.stdout, result.stderr
+            return success, result.stdout, result.stderr
         else:
             return False, "", "Clockwork command not available"
     
@@ -1286,8 +1173,7 @@ def run_clockwork_command(demo_dir: Path, command_args: List[str], timeout: int 
         if progress:
             progress.stop()
         
-        if text_only:
-            console.print(f"[yellow]⚠ Error executing command, continuing with simulation: {e}[/yellow]")
+        console.print(f"[red]❌ Error executing command: {e}[/red]")
         return False, "", str(e)
 
 
@@ -1436,43 +1322,10 @@ Running: clockwork plan
             console.print("\n[yellow]Warnings/Errors:[/yellow]")
             console.print(stderr)
     else:
-        if not text_only:
-            console.print("[yellow]Clockwork command not available. Simulating plan output...[/yellow]")
-        console.print("""
-[bold cyan]Plan Output (Simulated):[/bold cyan]
-Terraform will perform the following actions:
-
-  # file.demo_directory will be created
-  + resource "file" "demo_directory" {
-      + path = "./demo-output"
-      + type = "directory"
-      + mode = "755"
-    }
-
-  # file.config_file will be created
-  + resource "file" "config_file" {
-      + path       = "./demo-output/config.json"
-      + type       = "file"
-      + mode       = "644"
-      + depends_on = ["file.demo_directory"]
-    }
-
-  # file.readme will be created
-  + resource "file" "readme" {
-      + path       = "./demo-output/README.md"
-      + type       = "file"
-      + mode       = "644"
-      + depends_on = ["file.demo_directory"]
-    }
-
-  # verification.files_exist will be created
-  + resource "verification" "files_exist" {
-      + name       = "check_demo_files"
-      + depends_on = ["file.config_file", "file.readme"]
-    }
-
-Plan: 4 to add, 0 to change, 0 to destroy.
-""")
+        error_msg = "Clockwork command not available. Please ensure clockwork is properly installed and accessible."
+        console.print(f"[red]❌ {error_msg}[/red]")
+        console.print(f"[red]Error details: {stderr}[/red]")
+        raise RuntimeError(f"Demo failed: {error_msg}")
     
     console.print("""
 [bold cyan]What happened?[/bold cyan]
@@ -1531,29 +1384,10 @@ Running: clockwork build
                 if artifact.is_file():
                     console.print(f"  📄 {artifact.relative_to(artifacts_dir)}")
     else:
-        if not text_only:
-            console.print("[yellow]Clockwork command not available. Simulating build output...[/yellow]")
-        console.print("""
-[bold cyan]Build Output (Simulated):[/bold cyan]
-🔨 Building...
-
-🔨 Compiling artifacts with enhanced compiler...
-
-📄 Generated Artifacts:
-  demo_directory.sh
-  config_file.sh  
-  readme.sh
-  files_exist.sh
-
-✅ Build completed successfully
-""")
-        
-        # Create mock artifacts directory
-        artifacts_dir = demo_dir / ".clockwork" / "build"
-        artifacts_dir.mkdir(parents=True, exist_ok=True)
-        (artifacts_dir / "demo_directory.sh").write_text("#!/bin/bash\nmkdir -p ./demo-output")
-        (artifacts_dir / "config_file.sh").write_text("#!/bin/bash\necho 'Creating config file'")
-        (artifacts_dir / "readme.sh").write_text("#!/bin/bash\necho 'Creating README'")
+        error_msg = "Clockwork build command failed. Please ensure clockwork is properly installed and LM Studio is running."
+        console.print(f"[red]❌ {error_msg}[/red]")
+        console.print(f"[red]Error details: {stderr}[/red]")
+        raise RuntimeError(f"Demo failed: {error_msg}")
     
     console.print("""
 [bold cyan]What happened?[/bold cyan]
@@ -1608,28 +1442,10 @@ Running: clockwork verify
             console.print("\n[yellow]Warnings/Errors:[/yellow]")
             console.print(stderr)
     else:
-        if not text_only:
-            console.print("[yellow]Clockwork command not available. Simulating verification...[/yellow]")
-        if phase == "pre-apply":
-            console.print("""
-[bold cyan]Verification Output (Simulated):[/bold cyan]
-🔍 Verifying...
-
-❌ FAIL: ./demo-output/config.json does not exist
-❌ FAIL: ./demo-output/README.md does not exist
-
-2 checks failed, 0 passed
-""")
-        else:
-            console.print("""
-[bold cyan]Verification Output (Simulated):[/bold cyan]
-🔍 Verifying...
-
-✅ PASS: ./demo-output/config.json exists
-✅ PASS: ./demo-output/README.md exists
-
-2 checks passed, 0 failed
-""")
+        error_msg = "Clockwork verify command failed. Please ensure clockwork is properly installed and LM Studio is running."
+        console.print(f"[red]❌ {error_msg}[/red]")
+        console.print(f"[red]Error details: {stderr}[/red]")
+        raise RuntimeError(f"Demo failed: {error_msg}")
     
     if phase == "pre-apply":
         console.print("""
@@ -1677,7 +1493,7 @@ Running: clockwork apply --auto-approve
         console.print("[blue]► Step 5/7: Running apply command...[/blue]")
     
     # Run the apply command
-    success, stdout, stderr = run_clockwork_command(demo_dir, ["apply", "--auto-approve"], timeout=60, text_only=text_only)
+    success, stdout, stderr = run_clockwork_command(demo_dir, ["apply", "--auto-approve"], timeout=300, text_only=text_only)
     
     if success:
         console.print("[green]Command executed successfully[/green]")
@@ -1697,58 +1513,10 @@ Running: clockwork apply --auto-approve
                 console.print("\n[yellow]Warnings/Errors:[/yellow]")
                 console.print(filtered_stderr)
     else:
-        if not text_only:
-            console.print("[yellow]Clockwork command not available. Simulating apply and creating demo files...[/yellow]")
-        console.print("""
-[bold cyan]Apply Output (Simulated):[/bold cyan]
-🚀 Applying...
-
-⚡ Executing artifacts...
-
-✅ SUCCESS: demo_directory (0.1s)
-✅ SUCCESS: config_file (0.2s) 
-✅ SUCCESS: readme (0.1s)
-✅ SUCCESS: files_exist (0.1s)
-
-✅ Apply completed successfully
-""")
-    
-    # Always create the demo files for the tutorial (whether real or simulated)
-    output_dir = demo_dir / "demo-output"
-    if not output_dir.exists():
-        output_dir.mkdir(exist_ok=True)
-        
-        # Create config.json
-        config_content = {
-            "name": "clockwork-demo",
-            "message": "Hello from Clockwork!",
-            "created": "2024-01-15T10:30:00Z"
-        }
-        (output_dir / "config.json").write_text(json.dumps(config_content, indent=2))
-        
-        # Create README.md  
-        readme_content = """# clockwork-demo
-
-Hello from Clockwork!
-
-This directory was created by Clockwork as part of the demo.
-
-Generated on: 2024-01-15T10:30:00Z
-"""
-        (output_dir / "README.md").write_text(readme_content)
-        
-        # Create state file to simulate tracking
-        state_dir = demo_dir / ".clockwork"
-        state_dir.mkdir(exist_ok=True)
-        state_content = {
-            "resources": {
-                "demo_directory": {"status": "created", "path": "./demo-output"},
-                "config_file": {"status": "created", "path": "./demo-output/config.json"},
-                "readme": {"status": "created", "path": "./demo-output/README.md"}
-            },
-            "last_applied": "2024-01-15T10:30:00Z"
-        }
-        (state_dir / "state.json").write_text(json.dumps(state_content, indent=2))
+        error_msg = "Clockwork apply command failed. Please ensure clockwork is properly installed and LM Studio is running."
+        console.print(f"[red]❌ {error_msg}[/red]")
+        console.print(f"[red]Error details: {stderr}[/red]")
+        raise RuntimeError(f"Demo failed: {error_msg}")
     
     console.print("""
 [bold cyan]What happened?[/bold cyan]

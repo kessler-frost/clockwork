@@ -306,47 +306,7 @@ def validate_action_list(action_list: ActionList) -> bool:
         return False
 
 
-def optimize_action_list(action_list: ActionList) -> ActionList:
-    """
-    Optimize an ActionList for better performance and resource utilization.
-    
-    This function analyzes the action list and applies optimizations such as:
-    - Parallelizing independent actions
-    - Removing redundant actions
-    - Reordering for better efficiency
-    
-    Args:
-        action_list: The ActionList to optimize
-        
-    Returns:
-        ActionList: Optimized version of the input list
-    """
-    try:
-        if not validate_action_list(action_list):
-            logger.warning("Cannot optimize invalid ActionList")
-            return action_list
-        
-        # Create a copy to avoid modifying the original
-        optimized_actions = action_list.steps.copy()
-        
-        # TODO: Implement actual optimization algorithms
-        # For now, just return the original list with updated metadata
-        
-        optimized_metadata = action_list.metadata.copy()
-        optimized_metadata.update({
-            "optimized": True,
-            "optimization_applied": "basic_validation_only"
-        })
-        
-        return ActionList(
-            version=action_list.version,
-            steps=optimized_actions,
-            metadata=optimized_metadata
-        )
-        
-    except Exception as e:
-        logger.error(f"Error during ActionList optimization: {str(e)}")
-        return action_list
+# optimize_action_list function removed - was only placeholder implementation
 
 
 def _validate_action_list_structure(action_list: ActionList) -> bool:

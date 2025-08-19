@@ -8,7 +8,6 @@ representation (IR) to action lists and computing state differences.
 from .planner import (
     convert_ir_to_actions,
     validate_action_list,
-    optimize_action_list,
 )
 from ..models import Action, ActionList, ActionType
 
@@ -27,7 +26,6 @@ __all__ = [
     "ActionType",
     "convert_ir_to_actions",
     "validate_action_list",
-    "optimize_action_list",
     # Differ exports
     "StateDiff",
     "DiffType",
