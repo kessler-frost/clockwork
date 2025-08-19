@@ -35,5 +35,6 @@ package = true
 
 [dependency-groups]
 dev = [
+    "detect-secrets>=1.5.0",
     "pytest>=8.4.1",
 ]
