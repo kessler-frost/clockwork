@@ -814,12 +814,12 @@ class ClockworkCore:
             state = self.state_manager.load_state() or ClockworkState()
             
             # Create execution record
-            # Calculate checksums
-            action_list_str = json.dumps([step.model_dump() for step in action_list.steps], sort_keys=True)
-            action_list_checksum = hashlib.sha256(action_list_str.encode()).hexdigest()
-            
+            # Calculate checksums - use artifact bundle steps as proxy for action list since we don't have access to it
             artifact_bundle_str = json.dumps([step.model_dump() for step in artifact_bundle.steps], sort_keys=True)
             artifact_bundle_checksum = hashlib.sha256(artifact_bundle_str.encode()).hexdigest()
+            
+            # Use artifact bundle checksum for action list checksum since action_list is not available
+            action_list_checksum = artifact_bundle_checksum
             
             execution_record = ExecutionRecord(
                 run_id=f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}",

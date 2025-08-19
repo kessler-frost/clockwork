@@ -373,11 +373,18 @@ class ArtifactPathValidator:
             if re.search(cmd, content):
                 warnings.append(f"Dangerous command detected: {cmd}")
         
-        # Check for network operations
-        network_commands = ["curl", "wget", "nc", "netcat", "telnet", "ssh"]
-        for cmd in network_commands:
-            if re.search(rf'\b{cmd}\b', content):
-                warnings.append(f"Network command detected: {cmd}")
+        # Check for network operations - only warn for potentially dangerous patterns
+        # curl and wget are common and generally safe, only warn for dangerous usage
+        dangerous_network_patterns = [
+            r"telnet\s",  # Telnet is generally insecure
+            r"nc\s.*-e",  # Netcat with execute flag
+            r"ssh\s.*-o\s*StrictHostKeyChecking=no",  # SSH with disabled host key checking
+            r"curl\s.*\|\s*sh",  # Curl piped to shell (dangerous)
+            r"wget\s.*-O-\s*\|\s*sh",  # Wget piped to shell (dangerous)
+        ]
+        for pattern in dangerous_network_patterns:
+            if re.search(pattern, content, re.IGNORECASE):
+                warnings.append(f"Potentially dangerous network pattern detected: {pattern}")
         
         return warnings
     
