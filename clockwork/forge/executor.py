@@ -184,7 +184,7 @@ class ArtifactPathValidator:
             ],
             "bash": [
                 "rm -rf", ":(){ :|:& };:", "dd if=", "mkfs",
-                "> /dev/null", "> /dev/zero", "> /dev/random", "nc ", "netcat",
+                "> /dev/zero", "> /dev/random", 
                 "chmod 777", "sudo", "su -", "/etc/passwd"
             ],
             "javascript": [

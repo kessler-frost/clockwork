@@ -20,12 +20,15 @@ logger = logging.getLogger(__name__)
 
 
 class AgentArtifact(BaseModel):
-    """Pydantic model for AI agent artifact generation."""
+    """Pydantic model for AI agent artifact generation using templates."""
     path: str = Field(..., description="Relative path for the artifact file (e.g., 'scripts/01_fetch_repo.sh')")
     mode: str = Field(..., description="File permissions in octal format (e.g., '0755' for executable, '0644' for data)")
     purpose: str = Field(..., description="The purpose/name of the action this artifact serves")
-    lang: str = Field(..., description="Programming language (bash, python, deno, go, etc.)")
-    content: str = Field(..., description="Complete executable content of the artifact with proper headers and error handling")
+    template: str = Field(..., description="Name of the script template to use (e.g., 'create_directory', 'write_file')")
+    params: Dict[str, Any] = Field(..., description="Parameters to substitute in the template")
+    # Keep content as optional for backwards compatibility, but prefer template + params
+    content: Optional[str] = Field(None, description="Direct script content (only used if template approach fails)")
+    lang: str = Field(default="bash", description="Programming language (always bash for templates)")
 
 
 class AgentExecutionStep(BaseModel):
@@ -52,8 +55,321 @@ class AgnoCompiler:
     AI-powered compiler using Agno framework with LM Studio integration.
     
     This class uses a local LM Studio instance to generate executable artifacts
-    from declarative ActionList specifications.
+    from declarative ActionList specifications using proven script templates.
     """
+    
+    # Pre-tested script templates that the AI combines and parameterizes
+    SCRIPT_TEMPLATES = {
+        # File Operations
+        'create_directory': '''#!/bin/bash
+set -e
+set -o pipefail
+
+DIR_PATH="{path}"
+if [ -z "$DIR_PATH" ]; then
+    echo "✗ Error: Directory path is required"
+    exit 1
+fi
+
+echo "Creating directory: $DIR_PATH"
+mkdir -p "$DIR_PATH"
+echo "✓ Created directory: $DIR_PATH"
+exit 0''',
+
+        'write_file': '''#!/bin/bash
+set -e
+set -o pipefail
+
+FILE_PATH="{path}"
+if [ -z "$FILE_PATH" ]; then
+    echo "✗ Error: File path is required"
+    exit 1
+fi
+
+echo "Writing file: $FILE_PATH"
+# Ensure parent directory exists
+mkdir -p "$(dirname "$FILE_PATH")"
+
+cat > "$FILE_PATH" << 'EOF'
+{content}
+EOF
+
+if [ $? -eq 0 ]; then
+    echo "✓ Successfully wrote file: $FILE_PATH"
+    echo "  Size: $(wc -c < "$FILE_PATH") bytes"
+else
+    echo "✗ Failed to write file: $FILE_PATH"
+    exit 1
+fi
+exit 0''',
+
+        'verify_exists': '''#!/bin/bash
+set -e
+set -o pipefail
+
+TARGET="{path}"
+if [ -z "$TARGET" ]; then
+    echo "✗ Error: Target path is required"
+    exit 1
+fi
+
+echo "Verifying path exists: $TARGET"
+if [ -e "$TARGET" ]; then
+    if [ -f "$TARGET" ]; then
+        echo "✓ File exists: $TARGET ($(wc -c < "$TARGET") bytes)"
+    elif [ -d "$TARGET" ]; then
+        echo "✓ Directory exists: $TARGET ($(ls -1 "$TARGET" | wc -l) items)"
+    else
+        echo "✓ Path exists: $TARGET"
+    fi
+    exit 0
+else
+    echo "✗ Path not found: $TARGET"
+    exit 1
+fi''',
+
+        # Command Operations
+        'run_command': '''#!/bin/bash
+set -e
+set -o pipefail
+
+COMMAND="{command}"
+if [ -z "$COMMAND" ]; then
+    echo "✗ Error: Command is required"
+    exit 1
+fi
+
+echo "Executing command: $COMMAND"
+eval "$COMMAND"
+EXIT_CODE=$?
+
+if [ $EXIT_CODE -eq 0 ]; then
+    echo "✓ Command completed successfully: $COMMAND"
+else
+    echo "✗ Command failed with exit code $EXIT_CODE: $COMMAND"
+    exit $EXIT_CODE
+fi
+exit 0''',
+
+        'run_with_timeout': '''#!/bin/bash
+set -e
+set -o pipefail
+
+COMMAND="{command}"
+TIMEOUT="{timeout}"
+if [ -z "$COMMAND" ]; then
+    echo "✗ Error: Command is required"
+    exit 1
+fi
+if [ -z "$TIMEOUT" ]; then
+    TIMEOUT="30"
+fi
+
+echo "Executing command with ${TIMEOUT}s timeout: $COMMAND"
+timeout "$TIMEOUT" bash -c "$COMMAND"
+EXIT_CODE=$?
+
+if [ $EXIT_CODE -eq 0 ]; then
+    echo "✓ Command completed successfully: $COMMAND"
+elif [ $EXIT_CODE -eq 124 ]; then
+    echo "✗ Command timed out after ${TIMEOUT}s: $COMMAND"
+    exit 1
+else
+    echo "✗ Command failed with exit code $EXIT_CODE: $COMMAND"
+    exit $EXIT_CODE
+fi
+exit 0''',
+
+        # Service Operations
+        'check_port': '''#!/bin/bash
+set -e
+set -o pipefail
+
+PORT="{port}"
+HOST="{host}"
+if [ -z "$PORT" ]; then
+    echo "✗ Error: Port is required"
+    exit 1
+fi
+if [ -z "$HOST" ]; then
+    HOST="localhost"
+fi
+
+echo "Checking if port $PORT is open on $HOST"
+if command -v nc >/dev/null 2>&1; then
+    if nc -z "$HOST" "$PORT" 2>/dev/null; then
+        echo "✓ Port $PORT is open on $HOST"
+        exit 0
+    else
+        echo "✗ Port $PORT is not open on $HOST"
+        exit 1
+    fi
+elif command -v curl >/dev/null 2>&1; then
+    if curl -s --connect-timeout 5 "$HOST:$PORT" >/dev/null 2>&1; then
+        echo "✓ Port $PORT is open on $HOST"
+        exit 0
+    else
+        echo "✗ Port $PORT is not open on $HOST"
+        exit 1
+    fi
+else
+    echo "✗ Neither nc nor curl available for port check"
+    exit 1
+fi''',
+
+        'wait_for_service': '''#!/bin/bash
+set -e
+set -o pipefail
+
+SERVICE="{service}"
+TIMEOUT_PARAM="{timeout}"
+if [ -z "$SERVICE" ]; then
+    echo "✗ Error: Service name is required"
+    exit 1
+fi
+if [ -z "$TIMEOUT_PARAM" ] || [ "$TIMEOUT_PARAM" = "None" ]; then
+    TIMEOUT=60
+else
+    TIMEOUT="$TIMEOUT_PARAM"
+fi
+
+echo "Waiting for service to be ready: $SERVICE (timeout: ${TIMEOUT}s)"
+START_TIME=$(date +%s)
+
+while true; do
+    CURRENT_TIME=$(date +%s)
+    ELAPSED=$((CURRENT_TIME - START_TIME))
+    
+    if [ $ELAPSED -ge $TIMEOUT ]; then
+        echo "✗ Timeout waiting for service: $SERVICE"
+        exit 1
+    fi
+    
+    if pgrep -f "$SERVICE" >/dev/null 2>&1; then
+        echo "✓ Service is running: $SERVICE"
+        exit 0
+    fi
+    
+    echo "  Waiting for service... (${ELAPSED}s/${TIMEOUT}s)"
+    sleep 2
+done''',
+
+        # Docker Operations
+        'docker_run': '''#!/bin/bash
+set -e
+set -o pipefail
+
+IMAGE="{image}"
+NAME="{name}"
+PORTS="{ports}"
+ENV_VARS="{env_vars}"
+
+if [ -z "$IMAGE" ]; then
+    echo "✗ Error: Docker image is required"
+    exit 1
+fi
+if [ -z "$NAME" ] || [ "$NAME" = "None" ]; then
+    NAME="$(echo "$IMAGE" | tr ':/' '_')"
+fi
+
+echo "Running Docker container: $IMAGE"
+DOCKER_CMD="docker run -d --name $NAME"
+
+if [ -n "$PORTS" ] && [ "$PORTS" != "None" ]; then
+    DOCKER_CMD="$DOCKER_CMD -p $PORTS"
+fi
+
+if [ -n "$ENV_VARS" ] && [ "$ENV_VARS" != "None" ]; then
+    DOCKER_CMD="$DOCKER_CMD $ENV_VARS"
+fi
+
+DOCKER_CMD="$DOCKER_CMD $IMAGE"
+
+echo "Executing: $DOCKER_CMD"
+eval "$DOCKER_CMD"
+EXIT_CODE=$?
+
+if [ $EXIT_CODE -eq 0 ]; then
+    echo "✓ Container started successfully: $NAME"
+    echo "  Use 'docker logs $NAME' to view logs"
+else
+    echo "✗ Failed to start container: $NAME"
+    exit $EXIT_CODE
+fi
+exit 0''',
+
+        # Web/API Operations
+        'check_http': '''#!/bin/bash
+set -e
+set -o pipefail
+
+URL="{url}"
+EXPECTED_STATUS="{expected_status}"
+if [ -z "$URL" ]; then
+    echo "✗ Error: URL is required"
+    exit 1
+fi
+if [ -z "$EXPECTED_STATUS" ] || [ "$EXPECTED_STATUS" = "None" ]; then
+    EXPECTED_STATUS="200"
+fi
+
+echo "Checking HTTP endpoint: $URL (expecting status $EXPECTED_STATUS)"
+if command -v curl >/dev/null 2>&1; then
+    ACTUAL_STATUS=$(curl -s -o /dev/null -w "%{{http_code}}" "$URL" 2>/dev/null || echo "000")
+    
+    if [ "$ACTUAL_STATUS" = "$EXPECTED_STATUS" ]; then
+        echo "✓ HTTP check passed: $URL returned $ACTUAL_STATUS"
+        exit 0
+    else
+        echo "✗ HTTP check failed: $URL returned $ACTUAL_STATUS (expected $EXPECTED_STATUS)"
+        exit 1
+    fi
+else
+    echo "✗ curl not available for HTTP check"
+    exit 1
+fi''',
+
+        # JSON Configuration
+        'write_json_config': '''#!/bin/bash
+set -e
+set -o pipefail
+
+FILE_PATH="{path}"
+CONFIG_DATA='{config_json}'
+
+if [ -z "$FILE_PATH" ]; then
+    echo "✗ Error: File path is required"
+    exit 1
+fi
+
+echo "Writing JSON configuration: $FILE_PATH"
+# Ensure parent directory exists
+mkdir -p "$(dirname "$FILE_PATH")"
+
+# Validate JSON before writing
+if echo '$CONFIG_DATA' | python3 -m json.tool >/dev/null 2>&1; then
+    echo '$CONFIG_DATA' | python3 -m json.tool > "$FILE_PATH"
+    echo "✓ Successfully wrote JSON config: $FILE_PATH"
+    echo "  Size: $(wc -c < "$FILE_PATH") bytes"
+else
+    echo "✗ Invalid JSON data"
+    exit 1
+fi
+exit 0''',
+
+        # Generic template for simple operations
+        'simple_task': '''#!/bin/bash
+set -e
+set -o pipefail
+
+echo "Executing task: {task_name}"
+echo "Description: {description}"
+
+{task_commands}
+
+echo "✓ Task completed: {task_name}"
+exit 0'''
+    }
     
     def __init__(
         self,
@@ -82,7 +398,7 @@ class AgnoCompiler:
                 # Add additional parameters that might help with LM Studio compatibility
                 timeout=timeout,
                 max_tokens=4000,
-                temperature=0.1
+                temperature=0.05  # Lower temperature for more deterministic template selection
             )
             
             self.agent = Agent(
@@ -107,103 +423,237 @@ class AgnoCompiler:
             raise AgnoCompilerError(f"Failed to initialize AI agent: {e}")
     
     def _get_system_instructions(self) -> str:
-        """Get comprehensive system instructions for the AI agent."""
-        return """
-You are an expert DevOps engineer and automation specialist with advanced intelligence for inferring missing configurations from minimal user input. Your job is to convert high-level declarative task specifications into production-ready executable artifacts by intelligently filling in missing details.
+        """Get simplified system instructions for template-based artifact generation."""
+        return f"""
+You are an expert DevOps automation specialist. Your job is to convert task specifications into executable artifacts by selecting and parameterizing proven script templates.
 
-CORE RESPONSIBILITIES:
-1. Generate secure, production-ready scripts in appropriate languages
-2. Ensure all artifacts follow security best practices
-3. Include comprehensive error handling and logging
-4. Respect execution order and dependencies
-5. Use only allowlisted runtimes and secure file paths
-6. **INTELLIGENTLY INFER missing configurations from minimal input**
-7. **APPLY best practices and conventions automatically**
+CRITICAL: You do NOT write bash scripts from scratch. You ONLY select from pre-tested script templates and provide parameters.
 
-INTELLIGENT INFERENCE CAPABILITIES:
-When given minimal input, you MUST intelligently infer and add missing configurations:
+AVAILABLE SCRIPT TEMPLATES:
+{self._get_template_descriptions()}
 
-**Service Deployment Intelligence:**
-- nginx/apache/web services → Default port 80/443, health check on '/', non-root user
-- APIs/backend services → Default port 8080, health check on '/health' or '/api/health'
-- Database services → MySQL (3306), PostgreSQL (5432), MongoDB (27017), Redis (6379)
-- Node.js apps → Port 3000, health check on '/health', npm start command
-- Python apps → Port 8000, health check on '/health', gunicorn/uvicorn server
-- Go apps → Port 8080, health check on '/health', compiled binary execution
+HOW TO USE TEMPLATES:
+1. Analyze the task requirements
+2. Select the appropriate template(s) from the list above
+3. Provide the required parameters for each template
+4. Chain templates together for complex operations
+5. Ensure proper execution order using dependencies
 
-**Security & Best Practices Auto-Applied:**
-- Always run containers as non-root user (user: 1000:1000 or named user)
-- Set resource limits (memory: 512Mi, cpu: 500m as defaults)
-- Add security context (readOnlyRootFilesystem: true when possible)
-- Include liveness and readiness probes with appropriate timeouts
-- Set proper restart policies (Always for services, OnFailure for jobs)
+TEMPLATE SELECTION GUIDELINES:
+- File Operations: Use 'create_directory', 'write_file', 'verify_exists'
+- Commands: Use 'run_command' or 'run_with_timeout'
+- Services: Use 'check_port', 'wait_for_service'
+- Docker: Use 'docker_run'
+- HTTP Checks: Use 'check_http'
+- JSON Config: Use 'write_json_config'
+- Generic Tasks: Use 'simple_task'
 
-**Environment & Configuration Intelligence:**
-- Auto-detect environment variables needed (PORT, DATABASE_URL, etc.)
-- Infer configuration files and their locations
-- Add logging configuration (stdout/stderr for containerized apps)
-- Include monitoring endpoints and health checks
-- Set appropriate timeouts and retry policies
+PARAMETER INFERENCE:
+When parameters aren't explicitly provided, intelligently infer them:
+- Ports: nginx=80, api=8080, database=5432/3306, redis=6379
+- Paths: Use descriptive names under .clockwork/build/ or scripts/
+- Timeouts: 30s for checks, 60s for service waits
+- Hosts: Default to "localhost"
 
-**Dependency Intelligence:**
-- Databases start before applications that use them
-- Configuration/secrets loaded before services that need them
-- Network setup before services that require connectivity
-- Volume mounts configured before applications that use them
+TEMPLATE CHAINING EXAMPLES:
+1. Deploy web service:
+   - create_directory (for config)
+   - write_file (config file)
+   - docker_run (start container)
+   - check_port (verify running)
 
-**Project Context Awareness:**
-- Detect project type from minimal clues (Dockerfile → containerized app)
-- Infer build processes (package.json → npm install, requirements.txt → pip install)
-- Apply language-specific conventions and optimizations
-- Include appropriate monitoring and observability setup
-
-SECURITY REQUIREMENTS:
-- All artifact paths must be under .clockwork/build/ or scripts/
-- Only use allowlisted runtimes: bash, python3, python, deno, go, node, npm, npx, java, mvn, gradle, dotnet, cargo, rustc, env
-- Executable files should have 0755 permissions, data files 0644
-- Never include hardcoded secrets or credentials
-- Always validate inputs and handle errors gracefully
-- Apply principle of least privilege automatically
-
-LANGUAGE SELECTION GUIDELINES:
-- bash: System operations, file management, simple automation, Docker/Kubernetes commands
-- python3: Complex logic, API calls, data processing, configuration management
-- deno: Modern TypeScript/JavaScript with built-in security and HTTP clients
-- go: High-performance network operations, compiled binaries, microservices
-
-CONFIGURATION TEMPLATES KNOWLEDGE:
-You have built-in knowledge of standard configurations for:
-- **Web Applications**: Nginx, Apache, reverse proxies, load balancers
-- **API Services**: REST APIs, GraphQL, microservices, service mesh
-- **Databases**: MySQL, PostgreSQL, MongoDB, Redis, configuration and initialization
-- **Container Orchestration**: Docker Compose, Kubernetes manifests, Helm charts
-- **CI/CD**: Build scripts, deployment pipelines, testing automation
-- **Monitoring**: Health checks, metrics, logging, alerting setup
-
-SCRIPT STRUCTURE:
-- Include proper shebang lines (#!/bin/bash, #!/usr/bin/env python3, etc.)
-- Add descriptive comments explaining the purpose AND inferred decisions
-- Include error handling with meaningful error messages
-- Log important operations and results (including what was auto-configured)
-- Use environment variables from the vars section
-- Return meaningful exit codes (0 for success, non-zero for failure)
-- Document any assumptions made during inference
+2. Verify deployment:
+   - verify_exists (check files)
+   - check_http (test endpoints)
+   - check_port (verify services)
 
 OUTPUT FORMAT:
-Generate a complete ArtifactBundle with all required fields:
-- version: Always "1"
-- artifacts: Array of executable files with path, mode, purpose, lang, content
-- steps: Array of execution commands matching artifact purposes
-- vars: Environment variables and configuration values (including inferred ones)
+You MUST respond with a JSON object containing:
+- artifacts: Array of template selections with parameters
+- steps: Execution order matching artifacts
+- vars: Environment variables for the templates
 
-CRITICAL: When given minimal input like "deploy nginx on port 8080", you should automatically infer and include:
-- Full deployment configuration with health checks
-- Security settings (non-root user, resource limits)
-- Logging and monitoring setup
-- Proper error handling and rollback capabilities
-- Environment variables for configuration
-- Dependencies and startup order
+EXAMPLE OUTPUT:
+{{
+  "version": "1",
+  "artifacts": [
+    {{
+      "path": "scripts/01_setup_directory.sh",
+      "mode": "0755",
+      "purpose": "setup_directory",
+      "template": "create_directory",
+      "params": {{"path": "./demo-output"}}
+    }},
+    {{
+      "path": "scripts/02_write_config.sh",
+      "mode": "0755", 
+      "purpose": "write_config",
+      "template": "write_file",
+      "params": {{"path": "./demo-output/config.json", "content": "{{\\"name\\": \\"demo\\"}}"}}
+    }}
+  ],
+  "steps": [
+    {{"purpose": "setup_directory", "run": {{"cmd": ["bash", "scripts/01_setup_directory.sh"]}}}},
+    {{"purpose": "write_config", "run": {{"cmd": ["bash", "scripts/02_write_config.sh"]}}}}
+  ],
+  "vars": {{
+    "DEMO_NAME": "clockwork-demo",
+    "CONFIG_PATH": "./demo-output/config.json"
+  }}
+}}
+
+REMEMBER:
+- NEVER write bash code - only select templates and provide parameters
+- All scripts will be generated from the proven templates
+- Focus on correct template selection and parameter values
+- Ensure proper dependency order in steps array"""
+
+    def _get_template_descriptions(self) -> str:
+        """Generate descriptions of available script templates."""
+        return """
+FILE OPERATIONS:
+• create_directory: Creates a directory with proper error handling
+  Parameters: path (required) - Directory path to create
+  Example: {"template": "create_directory", "params": {"path": "./demo-output"}}
+
+• write_file: Writes content to a file, creating parent directories if needed
+  Parameters: path (required), content (required) - File path and content
+  Example: {"template": "write_file", "params": {"path": "./config.json", "content": "{\\"name\\": \\"demo\\"}"}}
+
+• verify_exists: Checks if a file or directory exists
+  Parameters: path (required) - Path to verify
+  Example: {"template": "verify_exists", "params": {"path": "./demo-output"}}
+
+COMMAND OPERATIONS:
+• run_command: Executes a shell command with error handling
+  Parameters: command (required) - Command to execute
+  Example: {"template": "run_command", "params": {"command": "echo Hello World"}}
+
+• run_with_timeout: Executes a command with a timeout
+  Parameters: command (required), timeout (optional, default: 30) - Command and timeout in seconds
+  Example: {"template": "run_with_timeout", "params": {"command": "sleep 5", "timeout": "10"}}
+
+SERVICE OPERATIONS:
+• check_port: Checks if a port is open on a host
+  Parameters: port (required), host (optional, default: localhost) - Port number and hostname
+  Example: {"template": "check_port", "params": {"port": "8080", "host": "localhost"}}
+
+• wait_for_service: Waits for a service to be running
+  Parameters: service (required), timeout (optional, default: 60) - Service name and timeout
+  Example: {"template": "wait_for_service", "params": {"service": "nginx", "timeout": "120"}}
+
+DOCKER OPERATIONS:
+• docker_run: Starts a Docker container
+  Parameters: image (required), name (optional), ports (optional), env_vars (optional)
+  Example: {"template": "docker_run", "params": {"image": "nginx:latest", "ports": "8080:80"}}
+
+WEB/API OPERATIONS:
+• check_http: Performs HTTP health check
+  Parameters: url (required), expected_status (optional, default: 200)
+  Example: {"template": "check_http", "params": {"url": "http://localhost:8080", "expected_status": "200"}}
+
+CONFIGURATION:
+• write_json_config: Writes a JSON configuration file with validation
+  Parameters: path (required), config_json (required) - File path and JSON content
+  Example: {"template": "write_json_config", "params": {"path": "./config.json", "config_json": "{\\"port\\": 8080}"}}
+
+GENERIC:
+• simple_task: Generic template for simple operations
+  Parameters: task_name (required), description (optional), task_commands (required)
+  Example: {"template": "simple_task", "params": {"task_name": "cleanup", "task_commands": "rm -f temp.txt"}}
 """
+
+    def get_template(self, template_name: str, **params) -> str:
+        """
+        Get a script template and substitute parameters.
+        
+        Args:
+            template_name: Name of the template to use
+            **params: Parameters to substitute in the template
+            
+        Returns:
+            Script content with parameters substituted
+            
+        Raises:
+            AgnoCompilerError: If template not found or parameter substitution fails
+        """
+        if template_name not in self.SCRIPT_TEMPLATES:
+            available_templates = ', '.join(self.SCRIPT_TEMPLATES.keys())
+            raise AgnoCompilerError(
+                f"Unknown template: '{template_name}'. "
+                f"Available templates: {available_templates}"
+            )
+        
+        template = self.SCRIPT_TEMPLATES[template_name]
+        
+        try:
+            # Substitute parameters in the template
+            script_content = template.format(**params)
+            return script_content
+        except KeyError as e:
+            raise AgnoCompilerError(
+                f"Missing required parameter for template '{template_name}': {e}"
+            )
+        except Exception as e:
+            raise AgnoCompilerError(
+                f"Failed to substitute parameters in template '{template_name}': {e}"
+            )
+    
+    def validate_template_params(self, template_name: str, params: Dict[str, Any]) -> List[str]:
+        """
+        Validate that all required parameters are provided for a template.
+        
+        Args:
+            template_name: Name of the template
+            params: Parameters to validate
+            
+        Returns:
+            List of validation errors (empty if valid)
+        """
+        errors = []
+        
+        if template_name not in self.SCRIPT_TEMPLATES:
+            errors.append(f"Unknown template: '{template_name}'")
+            return errors
+        
+        template = self.SCRIPT_TEMPLATES[template_name]
+        
+        # Extract parameter placeholders from template
+        import re
+        param_placeholders = re.findall(r'\{(\w+)\}', template)
+        required_params = set(param_placeholders)
+        
+        # Check for missing required parameters
+        provided_params = set(params.keys())
+        missing_params = required_params - provided_params
+        
+        if missing_params:
+            errors.append(
+                f"Template '{template_name}' missing required parameters: {', '.join(missing_params)}"
+            )
+        
+        return errors
+    
+    def list_available_templates(self) -> Dict[str, str]:
+        """
+        Get a list of all available templates with their descriptions.
+        
+        Returns:
+            Dictionary mapping template names to descriptions
+        """
+        # Extract first line of each template as description
+        descriptions = {}
+        for name, template in self.SCRIPT_TEMPLATES.items():
+            lines = template.strip().split('\n')
+            # Find the first comment line after shebang
+            description = f"Script template: {name}"
+            for line in lines[1:]:  # Skip shebang
+                if line.strip().startswith('#') and 'Error:' not in line:
+                    description = line.strip('#').strip()
+                    break
+            descriptions[name] = description
+        
+        return descriptions
 
     def compile_to_artifacts(self, action_list: ActionList) -> ArtifactBundle:
         """
@@ -267,7 +717,7 @@ CRITICAL: When given minimal input like "deploy nginx on port 8080", you should 
                         "content": prompt
                     }
                 ],
-                "temperature": 0.1,
+                "temperature": 0.05,  # Lower temperature for more deterministic template selection
                 "max_tokens": 6000,
                 "response_format": {"type": "text"}  # LM Studio requires 'text' or 'json_schema'
             }
@@ -381,150 +831,124 @@ CRITICAL: When given minimal input like "deploy nginx on port 8080", you should 
         return json_content
     
     def _generate_compilation_prompt(self, action_list: ActionList) -> str:
-        """Generate a comprehensive prompt for AI artifact compilation with intelligent inference."""
-        # Detect project context
-        project_context = self._analyze_project_context()
+        """Generate a simplified prompt for template-based artifact compilation."""
         
         prompt = f"""
-Generate executable artifacts for the following task automation sequence with INTELLIGENT INFERENCE of missing configurations:
+Convert the following task automation sequence into executable artifacts by selecting script templates and providing parameters.
 
 ACTION LIST SPECIFICATION:
 Version: {action_list.version}
 Total Steps: {len(action_list.steps)}
 
-PROJECT CONTEXT DETECTED:
-{project_context}
-
-STEPS TO IMPLEMENT (with intelligent inference applied):
+TASKS TO IMPLEMENT:
 """
         
         for i, step in enumerate(action_list.steps, 1):
-            # Analyze step for inference opportunities
-            step_analysis = self._analyze_step_for_inference(step)
             prompt += f"""
 Step {i}: {step.name}
   Type: {step.type if hasattr(step, 'type') else 'CUSTOM'}
   Arguments: {json.dumps(step.args, indent=2)}
-  
-  INTELLIGENT INFERENCE FOR THIS STEP:
-  {step_analysis}
 """
         
         prompt += f"""
 
-ENHANCED IMPLEMENTATION REQUIREMENTS:
-1. **APPLY INTELLIGENT INFERENCE**: Use the analysis above to fill in missing configurations
-2. **AUTO-APPLY BEST PRACTICES**: Include security, monitoring, and reliability patterns
-3. Create one artifact per step (or combine related steps if logical)
-4. Use appropriate programming languages for each task type
-5. Ensure all file paths are under .clockwork/build/ or scripts/
-6. Include comprehensive error handling and logging
-7. Use environment variables for configuration values
-8. Follow security best practices (no hardcoded secrets, input validation)
-9. Add proper file permissions (0755 for executables, 0644 for data)
-10. **DOCUMENT INFERENCES**: Add comments explaining what was automatically inferred
+TEMPLATE SELECTION INSTRUCTIONS:
+You MUST select from these available script templates (DO NOT write bash scripts):
 
-SMART INFERENCE EXAMPLES:
-- "deploy nginx" → Infer port 80/443, health check on '/', non-root user, resource limits
-- "start database" → Infer appropriate port, data volume, initialization scripts, backup strategy
-- "api service" → Infer port 8080, /health endpoint, environment variables, scaling config
-- "web app" → Infer static file serving, SSL/TLS setup, caching, CDN configuration
+FILE OPERATIONS:
+• create_directory - Creates a directory 
+  Required: path
+• write_file - Writes content to a file
+  Required: path, content  
+• verify_exists - Checks if a file/directory exists
+  Required: path
 
-ARTIFACT NAMING CONVENTION:
-- Use descriptive names: scripts/01_deploy_nginx_with_health_check.sh
-- Number artifacts in execution order
-- Include file extension matching the language
-- Include inferred purpose in the name
+COMMAND OPERATIONS:
+• run_command - Executes a shell command
+  Required: command
+• run_with_timeout - Executes command with timeout
+  Required: command, Optional: timeout (default 30s)
 
-EXECUTION STEPS WITH DEPENDENCY INTELLIGENCE:
-- Each step must have a 'purpose' matching an artifact's purpose
-- **AUTO-ORDER BY DEPENDENCIES**: Ensure databases start before apps, configs before services
-- Include the complete command to execute the artifact
-- Add dependency checks and wait conditions
-- Example: {{"purpose": "deploy_web_service", "run": {{"cmd": ["bash", "scripts/02_deploy_web_with_health_check.sh"]}}}}
+SERVICE OPERATIONS:
+• check_port - Checks if a port is open
+  Required: port, Optional: host (default localhost)
+• wait_for_service - Waits for a service to start
+  Required: service, Optional: timeout (default 60s)
 
-ENVIRONMENT VARIABLES (including inferred ones):
-Include both explicit and intelligently inferred configuration:
-- **Service Configuration**: PORT, SERVICE_NAME, REPLICAS, HEALTH_CHECK_PATH
-- **Database Configuration**: DATABASE_URL, DB_HOST, DB_PORT, DB_NAME, CONNECTION_POOL_SIZE  
-- **Security Configuration**: SSL_ENABLED, CORS_ORIGINS, API_KEY_HEADER
-- **Monitoring Configuration**: METRICS_ENABLED, LOG_LEVEL, HEALTH_CHECK_INTERVAL
-- **Infrastructure Configuration**: MEMORY_LIMIT, CPU_LIMIT, RESTART_POLICY
+DOCKER OPERATIONS:
+• docker_run - Starts a Docker container
+  Required: image, Optional: name, ports, env_vars
 
-CONFIGURATION TEMPLATES TO APPLY:
-Based on detected services, automatically include:
+WEB OPERATIONS:
+• check_http - HTTP health check
+  Required: url, Optional: expected_status (default 200)
 
-**For Web Services (nginx, apache, frontend apps):**
-- SSL/TLS configuration with Let's Encrypt support
-- Reverse proxy setup with load balancing
-- Static file serving optimization
-- Security headers (HSTS, CSP, etc.)
-- Caching strategy (browser cache, CDN)
+CONFIGURATION:
+• write_json_config - Writes JSON configuration
+  Required: path, config_json
 
-**For API Services (REST, GraphQL, microservices):**
-- OpenAPI/Swagger documentation endpoint
-- Rate limiting and throttling
-- CORS configuration
-- Authentication/authorization middleware
-- API versioning support
-- Request/response logging
+TASK MAPPING GUIDE:
+- Create/manage files → use create_directory, write_file, verify_exists
+- Run commands → use run_command or run_with_timeout  
+- Deploy services → use docker_run, then check_port
+- Verify deployments → use check_http, verify_exists, check_port
+- Database setup → use docker_run + wait_for_service
+- Configuration → use write_json_config or write_file
 
-**For Database Services (MySQL, PostgreSQL, MongoDB, Redis):**
-- Data persistence volumes
-- Backup and restore procedures
-- Connection pooling configuration
-- Performance tuning parameters
-- Monitoring and alerting setup
-- Security hardening (encryption, access controls)
+PARAMETER INFERENCE:
+When step arguments don't provide all needed parameters, infer reasonable defaults:
+- Ports: nginx=80, api=8080, database=5432, redis=6379
+- Paths: Use descriptive names under scripts/ (e.g., scripts/01_setup_dir.sh)
+- Timeouts: 30s for quick checks, 60s for service waits
+- Hosts: Default to "localhost"
 
-**For Container Deployments:**
-- Multi-stage Docker builds for efficiency
-- Non-root user setup for security
-- Health checks (liveness, readiness, startup)
-- Resource limits and requests
-- Pod disruption budgets
-- Rolling update strategy
-
-CRITICAL OUTPUT REQUIREMENT:
-You MUST respond with ONLY a valid JSON object that exactly matches this structure:
-
+EXAMPLE OUTPUT (respond with ONLY this JSON format):
 {{
   "version": "1",
   "artifacts": [
     {{
-      "path": "scripts/01_deploy_nginx_with_health_check.sh",
+      "path": "scripts/01_create_output_dir.sh",
       "mode": "0755",
-      "purpose": "deploy_web_service",
-      "lang": "bash",
-      "content": "#!/bin/bash\\nset -e\\n# Auto-generated deployment with intelligent inference\\n# Inferred: nginx on port 80, health check on /, non-root user\\necho 'Deploying nginx with inferred configuration...'\\n# Include full implementation here"
+      "purpose": "create_output_directory", 
+      "template": "create_directory",
+      "params": {{"path": "./demo-output"}}
+    }},
+    {{
+      "path": "scripts/02_write_config_file.sh",
+      "mode": "0755",
+      "purpose": "write_config_file",
+      "template": "write_file", 
+      "params": {{"path": "./demo-output/config.json", "content": "{{\\"name\\": \\"demo\\", \\"version\\": \\"1.0\\"}}"}}
+    }},
+    {{
+      "path": "scripts/03_verify_setup.sh",
+      "mode": "0755", 
+      "purpose": "verify_setup",
+      "template": "verify_exists",
+      "params": {{"path": "./demo-output/config.json"}}
     }}
   ],
   "steps": [
-    {{
-      "purpose": "deploy_web_service",
-      "run": {{"cmd": ["bash", "scripts/01_deploy_nginx_with_health_check.sh"]}}
-    }}
+    {{"purpose": "create_output_directory", "run": {{"cmd": ["bash", "scripts/01_create_output_dir.sh"]}}}},
+    {{"purpose": "write_config_file", "run": {{"cmd": ["bash", "scripts/02_write_config_file.sh"]}}}},
+    {{"purpose": "verify_setup", "run": {{"cmd": ["bash", "scripts/03_verify_setup.sh"]}}}}
   ],
   "vars": {{
-    "SERVICE_NAME": "nginx-web",
-    "PORT": "80",
-    "HEALTH_CHECK_PATH": "/",
-    "MEMORY_LIMIT": "512Mi",
-    "CPU_LIMIT": "500m",
-    "REPLICAS": "2",
-    "SSL_ENABLED": "true",
-    "LOG_LEVEL": "info"
+    "DEMO_NAME": "clockwork-demo",
+    "OUTPUT_DIR": "./demo-output",
+    "CONFIG_FILE": "./demo-output/config.json"
   }}
 }}
 
-IMPORTANT:
-- Respond ONLY with valid JSON
-- No explanatory text or comments outside the JSON
-- Start with {{ and end with }}
-- Follow the exact structure shown above
-- Include ALL inferred configurations in vars section
-- Document inferences in artifact content comments
-"""
+CRITICAL REQUIREMENTS:
+- Respond with ONLY the JSON object above
+- Use ONLY the templates listed (do not write bash code)
+- Each artifact needs: path, mode, purpose, template, params
+- Steps array must match artifact purposes
+- Include relevant environment variables in vars
+- Number artifacts in execution order (01_, 02_, etc.)
+- All paths should be under scripts/ directory"""
+        
         return prompt
     
     def _analyze_project_context(self) -> str:
@@ -863,21 +1287,82 @@ IMPORTANT:
         return config
     
     def _convert_to_clockwork_format(self, agent_bundle: AgentArtifactBundle) -> ArtifactBundle:
-        """Convert AI agent response to Clockwork ArtifactBundle format."""
+        """Convert AI agent response to Clockwork ArtifactBundle format with template expansion."""
         try:
-            # Convert artifacts
             artifacts = []
-            for agent_artifact in agent_bundle.artifacts:
-                artifact = Artifact(
-                    path=agent_artifact.path,
-                    mode=agent_artifact.mode,
-                    purpose=agent_artifact.purpose,
-                    lang=agent_artifact.lang,
-                    content=agent_artifact.content
-                )
-                artifacts.append(artifact)
+            template_expansion_errors = []
             
-            # Convert execution steps
+            for i, agent_artifact in enumerate(agent_bundle.artifacts):
+                try:
+                    # Expand template into actual script content
+                    if hasattr(agent_artifact, 'template') and agent_artifact.template:
+                        # Validate template parameters first
+                        validation_errors = self.validate_template_params(
+                            agent_artifact.template, 
+                            agent_artifact.params or {}
+                        )
+                        if validation_errors:
+                            error_msg = f"Template validation failed for artifact {i}: {'; '.join(validation_errors)}"
+                            template_expansion_errors.append(error_msg)
+                            logger.error(error_msg)
+                            
+                            # Fall back to a simple error script
+                            script_content = f'''#!/bin/bash
+echo "✗ Template expansion error: {error_msg}"
+exit 1'''
+                        else:
+                            # Expand the template with parameters
+                            script_content = self.get_template(
+                                agent_artifact.template, 
+                                **(agent_artifact.params or {})
+                            )
+                            logger.info(f"Expanded template '{agent_artifact.template}' for artifact: {agent_artifact.path}")
+                    
+                    elif agent_artifact.content:
+                        # Use direct content if provided (fallback)
+                        script_content = agent_artifact.content
+                        logger.info(f"Using direct content for artifact: {agent_artifact.path}")
+                    
+                    else:
+                        # Neither template nor content provided
+                        error_msg = f"Artifact {i} has neither template nor content"
+                        template_expansion_errors.append(error_msg)
+                        logger.error(error_msg)
+                        
+                        script_content = f'''#!/bin/bash
+echo "✗ No template or content provided for this artifact"
+exit 1'''
+                    
+                    # Create the artifact with expanded content
+                    artifact = Artifact(
+                        path=agent_artifact.path,
+                        mode=agent_artifact.mode,
+                        purpose=agent_artifact.purpose,
+                        lang="bash",  # All templates are bash scripts
+                        content=script_content
+                    )
+                    artifacts.append(artifact)
+                    
+                except Exception as e:
+                    error_msg = f"Failed to expand template for artifact {i}: {e}"
+                    template_expansion_errors.append(error_msg)
+                    logger.error(error_msg)
+                    
+                    # Create an error artifact
+                    error_script = f'''#!/bin/bash
+echo "✗ Template expansion failed: {e}"
+exit 1'''
+                    
+                    artifact = Artifact(
+                        path=agent_artifact.path or f"scripts/error_{i}.sh",
+                        mode=agent_artifact.mode or "0755",
+                        purpose=agent_artifact.purpose or f"error_{i}",
+                        lang="bash",
+                        content=error_script
+                    )
+                    artifacts.append(artifact)
+            
+            # Convert execution steps (unchanged)
             steps = []
             for agent_step in agent_bundle.steps:
                 step = ExecutionStep(
@@ -886,17 +1371,28 @@ IMPORTANT:
                 )
                 steps.append(step)
             
+            # Add template expansion status to vars
+            bundle_vars = agent_bundle.vars or {}
+            if template_expansion_errors:
+                bundle_vars["template_expansion_errors"] = template_expansion_errors
+                bundle_vars["template_expansion_status"] = "partial_success"
+                logger.warning(f"Template expansion completed with {len(template_expansion_errors)} errors")
+            else:
+                bundle_vars["template_expansion_status"] = "success"
+                logger.info("All templates expanded successfully")
+            
             # Create Clockwork ArtifactBundle
             bundle = ArtifactBundle(
                 version=agent_bundle.version,
                 artifacts=artifacts,
                 steps=steps,
-                vars=agent_bundle.vars or {}
+                vars=bundle_vars
             )
             
             return bundle
             
         except Exception as e:
+            logger.error(f"Failed to convert AI response to ArtifactBundle: {e}")
             raise AgnoCompilerError(f"Failed to convert AI response to ArtifactBundle: {e}")
     
     def _test_lm_studio_connection(self) -> None:
