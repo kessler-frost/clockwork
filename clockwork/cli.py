@@ -1196,142 +1196,40 @@ The Terraform-style output clearly shows these relationships.
 Let's create a .cw file that starts a service, lets it run for 30 seconds, captures output, and then shuts it down:
 """)
     
-    # Create sample .cw file with service management
-    sample_cw_content = '''# Clockwork Demo - Service Management Task
+    # Create sample .cw file with simple, declarative service management
+    sample_cw_content = '''# Clockwork Demo - Simple Web Service
 
-variable "service_name" {
-  type        = "string"
-  default     = "demo-web-server"
-  description = "Name for our demo service"
-}
-
-variable "service_port" {
-  type    = "number"
-  default = 8080
-}
-
-variable "run_duration" {
-  type    = "number"
-  default = 30
-  description = "How long to run the service in seconds"
-}
-
-# Step 1: Create output directory for logs and results
-resource "file" "output_directory" {
-  path = "./demo-output"
-  type = "directory"
-  mode = "755"
-}
-
-# Step 2: Start the demo web service
-resource "service" "demo_server" {
-  name  = var.service_name
-  image = "python:3.11-slim"
+# I want a demo web service that serves a "Hello World" page
+resource "webapp" "demo" {
+  name        = "clockwork-demo"
+  description = "A simple demo web service for showcasing Clockwork"
   
-  # Simple Python HTTP server command
-  command = [
-    "python", "-c",
-    "import http.server, socketserver, threading, time; server = socketserver.TCPServer(('', ${var.service_port}), http.server.SimpleHTTPRequestHandler); print(f'Demo server starting on port ${var.service_port}...'); server.serve_forever()"
-  ]
+  # What the service should do
+  content = "Hello from Clockwork! This demo service is running successfully."
   
-  ports = [{
-    external = var.service_port
-    internal = var.service_port
-  }]
+  # How long it should stay alive
+  lifetime = "30s"
   
-  environment = {
-    "DEMO_MESSAGE" = "Hello from Clockwork Demo Service!"
-    "START_TIME"   = timestamp()
-  }
+  # Basic service settings
+  port = 8080
   
-  health_check = {
-    path     = "/"
-    interval = "5s"
-    timeout  = "3s"
-  }
-  
-  depends_on = ["file.output_directory"]
+  # I want to capture what happened
+  capture_logs = true
 }
 
-# Step 3: Wait for service to be ready and capture initial status
-resource "verification" "service_ready" {
-  name = "check_service_health"
-  checks = [{
-    type    = "http_request"
-    url     = "http://localhost:${var.service_port}"
-    timeout = "10s"
-  }]
-  depends_on = ["service.demo_server"]
+# I want to verify the service worked
+resource "check" "demo_works" {
+  description = "Verify the demo service responded correctly"
+  target      = webapp.demo
 }
 
-# Step 4: Let service run and capture output
-resource "custom" "service_monitor" {
-  name = "monitor_service_output"
-  
-  script = <<-EOF
-#!/bin/bash
-echo "Service monitoring started at $(date)"
-echo "Letting service run for ${var.run_duration} seconds..."
-
-# Capture service logs and status
-echo "Checking service health..."
-curl -s http://localhost:${var.service_port} > ./demo-output/service_response.html || echo "Service not responding" > ./demo-output/service_response.html
-
-# Wait for the specified duration
-echo "Waiting ${var.run_duration} seconds for service to run..."
-sleep ${var.run_duration}
-
-# Capture final status
-echo "Service ran for ${var.run_duration} seconds" > ./demo-output/service_log.txt
-echo "Monitored at: $(date)" >> ./demo-output/service_log.txt
-echo "Port: ${var.service_port}" >> ./demo-output/service_log.txt
-
-echo "Service monitoring completed at $(date)"
-EOF
-
-  depends_on = ["verification.service_ready"]
+# Tell me what happened
+output "demo_url" {
+  value = webapp.demo.url
 }
 
-# Step 5: Stop the service after monitoring
-resource "service" "demo_server_stop" {
-  name   = var.service_name
-  state  = "stopped"
-  
-  depends_on = ["custom.service_monitor"]
-}
-
-# Step 6: Verify service shutdown and collect final results
-resource "verification" "service_cleanup" {
-  name = "verify_service_stopped"
-  checks = [{
-    type    = "service_status"
-    service = var.service_name
-    expected_state = "stopped"
-  }]
-  depends_on = ["service.demo_server_stop"]
-}
-
-output "service_url" {
-  value       = "http://localhost:${var.service_port}"
-  description = "URL where the demo service was running"
-}
-
-output "service_logs" {
-  value = [
-    "./demo-output/service_log.txt",
-    "./demo-output/service_response.html"
-  ]
-  description = "Files containing service output and logs"
-}
-
-output "runtime_summary" {
-  value = {
-    service_name = var.service_name
-    port = var.service_port
-    duration_seconds = var.run_duration
-    start_time = timestamp()
-  }
-  description = "Summary of the demo service execution"
+output "demo_status" {
+  value = check.demo_works.result
 }'''
     
     demo_cw_file = demo_dir / "demo.cw"
