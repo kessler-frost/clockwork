@@ -1193,87 +1193,145 @@ The pipeline has three phases:
 Dependencies are automatically resolved to ensure proper execution order.
 The Terraform-style output clearly shows these relationships.
 
-Let's create a simple .cw file that manages some files with proper dependencies:
+Let's create a .cw file that starts a service, lets it run for 30 seconds, captures output, and then shuts it down:
 """)
     
-    # Create sample .cw file with corrected dependencies
-    sample_cw_content = '''# Clockwork Demo - File Management Task
+    # Create sample .cw file with service management
+    sample_cw_content = '''# Clockwork Demo - Service Management Task
 
-variable "demo_name" {
+variable "service_name" {
   type        = "string"
-  default     = "clockwork-demo"
-  description = "Name for our demo project"
+  default     = "demo-web-server"
+  description = "Name for our demo service"
 }
 
-variable "message" {
-  type    = "string"
-  default = "Hello from Clockwork!"
+variable "service_port" {
+  type    = "number"
+  default = 8080
 }
 
-# Step 1: Create a directory for our demo files (no dependencies)
-resource "file" "demo_directory" {
-  path    = "./demo-output"
-  type    = "directory"
-  mode    = "755"
+variable "run_duration" {
+  type    = "number"
+  default = 30
+  description = "How long to run the service in seconds"
 }
 
-# Step 2: Create a configuration file (depends on demo_directory)
-resource "file" "config_file" {
-  path    = "./demo-output/config.json"
-  type    = "file"
-  content = jsonencode({
-    name    = var.demo_name
-    message = var.message
-    created = timestamp()
-  })
-  mode       = "644"
-  depends_on = ["file.demo_directory"]
+# Step 1: Create output directory for logs and results
+resource "file" "output_directory" {
+  path = "./demo-output"
+  type = "directory"
+  mode = "755"
 }
 
-# Step 3: Create a README file (depends on demo_directory)
-resource "file" "readme" {
-  path    = "./demo-output/README.md"
-  type    = "file"
-  content = <<-EOF
-# ${var.demo_name}
+# Step 2: Start the demo web service
+resource "service" "demo_server" {
+  name  = var.service_name
+  image = "python:3.11-slim"
+  
+  # Simple Python HTTP server command
+  command = [
+    "python", "-c",
+    "import http.server, socketserver, threading, time; server = socketserver.TCPServer(('', ${var.service_port}), http.server.SimpleHTTPRequestHandler); print(f'Demo server starting on port ${var.service_port}...'); server.serve_forever()"
+  ]
+  
+  ports = [{
+    external = var.service_port
+    internal = var.service_port
+  }]
+  
+  environment = {
+    "DEMO_MESSAGE" = "Hello from Clockwork Demo Service!"
+    "START_TIME"   = timestamp()
+  }
+  
+  health_check = {
+    path     = "/"
+    interval = "5s"
+    timeout  = "3s"
+  }
+  
+  depends_on = ["file.output_directory"]
+}
 
-${var.message}
+# Step 3: Wait for service to be ready and capture initial status
+resource "verification" "service_ready" {
+  name = "check_service_health"
+  checks = [{
+    type    = "http_request"
+    url     = "http://localhost:${var.service_port}"
+    timeout = "10s"
+  }]
+  depends_on = ["service.demo_server"]
+}
 
-This directory was created by Clockwork as part of the demo.
+# Step 4: Let service run and capture output
+resource "custom" "service_monitor" {
+  name = "monitor_service_output"
+  
+  script = <<-EOF
+#!/bin/bash
+echo "Service monitoring started at $(date)"
+echo "Letting service run for ${var.run_duration} seconds..."
 
-Generated on: ${timestamp()}
+# Capture service logs and status
+echo "Checking service health..."
+curl -s http://localhost:${var.service_port} > ./demo-output/service_response.html || echo "Service not responding" > ./demo-output/service_response.html
+
+# Wait for the specified duration
+echo "Waiting ${var.run_duration} seconds for service to run..."
+sleep ${var.run_duration}
+
+# Capture final status
+echo "Service ran for ${var.run_duration} seconds" > ./demo-output/service_log.txt
+echo "Monitored at: $(date)" >> ./demo-output/service_log.txt
+echo "Port: ${var.service_port}" >> ./demo-output/service_log.txt
+
+echo "Service monitoring completed at $(date)"
 EOF
-  mode       = "644"
-  depends_on = ["file.demo_directory"]
+
+  depends_on = ["verification.service_ready"]
 }
 
-# Step 4: Verify the files exist (depends on config_file and readme)
-resource "verification" "files_exist" {
-  name = "check_demo_files"
-  checks = [
-    {
-      type   = "file_exists"
-      target = "./demo-output/config.json"
-    },
-    {
-      type   = "file_exists" 
-      target = "./demo-output/README.md"
-    }
-  ]
-  depends_on = ["file.config_file", "file.readme"]
+# Step 5: Stop the service after monitoring
+resource "service" "demo_server_stop" {
+  name   = var.service_name
+  state  = "stopped"
+  
+  depends_on = ["custom.service_monitor"]
 }
 
-output "demo_path" {
-  value       = "./demo-output"
-  description = "Path to the demo output directory"
+# Step 6: Verify service shutdown and collect final results
+resource "verification" "service_cleanup" {
+  name = "verify_service_stopped"
+  checks = [{
+    type    = "service_status"
+    service = var.service_name
+    expected_state = "stopped"
+  }]
+  depends_on = ["service.demo_server_stop"]
 }
 
-output "files_created" {
+output "service_url" {
+  value       = "http://localhost:${var.service_port}"
+  description = "URL where the demo service was running"
+}
+
+output "service_logs" {
   value = [
-    "./demo-output/config.json",
-    "./demo-output/README.md"
+    "./demo-output/service_log.txt",
+    "./demo-output/service_response.html"
   ]
-  description = "List of files created by this demo"
+  description = "Files containing service output and logs"
+}
+
+output "runtime_summary" {
+  value = {
+    service_name = var.service_name
+    port = var.service_port
+    duration_seconds = var.run_duration
+    start_time = timestamp()
+  }
+  description = "Summary of the demo service execution"
 }'''
     
     demo_cw_file = demo_dir / "demo.cw"
