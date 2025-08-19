@@ -797,10 +797,21 @@ class ArtifactExecutor:
         result.working_directory = str(self.temp_dir)
         result.environment_vars = {k: v for k, v in env.items() if not k.startswith("_")}
         
+        # Ensure all environment variables are strings (required by subprocess)
+        string_env = {}
+        for k, v in env.items():
+            if isinstance(v, (list, dict)):
+                # Convert complex types to JSON strings
+                import json
+                string_env[k] = json.dumps(v)
+            else:
+                string_env[k] = str(v)
+        env = string_env
+        
         # Execute with timeout and monitoring
         process = subprocess.Popen(
             command,
-            cwd=self.temp_dir,
+            cwd=str(self.temp_dir),
             env=env,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

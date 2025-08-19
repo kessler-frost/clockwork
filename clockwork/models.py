@@ -207,6 +207,13 @@ class Artifact(BaseModel):
     content: str
     checksum: Optional[str] = None
 
+    @validator('path')
+    def validate_path(cls, v):
+        """Validate path is a string."""
+        if not isinstance(v, str):
+            raise ValueError(f"Path must be a string, got {type(v)}: {v}")
+        return v
+        
     @validator('mode')
     def validate_mode(cls, v):
         """Validate file mode format."""
