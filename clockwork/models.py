@@ -10,6 +10,7 @@ This module contains the core data models used throughout the Clockwork pipeline
 
 from typing import Dict, List, Any, Optional, Union, Literal
 from pydantic import BaseModel, Field, validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from datetime import datetime, timedelta
 from enum import Enum
 import json
@@ -401,15 +402,37 @@ class Environment(BaseModel):
     constraints: Dict[str, Any] = Field(default_factory=dict)  # resource limits, etc.
 
 
-class ClockworkConfig(BaseModel):
-    """Global Clockwork configuration."""
-    project_name: str
+class ClockworkConfig(BaseSettings):
+    """Global Clockwork configuration with environment variable support."""
+    model_config = SettingsConfigDict(
+        env_prefix='CLOCKWORK_',
+        env_file='.env',
+        env_file_encoding='utf-8',
+        case_sensitive=False,
+        extra='ignore'
+    )
+    
+    # Core settings
+    project_name: str = "clockwork-project"
     version: str = "1.0"
     default_timeout: int = 300
     max_retries: int = 3
     state_file: str = ".clockwork/state.json"
     build_dir: str = ".clockwork/build"
     log_level: str = "INFO"
+    
+    # LM Studio / AI settings
+    lm_studio_url: str = "http://localhost:1234"
+    lm_studio_model: str = "openai/gpt-oss-20b"
+    use_agno: bool = True
+    
+    # Execution settings
+    parallel_limit: int = 4
+    
+    # Runner settings
+    runner_type: Optional[str] = None
+    
+    # Legacy support (can be removed later)
     agent_config: Dict[str, Any] = Field(default_factory=dict)
     environment: Environment = Field(default_factory=Environment)
 

@@ -1,0 +1,5 @@
+# Clockwork ignore file
+.git/
+*.log
+.clockwork/build/
+.clockwork/cache/

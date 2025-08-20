@@ -51,15 +51,15 @@ class Compiler:
             build_dir: Base directory for artifact output
             use_agno: Whether to use Agno/LM Studio integration (default: True)
             lm_studio_url: LM Studio server URL (default: http://localhost:1234)
-            agno_model_id: Model ID for Agno agent (default: qwen/qwen3-4b-2507)
+            agno_model_id: Model ID for Agno agent (default: openai/gpt-oss-20b)
         """
         self.timeout = timeout
         self.build_dir = Path(build_dir)
         
         # Agno integration parameters
         self.use_agno = use_agno
-        self.lm_studio_url = lm_studio_url or os.getenv('CLOCKWORK_LM_STUDIO_URL', "http://localhost:1234")
-        self.agno_model_id = agno_model_id or "qwen/qwen3-4b-2507"
+        self.lm_studio_url = lm_studio_url or "http://localhost:1234"
+        self.agno_model_id = agno_model_id or "openai/gpt-oss-20b"
         
         # Initialize Agno compiler if enabled - fail fast if not available
         self.agno_compiler = None

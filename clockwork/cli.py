@@ -52,9 +52,6 @@ def main(
     ),
     verbose: bool = typer.Option(False, "--verbose", "-V", help="Enable verbose output"),
     debug: bool = typer.Option(False, "--debug", help="Enable debug logging"),
-    config_file: Optional[Path] = typer.Option(
-        None, "--config", "-c", help="Path to configuration file"
-    ),
 ):
     """
     Clockwork - Factory for intelligent declarative tasks.
@@ -64,6 +61,7 @@ def main(
     - Assembly: Plan actions from IR (ActionList) with drift detection  
     - Forge: Compile and execute task artifacts
     
+    Configuration is handled through environment variables or .env files.
     Output displayed in Terraform-style format by default. Use --json for programmatic usage.
     """
     # Setup logging based on verbosity
@@ -104,7 +102,7 @@ def plan(
     
     try:
         # Initialize core
-        core = ClockworkCore(config_path=path)
+        core = ClockworkCore()
         
         # Parse variables with enhanced support
         variables = parse_variables(var, load_cwvars=True, config_path=path)
@@ -201,7 +199,7 @@ def build(
     
     try:
         # Initialize core
-        core = ClockworkCore(config_path=path)
+        core = ClockworkCore()
         
         # Parse variables with enhanced support
         variables = parse_variables(var, load_cwvars=True, config_path=path)
@@ -291,7 +289,7 @@ def apply(
     
     try:
         # Initialize core
-        core = ClockworkCore(config_path=path)
+        core = ClockworkCore()
         
         # Parse variables with enhanced support
         variables = parse_variables(var, load_cwvars=True, config_path=path)
@@ -404,7 +402,7 @@ def verify(
     
     try:
         # Initialize core  
-        core = ClockworkCore(config_path=path)
+        core = ClockworkCore()
         
         # Parse variables with enhanced support
         variables = parse_variables(var, load_cwvars=True, config_path=path)
@@ -791,7 +789,7 @@ def status(
         console.print("[bold blue]📊 Status[/bold blue]")
     
     try:
-        core = ClockworkCore(config_path=path)
+        core = ClockworkCore()
         
         # Parse variables
         variables = parse_variables(var)
@@ -911,6 +909,28 @@ output "app_url" {{
 .clockwork/cache/
 """)
         
+        # Create .env file for environment configuration
+        env_file = project_path / ".env"
+        env_content = f'''# {name} Environment Configuration
+# Clockwork uses environment variables for configuration
+
+# LM Studio Configuration
+CLOCKWORK_LM_STUDIO_URL=http://localhost:1234/v1
+CLOCKWORK_LM_STUDIO_MODEL=llama-3.1-8b-instruct
+
+# Build Configuration
+CLOCKWORK_BUILD_DIR=.clockwork/build
+CLOCKWORK_STATE_FILE=.clockwork/state.json
+
+# Default timeout in seconds
+CLOCKWORK_DEFAULT_TIMEOUT=300
+
+# Enable Agno for AI-powered execution
+CLOCKWORK_USE_AGNO=true
+'''
+        env_file.write_text(env_content)
+        console.print(f"[green]Created {env_file}[/green]")
+        
         console.print(f"[green]✅ Project '{name}' initialized at {project_path}[/green]")
         console.print(f"\nNext steps:")
         console.print(f"  cd {project_path}")
@@ -1010,6 +1030,7 @@ def demo(
         console.print("\n[bold cyan]Next Steps:[/bold cyan]")
         console.print("• Try modifying the demo.cw file and re-running the commands")
         console.print("• Create your own .cw files for real tasks")
+        console.print("• Configure Clockwork using environment variables or .env files")
         console.print("• Read the documentation for advanced features")
         console.print("• Run 'clockwork init my-project' to start a new project")
         

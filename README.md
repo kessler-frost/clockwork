@@ -15,9 +15,6 @@ uv add clockwork agno openai requests
 
 # Run example with AI compilation
 clockwork compile examples/basic-web-service/main.cw
-
-# Or run without AI (fallback mode)
-clockwork --config configs/production.json compile examples/basic-web-service/main.cw
 ```
 
 ## 📖 Overview
@@ -47,7 +44,7 @@ clockwork/
 │   ├── 🤖 daemon/         # Background reconciliation & auto-fix
 │   └── core.py           # Main orchestrator
 ├── 📚 docs/              # Documentation (guides, architecture, API)
-├── ⚙️ configs/           # Environment configurations (dev, prod, AI)
+├── ⚙️ configs/           # Configuration templates and examples
 ├── 🧪 tests/             # Organized test suite (unit, integration, e2e)
 ├── 📋 examples/          # Sample .cw configurations
 └── 🔧 run_tests.py       # Test runner utility
@@ -86,9 +83,6 @@ clockwork verify
 ### Configuration
 
 ```bash
-# Use specific configuration
-clockwork --config configs/development.json compile main.cw
-
 # Override variables
 clockwork apply --var KEY=VALUE --timeout-per-step 300
 ```
@@ -97,7 +91,7 @@ clockwork apply --var KEY=VALUE --timeout-per-step 300
 
 - **[Architecture Guide](./ARCHITECTURE.md)** - Technical architecture and system design
 - **[AI Integration](./docs/guides/AI_INTEGRATION.md)** - LM Studio + Agno setup guide
-- **[Configuration](./configs/README.md)** - Environment configuration options
+- **[Configuration](#configuration)** - Environment variable configuration
 - **[Examples](./examples/)** - Sample configurations and use cases
 
 ## 🧪 Testing
@@ -118,3 +112,17 @@ uv run pytest tests/e2e/ -v
 2. **Set up AI (optional)**: Follow [AI Integration Guide](./docs/guides/AI_INTEGRATION.md)
 3. **Try an example**: `clockwork compile examples/basic-web-service/main.cw`
 4. **Create your config**: Use examples as templates for your own `.cw` files
+
+## Configuration
+
+Clockwork uses environment variables for configuration. Key variables include:
+
+- `CLOCKWORK_PROJECT_NAME`: Project name
+- `CLOCKWORK_LOG_LEVEL`: Log level (default: INFO)
+- `CLOCKWORK_LM_STUDIO_URL`: LM Studio URL (default: http://localhost:1234)
+- `CLOCKWORK_LM_STUDIO_MODEL`: Model to use (default: qwen/qwen3-4b-2507)
+- `CLOCKWORK_USE_AGNO`: Enable AI integration (default: true)
+- `CLOCKWORK_PARALLEL_LIMIT`: Parallel execution limit (default: 4)
+- `CLOCKWORK_DEFAULT_TIMEOUT`: Default operation timeout in seconds (default: 300)
+
+You can also create a `.env` file in your project root with these variables.

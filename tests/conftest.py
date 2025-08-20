@@ -29,9 +29,9 @@ def test_config(temp_dir):
 
 
 @pytest.fixture
-def clockwork_core(temp_dir, test_config):
+def clockwork_core(test_config):
     """Provide a ClockworkCore instance for testing."""
-    return ClockworkCore(config_path=temp_dir, config=test_config)
+    return ClockworkCore(config=test_config)
 
 
 @pytest.fixture

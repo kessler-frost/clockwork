@@ -20,20 +20,27 @@ Clockwork now supports AI-powered artifact compilation using the Agno framework 
 
 ## Configuration
 
-The compiler automatically detects and uses Agno when available:
+The compiler automatically detects and uses Agno when available. Configure using environment variables:
 
-```python
-from clockwork.forge import Compiler
+```bash
+# Core AI Configuration
+export CLOCKWORK_USE_AGNO=true
+export CLOCKWORK_LM_STUDIO_URL=http://localhost:1234
+export CLOCKWORK_LM_STUDIO_MODEL=qwen/qwen3-4b-thinking-2507
 
-# AI-enabled compiler (default)
-compiler = Compiler(
-    use_agno=True,                              # Enable AI integration
-    lm_studio_url="http://localhost:1234",      # LM Studio server
-    agno_model_id="qwen/qwen3-4b-thinking-2507" # Model identifier
-)
+# Optional settings
+export CLOCKWORK_AI_TIMEOUT=300
+export CLOCKWORK_AI_MAX_TOKENS=6000
+export CLOCKWORK_AI_TEMPERATURE=0.1
+```
 
-# Traditional compiler (fallback)
-compiler = Compiler(use_agno=False)
+Or use a `.env` file:
+
+```bash
+# .env file
+CLOCKWORK_USE_AGNO=true
+CLOCKWORK_LM_STUDIO_URL=http://localhost:1234
+CLOCKWORK_LM_STUDIO_MODEL=qwen/qwen3-4b-thinking-2507
 ```
 
 ## AI Agent Capabilities
@@ -74,7 +81,17 @@ The system provides robust error handling:
 - **Import errors**: Ensure `agno` and `openai` packages are installed
 - **Model not found**: Download the required model in LM Studio
 
-See `configs/lm_studio_config.json` for detailed configuration options.
+## Environment Variables Reference
+
+| Variable | Description | Default |
+|----------|-------------|----------|
+| `CLOCKWORK_USE_AGNO` | Enable AI integration | `true` |
+| `CLOCKWORK_LM_STUDIO_URL` | LM Studio server URL | `http://localhost:1234` |
+| `CLOCKWORK_LM_STUDIO_MODEL` | Model identifier | `qwen/qwen3-4b-2507` |
+| `CLOCKWORK_AI_TIMEOUT` | Request timeout (seconds) | `300` |
+| `CLOCKWORK_AI_MAX_TOKENS` | Maximum response tokens | `6000` |
+| `CLOCKWORK_AI_TEMPERATURE` | Model temperature | `0.1` |
+| `CLOCKWORK_AI_MAX_RETRIES` | Maximum retry attempts | `3` |
 
 ## Development
 

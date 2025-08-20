@@ -21,7 +21,7 @@ class TestAgnoCompiler:
         """Test AgnoCompiler initialization with default parameters."""
         with patch('clockwork.forge.agno_agent.Agent') as mock_agent:
             compiler = AgnoCompiler()
-            assert compiler.model_id == "qwen/qwen3-4b-2507"
+            assert compiler.model_id == "openai/gpt-oss-20b"
             assert compiler.lm_studio_url == "http://localhost:1234"
             assert compiler.timeout == 300
             mock_agent.assert_called_once()

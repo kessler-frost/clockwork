@@ -5,3 +5,24 @@
 - "Always test whether the demo command is broken or not"
 
 - "Always do cleanup after final testing and demoing is finished"
+
+## LM Studio Configuration
+
+Use environment variables for all configuration:
+
+- `CLOCKWORK_LM_STUDIO_MODEL`: Model ID (default: `openai/gpt-oss-20b`)
+- `CLOCKWORK_LM_STUDIO_URL`: LM Studio URL (default: `http://localhost:1234`)
+- `CLOCKWORK_USE_AGNO`: Enable/disable AI compilation (default: `true`)
+
+To change the model:
+```bash
+CLOCKWORK_LM_STUDIO_MODEL="your-model" uv run clockwork demo --text-only
+```
+
+Or use a .env file:
+```bash
+echo "CLOCKWORK_LM_STUDIO_MODEL=your-model" >> .env
+uv run clockwork demo --text-only
+```
+
+When I ask you to change the model, update the `CLOCKWORK_LM_STUDIO_MODEL` environment variable.

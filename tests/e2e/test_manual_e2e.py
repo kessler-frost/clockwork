@@ -13,7 +13,7 @@ detailed output for manual verification.
 """
 
 import tempfile
-import json
+import os
 from pathlib import Path
 from clockwork.core import ClockworkCore
 from clockwork.models import ClockworkConfig
@@ -108,22 +108,16 @@ port        = 9090
 environment = "manual-test"
 ''')
     
-    # Create clockwork configuration
-    config_file = test_dir / "clockwork.json"
-    config = {
-        "project_name": "manual-e2e-test",
-        "version": "1.0",
-        "default_timeout": 300,
-        "max_retries": 3,
-        "log_level": "INFO",
-        "environment": {
-            "name": "test",
-            "variables": {
-                "TEST_MODE": "true"
-            }
-        }
-    }
-    config_file.write_text(json.dumps(config, indent=2))
+    # Create .env file with Clockwork configuration
+    env_file = test_dir / ".env"
+    env_content = '''CLOCKWORK_PROJECT_NAME=manual-e2e-test
+CLOCKWORK_DEFAULT_TIMEOUT=300
+CLOCKWORK_MAX_RETRIES=3
+CLOCKWORK_LOG_LEVEL=DEBUG
+CLOCKWORK_USE_AGNO=false
+TEST_MODE=true
+'''
+    env_file.write_text(env_content)
     
     logger.info(f"✅ Created test configuration in {test_dir}")
 
@@ -312,12 +306,15 @@ def test_validation_system(core: ClockworkCore, test_dir: Path):
         try:
             if hasattr(result, 'errors') and result.errors:
                 for error in result.errors[:3]:
-                    logger.info(f"   - Error: {error.message}")
+                    if hasattr(error, 'message'):
+                        logger.info(f"   - Error: {error.message}")
+                    else:
+                        logger.info(f"   - Error: {error}")
             elif hasattr(result, 'error_messages') and result.error_messages:
                 for error in result.error_messages[:3]:
                     logger.info(f"   - Error: {error}")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.info(f"   - Could not display validation details: {e}")
                 
     except Exception as e:
         logger.error(f"❌ Validation testing failed: {e}")
@@ -370,10 +367,28 @@ def main():
         test_dir = Path(temp_dir)
         logger.info(f"Test directory: {test_dir}")
         
+        # Save original environment variables
+        original_env = {}
+        env_vars = ['CLOCKWORK_PROJECT_NAME', 'CLOCKWORK_DEFAULT_TIMEOUT', 'CLOCKWORK_MAX_RETRIES', 
+                   'CLOCKWORK_LOG_LEVEL', 'CLOCKWORK_USE_AGNO', 'TEST_MODE']
+        
+        for var in env_vars:
+            original_env[var] = os.environ.get(var)
+        
         try:
-            # Setup
+            # Setup test configuration
             create_test_configuration(test_dir)
-            core = ClockworkCore(config_path=test_dir)
+            
+            # Set environment variables for the test
+            os.environ['CLOCKWORK_PROJECT_NAME'] = 'manual-e2e-test'
+            os.environ['CLOCKWORK_DEFAULT_TIMEOUT'] = '300'
+            os.environ['CLOCKWORK_MAX_RETRIES'] = '3'
+            os.environ['CLOCKWORK_LOG_LEVEL'] = 'DEBUG'
+            os.environ['CLOCKWORK_USE_AGNO'] = 'false'
+            os.environ['TEST_MODE'] = 'true'
+            
+            # Initialize ClockworkCore (will use environment variables)
+            core = ClockworkCore()
             
             # Test each phase
             ir = test_intake_phase(core, test_dir)
@@ -392,6 +407,13 @@ def main():
             logger.error(f"💥 Test failed with error: {e}")
             logger.error("Check the logs above for details.")
             return 1
+        finally:
+            # Restore original environment variables
+            for var, value in original_env.items():
+                if value is None:
+                    os.environ.pop(var, None)
+                else:
+                    os.environ[var] = value
     
     return 0
 

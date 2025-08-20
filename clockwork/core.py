@@ -64,7 +64,13 @@ class ClockworkCore:
         self.validator = EnhancedValidator()
         self.resolver = Resolver(cache_dir=str(self.config_path / ".clockwork" / "cache"))
         self.state_manager = StateManager(self.config.state_file)
-        self.compiler = Compiler(**self.config.agent_config)
+        self.compiler = Compiler(
+            timeout=self.config.default_timeout,
+            build_dir=self.config.build_dir,
+            use_agno=self.config.use_agno,
+            lm_studio_url=self.config.lm_studio_url,
+            agno_model_id=self.config.lm_studio_model
+        )
         self.executor = ArtifactExecutor()
         
         # Initialize runner factory and get available runners
@@ -84,28 +90,8 @@ class ClockworkCore:
         logger.info(f"Available runners: {', '.join(self.available_runners)}")
 
     def _load_config(self) -> ClockworkConfig:
-        """Load configuration from file or create default."""
-        config_file = self.config_path / "clockwork.json"
-        
-        if config_file.exists():
-            try:
-                with open(config_file) as f:
-                    config_data = json.load(f)
-                return ClockworkConfig(**config_data)
-            except json.JSONDecodeError as e:
-                raise ConfigurationError(
-                    f"Invalid JSON in configuration file: {e}",
-                    config_file=str(config_file),
-                    suggestions=["Check the JSON syntax in your clockwork.json file"]
-                )
-            except Exception as e:
-                logger.warning(f"Failed to load config from {config_file}: {e}")
-                # Continue with default config rather than failing
-        
-        # Create default config
-        return ClockworkConfig(
-            project_name=self.config_path.name or "clockwork-project"
-        )
+        """Load configuration from environment variables and .env file."""
+        return ClockworkConfig()
 
     # =========================================================================
     # Phase 1: Intake - Parse .cw files into IR
@@ -1277,14 +1263,13 @@ class ClockworkCore:
 # =============================================================================
 
 def create_default_config(path: Path, project_name: str) -> ClockworkConfig:
-    """Create a default configuration file."""
-    config = ClockworkConfig(project_name=project_name)
+    """Create a default configuration using environment variables and .env file."""
+    # Create .env file with project name if it doesn't exist
+    env_file = path / ".env"
+    if not env_file.exists():
+        env_file.write_text(f"CLOCKWORK_PROJECT_NAME={project_name}\n")
     
-    config_file = path / "clockwork.json"
-    with open(config_file, 'w') as f:
-        json.dump(config.dict(), f, indent=2, default=str)
-    
-    return config
+    return ClockworkConfig()
 
 
 def discover_cw_files(path: Path) -> List[Path]:

@@ -373,7 +373,7 @@ exit 0'''
     
     def __init__(
         self,
-        model_id: str = "qwen/qwen3-4b-2507",
+        model_id: str = "openai/gpt-oss-20b",
         lm_studio_url: str = "http://localhost:1234",
         timeout: int = 300
     ):
@@ -381,7 +381,7 @@ exit 0'''
         Initialize the Agno AI compiler.
         
         Args:
-            model_id: Model identifier in LM Studio (default: qwen/qwen3-4b-2507)
+            model_id: Model identifier in LM Studio (default: openai/gpt-oss-20b)
             lm_studio_url: LM Studio server URL (default: http://localhost:1234)
             timeout: Request timeout in seconds
         """
@@ -1576,7 +1576,7 @@ def create_agno_compiler(
         Configured AgnoCompiler instance
     """
     # Use defaults if not specified
-    model_id = model_id or "qwen/qwen3-4b-2507"
+    model_id = model_id or "openai/gpt-oss-20b"
     lm_studio_url = lm_studio_url or "http://localhost:1234"
     
     return AgnoCompiler(

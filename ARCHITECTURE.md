@@ -83,9 +83,7 @@ clockwork/
 │   └── api/                       # API reference documentation
 │
 ├── ⚙️ configs/                    # Configuration templates
-│   ├── development.json           # Development environment settings
-│   ├── production.json            # Production environment settings
-│   └── lm_studio_config.json      # AI agent configuration
+│   └── README.md                  # Configuration documentation
 │
 ├── 🧪 tests/                      # Test suite
 │   ├── unit/                      # Fast, isolated unit tests
@@ -198,22 +196,42 @@ ActionList → Prompt Generation → LM Studio API → JSON Response → Artifac
 
 All components support:
 
-- **Environment-specific configs**: Development, staging, production
-- **Runtime overrides**: CLI arguments and environment variables
+- **Environment variables**: Configure all aspects via environment variables
+- **Runtime overrides**: CLI arguments override environment variables
 - **Hot reloading**: Configuration changes without restart
+
+Key environment variables:
+
+- `CLOCKWORK_PROJECT_NAME`: Project identifier
+- `CLOCKWORK_LOG_LEVEL`: Logging verbosity (DEBUG, INFO, WARNING, ERROR)
+- `CLOCKWORK_LM_STUDIO_URL`: LM Studio server endpoint
+- `CLOCKWORK_LM_STUDIO_MODEL`: AI model identifier
+- `CLOCKWORK_USE_AGNO`: Enable/disable AI integration
+- `CLOCKWORK_PARALLEL_LIMIT`: Maximum parallel operations
+- `CLOCKWORK_DEFAULT_TIMEOUT`: Default timeout for operations
+- `CLOCKWORK_BUILD_DIR`: Artifact output directory
+- `CLOCKWORK_STATE_FILE`: State persistence file path
 
 ## 🚀 Deployment Patterns
 
 ### Local Development
 
 ```bash
-clockwork --config configs/development.json compile examples/basic-web-service/main.cw
+# Set environment variables or use .env file
+export CLOCKWORK_PROJECT_NAME=myproject
+export CLOCKWORK_LOG_LEVEL=DEBUG
+clockwork compile examples/basic-web-service/main.cw
 ```
 
 ### Production Deployment
 
 ```bash
-clockwork daemon --config configs/production.json --state-file /var/lib/clockwork/state.json
+# Production environment variables
+export CLOCKWORK_PROJECT_NAME=production-app
+export CLOCKWORK_LOG_LEVEL=INFO
+export CLOCKWORK_USE_AGNO=false
+export CLOCKWORK_STATE_FILE=/var/lib/clockwork/state.json
+clockwork daemon
 ```
 
 ### CI/CD Integration

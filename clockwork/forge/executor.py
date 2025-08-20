@@ -36,25 +36,6 @@ from ..errors import ValidationError
 logger = logging.getLogger(__name__)
 
 
-def load_parallel_limit_from_config() -> int:
-    """Load parallel_limit from development.json configuration."""
-    config_paths = [
-        "configs/development.json",
-        "../configs/development.json", 
-        "../../configs/development.json"
-    ]
-    
-    for config_path in config_paths:
-        try:
-            if os.path.exists(config_path):
-                with open(config_path, 'r') as f:
-                    config = json.load(f)
-                    return config.get("clockwork", {}).get("forge", {}).get("execution", {}).get("parallel_limit", 4)
-        except (json.JSONDecodeError, FileNotFoundError, KeyError):
-            continue
-    
-    # Fallback to environment variable or default
-    return int(os.environ.get("CLOCKWORK_PARALLEL_LIMIT", 4))
 
 
 class ExecutionStatus(Enum):
@@ -765,8 +746,8 @@ class ArtifactExecutor:
         env_vars = env_vars or {}
         results = []
         
-        # Load parallel limit from configuration
-        parallel_limit = load_parallel_limit_from_config()
+        # Use default parallel limit
+        parallel_limit = 4  # Default value
         self.sandbox_config.parallel_limit = parallel_limit
         
         logger.info(f"Executing {len(steps)} steps with parallel limit: {parallel_limit}")
@@ -867,7 +848,7 @@ class ArtifactExecutor:
 
 def create_secure_executor(runner_type: Optional[str] = None, execution_context: Optional[Dict[str, Any]] = None) -> ArtifactExecutor:
     """Create a secure executor with restrictive sandbox configuration."""
-    parallel_limit = load_parallel_limit_from_config()
+    parallel_limit = 4  # Default value
     config = SandboxConfig(
         max_memory_mb=256,
         max_cpu_percent=25.0,
@@ -901,7 +882,7 @@ def create_secure_executor(runner_type: Optional[str] = None, execution_context:
 
 def create_development_executor(runner_type: Optional[str] = None, execution_context: Optional[Dict[str, Any]] = None) -> ArtifactExecutor:
     """Create a development executor with more permissive settings."""
-    parallel_limit = load_parallel_limit_from_config()
+    parallel_limit = 4  # Default value
     config = SandboxConfig(
         max_memory_mb=1024,
         max_cpu_percent=75.0,

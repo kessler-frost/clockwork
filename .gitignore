@@ -59,10 +59,9 @@ models/
 *.gguf
 *.bin
 
-# Sensitive configuration
-configs/local.json
-configs/secrets.json
-configs/production.local.json
+# Environment-specific configuration
+.env.local
+.env.production
 
 # OS
 .DS_Store
