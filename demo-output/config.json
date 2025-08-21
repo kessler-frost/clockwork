@@ -1,1 +1,0 @@
-{"name": "${var.project_name}", "message": "${var.message}", "created_at": "${timestamp()}", "version": "1.0"}
