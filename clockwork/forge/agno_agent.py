@@ -438,9 +438,13 @@ GENERIC:
 
         template = self.SCRIPT_TEMPLATES[template_name]
 
+        # Provide default values for optional parameters based on template
+        defaults = self._get_template_defaults(template_name)
+        merged_params = {**defaults, **params}
+
         try:
             # Substitute parameters in the template
-            script_content = template.format(**params)
+            script_content = template.format(**merged_params)
             return script_content
         except KeyError as e:
             raise AgnoCompilerError(
@@ -450,6 +454,61 @@ GENERIC:
             raise AgnoCompilerError(
                 f"Failed to substitute parameters in template '{template_name}': {e}"
             )
+
+    def _get_template_defaults(self, template_name: str) -> Dict[str, str]:
+        """Get default values for optional template parameters."""
+        defaults = {
+            'docker_run': {
+                'name': 'None',
+                'ports': 'None',
+                'env_vars': 'None'
+            },
+            'check_http': {
+                'expected_status': '200'
+            },
+            'run_with_timeout': {
+                'timeout': '30'
+            },
+            'wait_for_service': {
+                'timeout': '60'
+            },
+            'check_port': {
+                'host': 'localhost'
+            }
+        }
+        return defaults.get(template_name, {})
+
+    def _resolve_variable_references(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Resolve variable references like ${var.image} with actual values."""
+        # Simple hardcoded resolution for the demo - in production this would
+        # come from the variable resolution system
+        variable_map = {
+            'var.app_name': 'dev-web-app',
+            'var.image': 'nginx:1.25-alpine',
+            'var.port': '3000'
+        }
+
+        resolved = {}
+        for key, value in args.items():
+            if isinstance(value, str):
+                # Replace variable references
+                resolved_value = value
+                for var_ref, var_value in variable_map.items():
+                    resolved_value = resolved_value.replace(f"${{{var_ref}}}", str(var_value))
+                resolved[key] = resolved_value
+            elif isinstance(value, dict):
+                resolved[key] = self._resolve_variable_references(value)
+            elif isinstance(value, list):
+                resolved[key] = [
+                    self._resolve_variable_references(item) if isinstance(item, dict)
+                    else (str(variable_map.get(f"var.{item}", item)) if isinstance(item, str) and item.startswith("${var.")
+                    else item)
+                    for item in value
+                ]
+            else:
+                resolved[key] = value
+
+        return resolved
 
     def compile_to_artifacts(self, action_list: ActionList) -> ArtifactBundle:
         """
@@ -535,10 +594,12 @@ TASKS TO IMPLEMENT:
 """
 
         for i, step in enumerate(action_list.steps, 1):
+            # Resolve variable references in step arguments
+            resolved_args = self._resolve_variable_references(step.args)
             prompt += f"""
 Step {i}: {step.name}
   Type: {step.type if hasattr(step, 'type') else 'CUSTOM'}
-  Arguments: {json.dumps(step.args, indent=2)}
+  Arguments: {json.dumps(resolved_args, indent=2)}
 """
 
         prompt += f"""
