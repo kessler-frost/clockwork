@@ -38,7 +38,7 @@ uv run clockwork demo --text-only
 
 ### Breaking Changes from Agno 1.x
 - **No backwards compatibility**: All fallback mechanisms removed
-- **Required dependencies**: FastAPI now required for workflow support
+- **Simplified architecture**: Uses direct Agno 2.0 Agents (not Workflows)
 - **Model defaults**: Changed from `openai/gpt-oss-20b` to `qwen/qwen3-4b-2507`
 - **Memory database**: In-memory database automatically created for agent memory
 

@@ -19,7 +19,6 @@ dependencies = [
     "paramiko>=4.0.0",
     "networkx>=3.5",
     "agno>=2.0.4",
-    "fastapi>=0.100.0",
     "openai>=1.99.9",
     "requests>=2.32.4",
     "joblib>=1.3.0",

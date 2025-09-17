@@ -12,7 +12,6 @@ from pydantic import BaseModel, Field
 
 from agno.agent import Agent
 from agno.models.lmstudio import LMStudio
-from agno.workflow import Workflow, Step
 from agno.tools.memory import MemoryTools
 from agno.db.in_memory import InMemoryDb
 
