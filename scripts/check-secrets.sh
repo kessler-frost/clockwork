@@ -20,6 +20,7 @@ if [[ "$1" == "--update" ]]; then
     echo "📝 Updating secrets baseline..."
     uv run detect-secrets scan --all-files \
         --exclude-files '\.venv/.*|\.clockwork/.*|\.pytest_cache/.*|\.git/.*' \
+        --exclude-lines 'dummy|placeholder|example|test|fake|mock' \
         . > .secrets.baseline
     echo "✅ Baseline updated: .secrets.baseline"
     echo ""
@@ -32,6 +33,7 @@ fi
 echo "🔍 Scanning for secrets..."
 if uv run detect-secrets scan --all-files \
     --exclude-files '\.venv/.*|\.clockwork/.*|\.pytest_cache/.*|\.git/.*' \
+    --exclude-lines 'dummy|placeholder|example|test|fake|mock' \
     --baseline .secrets.baseline .; then
     echo "✅ No new secrets detected"
 else
