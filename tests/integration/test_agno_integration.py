@@ -21,7 +21,7 @@ class TestAgnoCompiler:
         """Test AgnoCompiler initialization with default parameters."""
         with patch('clockwork.forge.agno_agent.Agent') as mock_agent:
             compiler = AgnoCompiler()
-            assert compiler.model_id == "openai/gpt-oss-20b"
+            assert compiler.model_id == "qwen/qwen3-4b-2507"
             assert compiler.lm_studio_url == "http://localhost:1234"
             assert compiler.timeout == 300
             mock_agent.assert_called_once()
@@ -49,35 +49,29 @@ class TestAgnoCompiler:
             assert compiler.model_id == "test/model"
             assert compiler.lm_studio_url == "http://test:1234"
     
-    @patch('requests.post')
     @patch('clockwork.forge.agno_agent.Agent')
-    def test_compile_to_artifacts_success(self, mock_agent_class, mock_requests_post):
-        """Test successful compilation of ActionList to ArtifactBundle."""
-        # Mock HTTP response from LM Studio
+    def test_compile_to_artifacts_success(self, mock_agent_class):
+        """Test successful compilation of ActionList to ArtifactBundle using Agno 2.0."""
+        # Mock Agno 2.0 agent response
+        mock_agent = Mock()
         mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "choices": [{
-                "message": {
-                    "content": """{
-                        "version": "1",
-                        "artifacts": [{
-                            "path": "scripts/01_test.sh",
-                            "mode": "0755", 
-                            "purpose": "test_step",
-                            "lang": "bash",
-                            "content": "#!/bin/bash\\necho 'test'"
-                        }],
-                        "steps": [{
-                            "purpose": "test_step",
-                            "run": {"cmd": ["bash", "scripts/01_test.sh"]}
-                        }],
-                        "vars": {"TEST_VAR": "value"}
-                    }"""
-                }
-            }]
+        mock_response.content = {
+            "version": "1",
+            "artifacts": [{
+                "path": "scripts/01_test.sh",
+                "mode": "0755",
+                "purpose": "test_step",
+                "template": "run_command",
+                "params": {"command": "echo 'test'"}
+            }],
+            "steps": [{
+                "purpose": "test_step",
+                "run": {"cmd": ["bash", "scripts/01_test.sh"]}
+            }],
+            "vars": {"TEST_VAR": "value"}
         }
-        mock_requests_post.return_value = mock_response
+        mock_agent.run.return_value = mock_response
+        mock_agent_class.return_value = mock_agent
         
         # Create test ActionList
         action_list = ActionList(
@@ -95,12 +89,13 @@ class TestAgnoCompiler:
         assert result.artifacts[0].path == "scripts/01_test.sh"
         assert result.steps[0].purpose == "test_step"
     
-    @patch('requests.post')
     @patch('clockwork.forge.agno_agent.Agent')
-    def test_compile_to_artifacts_failure(self, mock_agent_class, mock_requests_post):
-        """Test compilation failure handling."""
-        # Mock HTTP request failure
-        mock_requests_post.side_effect = Exception("Network error")
+    def test_compile_to_artifacts_failure(self, mock_agent_class):
+        """Test compilation failure handling with Agno 2.0."""
+        # Mock Agno 2.0 agent failure
+        mock_agent = Mock()
+        mock_agent.run.side_effect = Exception("Agent error")
+        mock_agent_class.return_value = mock_agent
         
         action_list = ActionList(
             version="1",
@@ -154,6 +149,11 @@ class TestAgnoCompiler:
         assert status["lm_studio_url"] == "http://test:1234"
         assert status["timeout"] == 600
         assert status["connection_ok"] is True
+        assert status["agno_version"] == "2.0"
+        assert "memory" in status["features"]
+        assert "reasoning" in status["features"]
+        assert "structured_outputs" in status["features"]
+        assert "exponential_backoff" in status["features"]
 
 
 class TestCompilerAgnoIntegration:
