@@ -21,7 +21,7 @@ Clockwork now uses **Agno 2.0** for AI-powered compilation with the following fe
 
 Use environment variables for all configuration:
 
-- `CLOCKWORK_LM_STUDIO_MODEL`: Model ID (default: `qwen/qwen3-4b-2507`)
+- `CLOCKWORK_LM_STUDIO_MODEL`: Model ID (default: `openai/gpt-oss-20b`)
 - `CLOCKWORK_LM_STUDIO_URL`: LM Studio URL (default: `http://localhost:1234`)
 - `CLOCKWORK_USE_AGNO`: Enable/disable AI compilation (default: `true`)
 
@@ -36,10 +36,16 @@ echo "CLOCKWORK_LM_STUDIO_MODEL=your-model" >> .env
 uv run clockwork demo --text-only
 ```
 
+### Integration Details
+- **LM Studio Compatibility**: Uses Agno's `OpenAIChat` class with LM Studio endpoint for better compatibility
+- **Structured Output**: Supports `output_schema` for reliable Pydantic model generation
+- **Model Support**: Optimized for `openai/gpt-oss-20b` model
+- **Endpoint**: Points to `http://localhost:1234/v1` (LM Studio's OpenAI-compatible API)
+
 ### Breaking Changes from Agno 1.x
 - **No backwards compatibility**: All fallback mechanisms removed
 - **Simplified architecture**: Uses direct Agno 2.0 Agents (not Workflows)
-- **Model defaults**: Changed from `openai/gpt-oss-20b` to `qwen/qwen3-4b-2507`
+- **Integration method**: Uses OpenAI-compatible API instead of direct LMStudio class
 - **Memory database**: In-memory database automatically created for agent memory
 
 When I ask you to change the model, update the `CLOCKWORK_LM_STUDIO_MODEL` environment variable.

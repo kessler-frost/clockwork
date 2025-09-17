@@ -11,7 +11,7 @@ from typing import Dict, List, Any, Optional
 from pydantic import BaseModel, Field
 
 from agno.agent import Agent, RunOutput
-from agno.models.lmstudio import LMStudio
+from agno.models.openai import OpenAIChat
 
 from ..models import ActionList, ArtifactBundle, Artifact, ExecutionStep
 
@@ -20,28 +20,25 @@ logger = logging.getLogger(__name__)
 
 
 class AgentArtifact(BaseModel):
-    """Pydantic model for AI agent artifact generation using templates."""
-    path: str = Field(..., description="Relative path for the artifact file (e.g., 'scripts/01_fetch_repo.sh')")
-    mode: str = Field(..., description="File permissions in octal format (e.g., '0755' for executable, '0644' for data)")
-    purpose: str = Field(..., description="The purpose/name of the action this artifact serves")
-    template: str = Field(..., description="Name of the script template to use (e.g., 'create_directory', 'write_file')")
-    params: Dict[str, Any] = Field(..., description="Parameters to substitute in the template")
-    content: Optional[str] = Field(None, description="Direct script content (only used if template approach fails)")
-    lang: str = Field(default="bash", description="Programming language (always bash for templates)")
+    """Pydantic model for AI agent artifact generation."""
+    path: str = Field(..., description="Artifact file path")
+    template: str = Field(..., description="Template name to use")
+    purpose: str = Field(..., description="Action purpose")
+    image: str = Field(default="nginx:latest", description="Docker image")
+    name: str = Field(default="service", description="Service name")
+    ports: str = Field(default="80:80", description="Port mapping")
 
 
 class AgentExecutionStep(BaseModel):
-    """Pydantic model for AI agent execution step generation."""
-    purpose: str = Field(..., description="The purpose/name that matches an artifact's purpose")
-    run: Dict[str, Any] = Field(..., description="Execution command configuration with 'cmd' array")
+    """Pydantic model for execution steps."""
+    purpose: str = Field(..., description="Step purpose")
+    command: str = Field(..., description="Command to execute")
 
 
 class AgentArtifactBundle(BaseModel):
-    """Pydantic model for AI agent complete artifact bundle generation."""
-    version: str = Field(default="1", description="Bundle format version")
-    artifacts: List[AgentArtifact] = Field(..., description="List of executable artifacts to generate")
-    steps: List[AgentExecutionStep] = Field(..., description="List of execution steps in order")
-    vars: Dict[str, Any] = Field(default_factory=dict, description="Environment variables and configuration values")
+    """Pydantic model for artifact bundle."""
+    artifacts: List[AgentArtifact] = Field(..., description="List of artifacts")
+    steps: List[AgentExecutionStep] = Field(..., description="List of execution steps")
 
 
 class AgnoCompilerError(Exception):
@@ -287,10 +284,11 @@ exit 0'''
 
         # Initialize Agno 2.0 agent
         try:
-            # Create LM Studio model
-            lm_studio_model = LMStudio(
+            # Create OpenAI model pointing to LM Studio endpoint
+            openai_model = OpenAIChat(
                 id=model_id,
-                base_url=lm_studio_url,
+                api_key="dummy",  # LM Studio doesn't require a real API key
+                base_url=f"{lm_studio_url}/v1",
                 timeout=timeout,
                 max_tokens=4000,
                 temperature=0.05
@@ -298,7 +296,7 @@ exit 0'''
 
             # Initialize agent with proper Agno 2.0 syntax
             self.agent = Agent(
-                model=lm_studio_model,
+                model=openai_model,
                 description="You are an expert DevOps engineer specializing in generating executable artifacts for task automation.",
                 instructions=self._get_system_instructions(),
                 output_schema=AgentArtifactBundle,
@@ -314,47 +312,19 @@ exit 0'''
             raise AgnoCompilerError(f"Failed to initialize AI agent: {e}")
 
     def _get_system_instructions(self) -> str:
-        """Get system instructions for template-based artifact generation."""
-        return f"""
-You are an expert DevOps automation specialist with advanced memory capabilities. Your job is to convert task specifications into executable artifacts by selecting and parameterizing proven script templates.
-
-MEMORY CAPABILITIES:
-- You can remember successful template patterns from previous compilations
-- Store and retrieve compilation optimizations and best practices
-- Learn from template usage patterns to improve future selections
-- Remember common parameter combinations for different deployment scenarios
-
-CRITICAL: You do NOT write bash scripts from scratch. You ONLY select from pre-tested script templates and provide parameters.
-
-AVAILABLE SCRIPT TEMPLATES:
-{self._get_template_descriptions()}
-
-HOW TO USE TEMPLATES:
-1. Analyze the task requirements
-2. Select the appropriate template(s) from the list above
-3. Provide the required parameters for each template
-4. Chain templates together for complex operations
-5. Ensure proper execution order using dependencies
-
-TEMPLATE SELECTION GUIDELINES:
-- File Operations: Use 'create_directory', 'write_file', 'verify_exists'
-- Commands: Use 'run_command'
-- Docker: Use 'docker_run'
-- HTTP Checks: Use 'check_http'
-- JSON Config: Use 'write_json_config'
-- Generic Tasks: Use 'simple_task'
+        """Get flat structure instructions."""
+        return """
+You are a DevOps automation expert. Generate Docker deployment configuration.
 
 OUTPUT FORMAT:
-You MUST respond with a structured AgentArtifactBundle containing:
-- artifacts: Array of template selections with parameters
-- steps: Execution order matching artifacts
-- vars: Environment variables for the templates
+Return flat JSON with deployment parameters:
+- deploy_script_path: Path to deployment script
+- deploy_image: Docker image to use
+- deploy_name: Service name
+- deploy_ports: Port mapping (e.g. "3000:80")
+- execute_command: Command to run the script
 
-REMEMBER:
-- NEVER write bash code - only select templates and provide parameters
-- All scripts will be generated from the proven templates
-- Focus on correct template selection and parameter values
-- Ensure proper dependency order in steps array
+Example: {"deploy_script_path": "scripts/deploy.sh", "deploy_image": "nginx:latest", "deploy_name": "web", "deploy_ports": "8080:80", "execute_command": "bash scripts/deploy.sh"}
 """
 
     def _get_template_descriptions(self) -> str:
@@ -561,15 +531,26 @@ GENERIC:
             # Run agent with structured output using Agno 2.0 API
             response: RunOutput = self.agent.run(prompt)
 
-            # Extract structured output directly from Agno 2.0 response
+            # Extract structured output from Agno 2.0 response
             if response and hasattr(response, 'content'):
-                # In Agno 2.0 with output_schema, the content should be the structured object
                 agent_bundle = response.content
 
-                # Validate it's the expected type
+                # Handle both structured and string responses
                 if isinstance(agent_bundle, AgentArtifactBundle):
                     logger.info("Agno 2.0 agent compilation completed successfully")
                     return agent_bundle
+                elif isinstance(agent_bundle, str):
+                    logger.info("Agent returned string response, attempting to parse as JSON")
+                    try:
+                        import json
+                        parsed_content = json.loads(agent_bundle)
+                        agent_bundle = AgentArtifactBundle(**parsed_content)
+                        logger.info("Successfully parsed string response to AgentArtifactBundle")
+                        return agent_bundle
+                    except (json.JSONDecodeError, TypeError, ValueError) as e:
+                        logger.error(f"Failed to parse string response: {e}")
+                        logger.debug(f"Raw string content: {agent_bundle}")
+                        raise AgnoCompilerError(f"Agent returned unparseable string response: {e}")
                 else:
                     logger.error(f"Unexpected response type: {type(agent_bundle)}")
                     raise AgnoCompilerError(f"Agent returned unexpected type: {type(agent_bundle)}")
@@ -657,98 +638,56 @@ CRITICAL REQUIREMENTS:
         return prompt
 
     def _convert_to_clockwork_format(self, agent_bundle: AgentArtifactBundle) -> ArtifactBundle:
-        """Convert AI agent response to Clockwork ArtifactBundle format with template expansion."""
+        """Convert agent response to Clockwork ArtifactBundle format."""
         try:
             artifacts = []
-            template_expansion_errors = []
+            steps = []
 
-            for i, agent_artifact in enumerate(agent_bundle.artifacts):
-                try:
-                    # Expand template into actual script content
-                    if hasattr(agent_artifact, 'template') and agent_artifact.template:
-                        # Expand the template with parameters
-                        script_content = self.get_template(
-                            agent_artifact.template,
-                            **(agent_artifact.params or {})
-                        )
-                        logger.info(f"Expanded template '{agent_artifact.template}' for artifact: {agent_artifact.path}")
-
-                    elif agent_artifact.content:
-                        # Use direct content if provided
-                        script_content = agent_artifact.content
-                        logger.info(f"Using direct content for artifact: {agent_artifact.path}")
-
-                    else:
-                        # Neither template nor content provided
-                        error_msg = f"Artifact {i} has neither template nor content"
-                        template_expansion_errors.append(error_msg)
-                        logger.error(error_msg)
-
-                        script_content = f'''#!/bin/bash
-echo "✗ No template or content provided for this artifact"
-exit 1'''
-
-                    # Create the artifact with expanded content
-                    artifact = Artifact(
-                        path=agent_artifact.path,
-                        mode=agent_artifact.mode,
-                        purpose=agent_artifact.purpose,
-                        lang="bash",  # All templates are bash scripts
-                        content=script_content
+            for agent_artifact in agent_bundle.artifacts:
+                # Generate script content based on template
+                if agent_artifact.template == "docker_run":
+                    script_content = self.SCRIPT_TEMPLATES['docker_run'].format(
+                        image=agent_artifact.image,
+                        name=agent_artifact.name,
+                        ports=agent_artifact.ports,
+                        env_vars="None"
                     )
-                    artifacts.append(artifact)
+                else:
+                    script_content = f'''#!/bin/bash
+echo "Running {agent_artifact.purpose}"
+echo "Template: {agent_artifact.template}"
+exit 0'''
 
-                except Exception as e:
-                    error_msg = f"Failed to expand template for artifact {i}: {e}"
-                    template_expansion_errors.append(error_msg)
-                    logger.error(error_msg)
-
-                    # Create an error artifact
-                    error_script = f'''#!/bin/bash
-echo "✗ Template expansion failed: {e}"
-exit 1'''
-
-                    artifact = Artifact(
-                        path=agent_artifact.path or f"scripts/error_{i}.sh",
-                        mode=agent_artifact.mode or "0755",
-                        purpose=agent_artifact.purpose or f"error_{i}",
-                        lang="bash",
-                        content=error_script
-                    )
-                    artifacts.append(artifact)
+                artifact = Artifact(
+                    path=agent_artifact.path,
+                    mode="0755",
+                    purpose=agent_artifact.purpose,
+                    lang="bash",
+                    content=script_content
+                )
+                artifacts.append(artifact)
 
             # Convert execution steps
-            steps = []
             for agent_step in agent_bundle.steps:
                 step = ExecutionStep(
                     purpose=agent_step.purpose,
-                    run=agent_step.run
+                    run={"cmd": agent_step.command.split()}
                 )
                 steps.append(step)
 
-            # Add template expansion status to vars
-            bundle_vars = agent_bundle.vars or {}
-            if template_expansion_errors:
-                bundle_vars["template_expansion_errors"] = template_expansion_errors
-                bundle_vars["template_expansion_status"] = "partial_success"
-                logger.warning(f"Template expansion completed with {len(template_expansion_errors)} errors")
-            else:
-                bundle_vars["template_expansion_status"] = "success"
-                logger.info("All templates expanded successfully")
-
-            # Create Clockwork ArtifactBundle
             bundle = ArtifactBundle(
-                version=agent_bundle.version,
+                version="1",
                 artifacts=artifacts,
                 steps=steps,
-                vars=bundle_vars
+                vars={}
             )
 
+            logger.info(f"Successfully converted agent response to Clockwork format: {len(artifacts)} artifacts, {len(steps)} steps")
             return bundle
 
         except Exception as e:
-            logger.error(f"Failed to convert AI response to ArtifactBundle: {e}")
-            raise AgnoCompilerError(f"Failed to convert AI response to ArtifactBundle: {e}")
+            logger.error(f"Failed to convert agent response to ArtifactBundle: {e}")
+            raise AgnoCompilerError(f"Failed to convert agent response to ArtifactBundle: {e}")
 
     def test_connection(self) -> bool:
         """
