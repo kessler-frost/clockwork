@@ -696,7 +696,7 @@ INVENTORY = [{', '.join(targets_list)}]"""
         """Generate generic PyInfra server.shell operation for unknown resource types."""
         command = config.get('command', f'echo "Processing {resource.name}"')
 
-        args = [f'command="{command}"']
+        args = [f'commands="{command}"']
 
         if 'chdir' in config:
             args.append(f'chdir="{config["chdir"]}"')
@@ -746,7 +746,7 @@ INVENTORY = [{', '.join(targets_list)}]"""
             # Get the substituted config for accurate port info
             substituted_config = self._substitute_variables(resource.config, variables)
             service_name = substituted_config.get('name', resource.name)
-            port = 80  # default
+            port = 8080  # default external port
 
             # Extract port from service config
             if 'ports' in substituted_config and substituted_config['ports']:
@@ -756,14 +756,14 @@ INVENTORY = [{', '.join(targets_list)}]"""
                 else:
                     port = port_config
 
-            # Generate HTTP health check command
-            command = f'curl -f http://localhost:{port}{path} || exit 1'
+            # Generate HTTP health check command with retry logic
+            command = f'sleep 5; for i in {{1..{retries}}}; do curl -f http://localhost:{port}{path} && exit 0 || sleep 2; done; exit 1'
         else:
             # Generic health check
             command = f'echo "Health check for {resource.name}: OK"'
 
         lines = [f"# Health check for {resource.name}"]
-        args = [f'command="{command}"']
+        args = [f'commands="{command}"']
 
         operation = f"server.shell(\n    {',\n    '.join(args)}\n)"
 
@@ -905,7 +905,7 @@ INVENTORY = [{', '.join(targets_list)}]"""
         """Generate generic PyInfra destroy operation for unknown resource types."""
         command = config.get('destroy_command', f'echo "Destroying {resource.name}"')
 
-        args = [f'command="{command}"']
+        args = [f'commands="{command}"']
 
         if 'chdir' in config:
             args.append(f'chdir="{config["chdir"]}"')

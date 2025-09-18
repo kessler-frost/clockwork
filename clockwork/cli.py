@@ -110,9 +110,20 @@ def apply(
         plan_data = core.plan(config_file, variables, [target])
         display_plan(plan_data)
     else:
-        results = core.apply(config_file, variables, [target])
-        success = all(result.get("success", False) for result in results)
-        console.print("✅ Apply completed" if success else "❌ Apply failed")
+        try:
+            results = core.apply(config_file, variables, [target])
+            success = all(result.get("success", False) for result in results)
+            if success:
+                console.print("✅ Apply completed")
+            else:
+                console.print("❌ Apply failed")
+                for result in results:
+                    if not result.get("success", False):
+                        console.print(f"Error: {result.get('stderr', 'Unknown error')}")
+        except Exception as e:
+            console.print(f"❌ Apply failed: {e}")
+            import traceback
+            console.print(traceback.format_exc())
 
 
 @app.command()
