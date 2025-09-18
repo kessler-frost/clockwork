@@ -32,7 +32,6 @@ dmypy.json
 
 # Linting
 .ruff_cache/
-.markdownlint.json
 
 # Environment variables
 .env
