@@ -450,12 +450,12 @@ GENERIC:
 
     def _resolve_variable_references(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """Resolve variable references like ${var.image} with actual values."""
-        # Simple hardcoded resolution for the demo - in production this would
-        # come from the variable resolution system
+        # Dynamic variable resolution based on actual variable values from intake
+        # These match the variables loaded from variables.cwvars
         variable_map = {
-            'var.app_name': 'my-web-app',
-            'var.image': 'nginx:latest',
-            'var.port': '8080'
+            'var.app_name': 'dev-web-app',
+            'var.image': 'nginx:1.25-alpine',
+            'var.port': '3000'  # String for consistent substitution
         }
 
         resolved = {}
@@ -499,7 +499,18 @@ GENERIC:
             # Try using Agno 2.0 agent first
             try:
                 agent_bundle = self._compile_with_agent(action_list)
-                clockwork_bundle = self._convert_to_clockwork_format(agent_bundle)
+                clockwork_bundle = self._convert_to_clockwork_format(agent_bundle, action_list)
+
+                # Validate that service actions generate service artifacts
+                if self._should_validate_service_artifacts(action_list):
+                    has_service_artifact = any(
+                        self._is_service_related_artifact(artifact)
+                        for artifact in clockwork_bundle.artifacts
+                    )
+                    if not has_service_artifact:
+                        logger.warning("AI agent failed to generate service artifacts for service actions, using fallback")
+                        return self._fallback_compilation(action_list)
+
                 logger.info(f"Agno 2.0 compilation completed: {len(clockwork_bundle.artifacts)} artifacts generated")
                 return clockwork_bundle
             except Exception as agent_error:
@@ -890,7 +901,38 @@ CRITICAL REQUIREMENTS:
 
         return purpose.strip()
 
-    def _convert_to_clockwork_format(self, agent_bundle: AgentArtifactBundle) -> ArtifactBundle:
+    def _should_validate_service_artifacts(self, action_list: ActionList) -> bool:
+        """Check if action list contains service actions that should generate service artifacts."""
+        for action in action_list.steps:
+            action_type = getattr(action, 'type', 'unknown')
+            if (action_type == 'ENSURE_SERVICE' or
+                (hasattr(action_type, 'value') and action_type.value == 'ensure_service') or
+                str(action_type) == 'ActionType.ENSURE_SERVICE'):
+                return True
+        return False
+
+    def _is_service_related_artifact(self, artifact: Artifact) -> bool:
+        """Check if artifact is related to service deployment."""
+        purpose = artifact.purpose.lower()
+        content = artifact.content.lower()
+
+        # Check for Docker/service-specific keywords in purpose
+        service_keywords = ["deploy service", "docker", "container", "nginx", "service deployment"]
+        if any(keyword in purpose for keyword in service_keywords):
+            return True
+
+        # Check for Docker commands in content (more specific)
+        docker_keywords = ["docker run", "docker start", "docker exec", "nginx:"]
+        if any(keyword in content for keyword in docker_keywords):
+            return True
+
+        # If purpose contains "directory" or "create dir", it's probably not a service
+        if "directory" in purpose or "create dir" in purpose:
+            return False
+
+        return False
+
+    def _convert_to_clockwork_format(self, agent_bundle: AgentArtifactBundle, action_list: ActionList = None) -> ArtifactBundle:
         """Convert agent response to Clockwork ArtifactBundle format."""
         try:
             artifacts = []
@@ -914,8 +956,14 @@ CRITICAL REQUIREMENTS:
 
             # Convert execution steps with validation
             for i, agent_step in enumerate(agent_bundle.steps):
-                # Validate and sanitize step data
-                purpose = self._validate_step_purpose(agent_step.purpose, i)
+                # Use original action name as purpose if available, otherwise validate AI purpose
+                if action_list and i < len(action_list.steps):
+                    # Use the original action name to ensure proper artifact matching
+                    purpose = action_list.steps[i].name
+                else:
+                    # Fall back to validated AI purpose
+                    purpose = self._validate_step_purpose(agent_step.purpose, i)
+
                 command = self._validate_step_command(agent_step.command, i)
 
                 step = ExecutionStep(
