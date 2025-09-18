@@ -27,8 +27,11 @@ uv run clockwork apply main.cw
 # Test
 curl http://localhost:8080
 
-# Clean up
-docker stop hello-world && docker rm hello-world
+# Clean up using Clockwork (recommended)
+uv run clockwork destroy main.cw
+
+# Alternative: Manual cleanup
+# docker stop hello-world && docker rm hello-world
 ```
 
 ## Customization

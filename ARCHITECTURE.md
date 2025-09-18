@@ -201,6 +201,9 @@ uv run clockwork apply --target production configs/production.cw
 # Validate, plan, then apply
 uv run clockwork plan configs/app.cw
 uv run clockwork apply configs/app.cw
+
+# Clean up resources when done
+uv run clockwork destroy configs/app.cw
 ```
 
 ## 🔄 Detailed Architecture Flow
@@ -302,6 +305,12 @@ http.request(
     method="GET",
     expected_status=200,
     timeout=30
+)
+
+# Example: Destroy operation (removes container)
+docker.container(
+    container="myapp",
+    present=False  # This removes the container
 )
 ```
 

@@ -317,6 +317,112 @@ class ClockworkCore:
             logger.error(f"Verification failed: {e}")
             raise ClockworkError(f"Verification failed: {e}") from e
 
+    def plan_destroy(self, path: Path, variables: Optional[Dict[str, Any]] = None, targets: Optional[List[str]] = None) -> str:
+        """
+        Generate a destroy plan (parse only) without executing.
+
+        Args:
+            path: Path to .cw configuration files
+            variables: Optional variable overrides
+            targets: Optional list of target hosts
+
+        Returns:
+            Generated pyinfra Python code that would be executed for destruction
+        """
+        logger.info("Generating destroy plan (parse only)")
+
+        try:
+            # Load the .cw file content
+            if path.is_file():
+                config_files = [path]
+            else:
+                config_files = list(path.glob("*.cw"))
+
+            if not config_files:
+                raise ConfigurationError(f"No .cw files found in {path}")
+
+            # For now, just use the first .cw file
+            config_file = config_files[0]
+            logger.info(f"Parsing destroy plan from: {config_file}")
+
+            # Generate destroy operations
+            destroy_code = self.parser.parse_file_for_destroy(config_file, targets)
+
+            logger.info("Destroy plan generated successfully")
+            return destroy_code
+
+        except PyInfraParserError as e:
+            logger.error(f"Failed to parse configuration for destroy: {e}")
+            raise ConfigurationError(f"Configuration parsing failed: {e}") from e
+        except Exception as e:
+            logger.error(f"Unexpected error generating destroy plan: {e}")
+            raise ClockworkError(f"Failed to generate destroy plan: {e}") from e
+
+    def destroy(self, path: Path, variables: Optional[Dict[str, Any]] = None,
+                targets: Optional[List[str]] = None, timeout_per_step: int = 300) -> List[Dict[str, Any]]:
+        """
+        Run complete destroy pipeline: parse → execute destroy operations.
+
+        Args:
+            path: Path to .cw configuration files
+            variables: Optional variable overrides
+            targets: Optional list of target hosts
+            timeout_per_step: Timeout for execution in seconds
+
+        Returns:
+            List of execution results from destroy operations
+        """
+        logger.info("Running complete destroy pipeline: parse → execute")
+
+        # Generate destroy plan
+        destroy_code = self.plan_destroy(path, variables, targets)
+
+        # Execute destroy operations
+        results = self.execute(destroy_code, targets, timeout_per_step)
+
+        # Update state to reflect destroyed resources
+        self._update_state_after_destroy(path, results)
+
+        logger.info("Destroy pipeline completed")
+        return results
+
+    def _update_state_after_destroy(self, path: Path, results: List[Dict[str, Any]]):
+        """
+        Update state after destroy operations to remove destroyed resources.
+
+        Args:
+            path: Path to configuration files
+            results: Results from destroy operations
+        """
+        try:
+            current_state = self.state_manager.load_state()
+            if not current_state:
+                logger.warning("No current state found to update after destroy")
+                return
+
+            # Create a new execution record for the destroy operation
+            execution_record = ExecutionRecord(
+                run_id=f"destroy_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                started_at=datetime.now(),
+                completed_at=datetime.now(),
+                status=ExecutionStatus.SUCCESS,
+                action_list_checksum="destroy",  # Simplified for destroy operations
+                artifact_bundle_checksum="destroy",  # Simplified for destroy operations
+                error_message=None
+            )
+
+            # Update state to mark resources as destroyed
+            # For now, just add the execution record
+            current_state.execution_history.append(execution_record)
+
+            # Save updated state
+            self.state_manager.save_state(current_state)
+            logger.info("State updated after destroy operations")
+
+        except Exception as e:
+            logger.error(f"Failed to update state after destroy: {e}")
+            # Don't raise here since the destroy operation itself succeeded
+
     # =========================================================================
     # State Management
     # =========================================================================

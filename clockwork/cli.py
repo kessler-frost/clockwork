@@ -792,5 +792,141 @@ def execute_pyinfra_operations(inventory: Inventory, operations: List[Dict[str, 
         return False
 
 
+@app.command()
+def destroy(
+    config_file: Path = typer.Argument(..., help="Path to .cw configuration file"),
+    target: str = typer.Option("@local", "--target", "-t", help="Target: @local, @docker:<container>, @ssh:<host>"),
+    force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation prompt"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be destroyed without executing"),
+    verbose: bool = typer.Option(False, "--verbose", help="Enable verbose PyInfra output"),
+):
+    """
+    Destroy infrastructure resources created by 'clockwork apply'.
+
+    This command will remove all resources defined in the configuration file,
+    such as Docker containers, files, and directories.
+    """
+    from rich.console import Console
+    from rich.prompt import Confirm
+    from rich.table import Table
+    from rich.panel import Panel
+    from .core import ClockworkCore
+
+    console = Console()
+
+    # Validate config file exists
+    if not config_file.exists():
+        console.print(f"[red]❌ Configuration file not found: {config_file}[/red]")
+        raise typer.Exit(1)
+
+    try:
+        # Initialize core
+        core = ClockworkCore()
+
+        # Parse config to understand what resources would be destroyed
+        try:
+            destroy_plan = core.plan_destroy(config_file, targets=[target])
+        except Exception as e:
+            console.print(f"[red]❌ Failed to generate destroy plan: {e}[/red]")
+            raise typer.Exit(1)
+
+        if not destroy_plan or destroy_plan.strip() == "# No resources to destroy":
+            console.print("[yellow]⚠️  No resources found to destroy[/yellow]")
+            return
+
+        # Parse the destroy plan to extract operations
+        operations = []
+        for line in destroy_plan.split('\n'):
+            if line.strip().startswith('# Destroy '):
+                operation_type = line.strip().split(': ')[0].replace('# Destroy ', '')
+                resource_name = line.strip().split(': ')[1] if ': ' in line else "Unknown"
+                operations.append({
+                    "operation": operation_type,
+                    "resource": resource_name,
+                    "args": []
+                })
+
+        if not operations:
+            console.print("[yellow]⚠️  No resources found to destroy[/yellow]")
+            return
+
+        if dry_run:
+            console.print("🚀 Destroy Plan (Dry Run)")
+
+            # Create table showing what would be destroyed
+            table = Table(show_header=True, header_style="bold magenta")
+            table.add_column("Step", style="dim", width=6)
+            table.add_column("Operation", style="bold")
+            table.add_column("Resource", style="cyan")
+            table.add_column("Details", style="green")
+
+            for i, op in enumerate(operations, 1):
+                table.add_row(
+                    str(i),
+                    op.get("operation", "Unknown"),
+                    op.get("resource", "Unknown"),
+                    f"Will be removed/destroyed"
+                )
+
+            console.print(table)
+
+            # Show the actual PyInfra code that would be executed
+            console.print("\n[dim]Generated PyInfra code:[/dim]")
+            console.print(Panel(destroy_plan, title="Destroy Operations", border_style="yellow"))
+
+            console.print(f"\nTotal operations: {len(operations)}")
+            console.print("🔍 Dry run completed - no changes made")
+            return
+
+        # Show what will be destroyed
+        console.print("🗑️  Resources to be destroyed:")
+
+        table = Table(show_header=True, header_style="bold red")
+        table.add_column("Resource Type", style="bold")
+        table.add_column("Resource Name", style="cyan")
+        table.add_column("Details", style="dim")
+
+        for op in operations:
+            table.add_row(
+                op.get("operation", "Unknown"),
+                op.get("resource", "Unknown"),
+                str(op.get("args", []))
+            )
+
+        console.print(table)
+
+        # Safety confirmation (unless force is used)
+        if not force:
+            console.print(f"\n[yellow]⚠️  This will destroy {len(operations)} resource(s)[/yellow]")
+
+            if not Confirm.ask("[bold red]Are you sure you want to proceed?[/bold red]", default=False):
+                console.print("[yellow]🛑 Destroy cancelled[/yellow]")
+                return
+
+        # Execute destroy
+        console.print("\n🗑️  Destroying resources...")
+
+        try:
+            results = core.destroy(config_file, targets=[target])
+
+            if results and any(r.get("success", False) for r in results):
+                console.print("[green]✅ Destroy completed successfully[/green]")
+            else:
+                console.print("[red]❌ Destroy failed[/red]")
+                if results:
+                    for result in results:
+                        if result.get("stderr"):
+                            console.print(f"[red]Error: {result['stderr']}[/red]")
+                raise typer.Exit(1)
+
+        except Exception as e:
+            console.print(f"[red]❌ Destroy failed: {e}[/red]")
+            raise typer.Exit(1)
+
+    except KeyboardInterrupt:
+        console.print("\n[yellow]🛑 Destroy interrupted[/yellow]")
+        raise typer.Exit(1)
+
+
 if __name__ == "__main__":
     app()

@@ -271,6 +271,68 @@ class PyInfraParser:
         except Exception as e:
             raise PyInfraParserError(f"Unexpected error: {str(e)}", str(directory_path))
 
+    def parse_string_for_destroy(self, cw_content: str, targets: Optional[List[str]] = None) -> str:
+        """
+        Parse .cw content and generate PyInfra destroy operations.
+
+        Args:
+            cw_content: .cw file content as a string
+            targets: Optional list of target hosts for PyInfra inventory
+
+        Returns:
+            Generated PyInfra Python code for destroying resources
+
+        Raises:
+            PyInfraParserError: If parsing fails
+        """
+        try:
+            # Parse HCL content to intermediate representation
+            ir = self._parse_hcl_to_ir(cw_content)
+
+            # Resolve variables first
+            resolved_variables = self._resolve_variables(ir.variables)
+
+            # Generate PyInfra destroy code
+            return self._generate_pyinfra_destroy_code(ir.resources, resolved_variables)
+
+        except PyInfraParserError:
+            raise
+        except Exception as e:
+            raise PyInfraParserError(f"Unexpected error: {str(e)}")
+
+    def parse_file_for_destroy(self, file_path: Union[str, Path], targets: Optional[List[str]] = None) -> str:
+        """
+        Parse a .cw configuration file and generate PyInfra destroy operations.
+
+        Args:
+            file_path: Path to the .cw configuration file
+            targets: Optional list of target hosts for PyInfra inventory
+
+        Returns:
+            Generated PyInfra Python code for destroying resources
+
+        Raises:
+            PyInfraParserError: If parsing fails
+        """
+        file_path = Path(file_path)
+
+        if not file_path.exists():
+            raise PyInfraParserError(f"Configuration file not found: {file_path}")
+
+        if not file_path.suffix == '.cw':
+            raise PyInfraParserError(f"Expected .cw file, got: {file_path.suffix}")
+
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            return self.parse_string_for_destroy(content, targets)
+
+        except PyInfraParserError:
+            raise
+        except Exception as e:
+            raise PyInfraParserError(f"Failed to parse file: {e}", str(file_path))
+
     def _generate_pyinfra_code(self, ir: IR, targets: List[str], source_path: str = None) -> str:
         """
         Generate executable PyInfra Python code from the parsed IR.
@@ -712,6 +774,133 @@ INVENTORY = [{', '.join(targets_list)}]"""
             lines.append(f'print(f"{output_name}: {value}")')
             lines.append("")
 
+        return "\n".join(lines)
+
+    def _generate_pyinfra_destroy_code(self, resources: Dict[str, Resource], variables: Dict[str, Any]) -> str:
+        """
+        Generate PyInfra operations for destroying resources (reverse operations).
+
+        Args:
+            resources: Dictionary of resources to destroy
+            variables: Dictionary of variable values
+
+        Returns:
+            Generated PyInfra Python code for destruction
+        """
+        operations = []
+
+        # Process resources in reverse order for proper cleanup
+        for resource_key, resource in reversed(list(resources.items())):
+            operation_code = self._generate_single_destroy_operation(resource, variables)
+            operations.append(operation_code)
+
+        if not operations:
+            return "# No resources to destroy"
+
+        lines = [
+            "# Generated PyInfra destroy operations from .cw file",
+            "# This code removes/destroys infrastructure components",
+            "",
+            "from pyinfra.operations import docker, files, git, server",
+            "",
+        ]
+
+        lines.extend(operations)
+
+        return "\n\n".join(lines)
+
+    def _generate_single_destroy_operation(self, resource: Resource, variables: Dict[str, Any]) -> str:
+        """
+        Generate a single destroy operation for a resource.
+
+        Args:
+            resource: Resource to destroy
+            variables: Dictionary of variable values
+
+        Returns:
+            PyInfra operation code for destroying the resource
+        """
+        config = self._substitute_variables(resource.config, variables)
+
+        if resource.type.value == "service":
+            return self._generate_service_destroy_operation(resource, config)
+        elif resource.type.value == "repository":
+            return self._generate_repository_destroy_operation(resource, config)
+        elif resource.type.value == "file":
+            return self._generate_file_destroy_operation(resource, config)
+        elif resource.type.value == "directory":
+            return self._generate_directory_destroy_operation(resource, config)
+        else:
+            return self._generate_generic_destroy_operation(resource, config)
+
+    def _generate_service_destroy_operation(self, resource: Resource, config: Dict[str, Any]) -> str:
+        """Generate PyInfra destroy operation for service resources (remove Docker container)."""
+        service_name = config.get('name', resource.name)
+
+        args = [
+            f'container="{service_name}"',
+            'present=False'  # This removes the container
+        ]
+
+        operation = f"docker.container(\n    {',\n    '.join(args)}\n)"
+
+        lines = [f"# Destroy service: {resource.name}", operation]
+        return "\n".join(lines)
+
+    def _generate_repository_destroy_operation(self, resource: Resource, config: Dict[str, Any]) -> str:
+        """Generate PyInfra destroy operation for repository resources (remove directory)."""
+        dest = config.get('dest', f'/opt/{resource.name}')
+
+        args = [
+            f'path="{dest}"',
+            'present=False'  # This removes the directory
+        ]
+
+        operation = f"files.directory(\n    {',\n    '.join(args)}\n)"
+
+        lines = [f"# Destroy repository: {resource.name}", operation]
+        return "\n".join(lines)
+
+    def _generate_file_destroy_operation(self, resource: Resource, config: Dict[str, Any]) -> str:
+        """Generate PyInfra destroy operation for file resources."""
+        path = config.get('path', f'/tmp/{resource.name}')
+
+        args = [
+            f'path="{path}"',
+            'present=False'  # This removes the file
+        ]
+
+        operation = f"files.file(\n    {',\n    '.join(args)}\n)"
+
+        lines = [f"# Destroy file: {resource.name}", operation]
+        return "\n".join(lines)
+
+    def _generate_directory_destroy_operation(self, resource: Resource, config: Dict[str, Any]) -> str:
+        """Generate PyInfra destroy operation for directory resources."""
+        path = config.get('path', f'/tmp/{resource.name}')
+
+        args = [
+            f'path="{path}"',
+            'present=False'  # This removes the directory
+        ]
+
+        operation = f"files.directory(\n    {',\n    '.join(args)}\n)"
+
+        lines = [f"# Destroy directory: {resource.name}", operation]
+        return "\n".join(lines)
+
+    def _generate_generic_destroy_operation(self, resource: Resource, config: Dict[str, Any]) -> str:
+        """Generate generic PyInfra destroy operation for unknown resource types."""
+        command = config.get('destroy_command', f'echo "Destroying {resource.name}"')
+
+        args = [f'command="{command}"']
+
+        if 'chdir' in config:
+            args.append(f'chdir="{config["chdir"]}"')
+
+        operation = f"server.shell(\n    {',\n    '.join(args)}\n)"
+
+        lines = [f"# Destroy resource: {resource.name}", operation]
         return "\n".join(lines)
 
 

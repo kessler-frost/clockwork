@@ -15,6 +15,9 @@ uv add clockwork
 # Apply a configuration (dry-run first)
 uv run clockwork plan examples/basic-web-service/main.cw
 uv run clockwork apply examples/basic-web-service/main.cw
+
+# Clean up when done
+uv run clockwork destroy examples/basic-web-service/main.cw
 ```
 
 ## 📖 Overview
@@ -30,6 +33,7 @@ to convert `.cw` configuration files into PyInfra operations that manage your in
 - **Declarative syntax**: Easy-to-read `.cw` configuration files
 - **Multi-target support**: Deploy to local, SSH, Docker, and Kubernetes environments
 - **Built-in safety**: Dry-run mode and state management prevent accidents
+- **Complete lifecycle**: Create, update, and destroy infrastructure with ease
 
 ## 📁 Project Structure
 
@@ -77,6 +81,15 @@ uv run clockwork plan examples/basic-web-service/main.cw
 # Apply configuration to infrastructure
 uv run clockwork apply examples/basic-web-service/main.cw
 
+# Destroy infrastructure resources (with confirmation)
+uv run clockwork destroy examples/basic-web-service/main.cw
+
+# Destroy without confirmation (for automation)
+uv run clockwork destroy examples/basic-web-service/main.cw --force
+
+# Preview what would be destroyed (dry-run)
+uv run clockwork destroy examples/basic-web-service/main.cw --dry-run
+
 # Watch file for changes and auto-apply
 uv run clockwork watch examples/basic-web-service/main.cw
 
@@ -97,6 +110,37 @@ uv run clockwork apply --var KEY=VALUE --timeout 300 examples/app.cw
 # Target different environments
 uv run clockwork apply --target production examples/app.cw
 ```
+
+## 🔄 Resource Lifecycle Management
+
+Clockwork provides complete lifecycle management for your infrastructure resources:
+
+### Creation and Updates
+```bash
+# Plan first (recommended)
+uv run clockwork plan examples/hello-world/main.cw
+
+# Apply changes
+uv run clockwork apply examples/hello-world/main.cw
+```
+
+### Destruction
+```bash
+# Preview what will be destroyed
+uv run clockwork destroy examples/hello-world/main.cw --dry-run
+
+# Destroy with confirmation prompt
+uv run clockwork destroy examples/hello-world/main.cw
+
+# Destroy without confirmation (automation)
+uv run clockwork destroy examples/hello-world/main.cw --force
+```
+
+### Safety Features
+- **Confirmation prompts**: Prevent accidental destruction
+- **Dry-run support**: See what will be destroyed before execution
+- **State tracking**: Record all operations for audit and troubleshooting
+- **Force flag**: Skip confirmations for automation workflows
 
 ## 📚 Documentation
 
