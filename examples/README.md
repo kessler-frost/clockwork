@@ -33,7 +33,7 @@ Complete web service deployment with health checks and comprehensive configurati
 - Port mapping and environment variables
 - HTTP health verification
 - Variable management
-- Both .cw and .hcl syntax examples
+- Complete configuration example
 
 **Usage**:
 ```bash

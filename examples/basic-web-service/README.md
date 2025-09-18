@@ -14,7 +14,6 @@ This example demonstrates deploying a simple nginx web service using Clockwork.
 ## Files
 
 - `main.cw` - Service configuration using Clockwork syntax
-- `main.hcl` - Alternative HCL syntax (same functionality)
 - `variables.cwvars` - Variable definitions with defaults
 
 ## Usage
