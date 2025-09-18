@@ -1,37 +1,67 @@
 # Clockwork Examples
 
-This directory contains practical examples of using Clockwork for different scenarios.
+This directory contains working examples of using Clockwork for service deployment.
 
 ## Examples
 
+### Hello World (`hello-world/`)
+
+**Status**: ✅ **Minimal Working Example**
+
+The simplest possible Clockwork deployment - perfect for getting started.
+
+**Features**:
+- Single nginx:alpine container
+- Minimal configuration
+- Custom environment variables
+
+**Usage**:
+```bash
+cd examples/hello-world
+uv run clockwork apply --auto-approve
+curl http://localhost:8080
+```
+
 ### Basic Web Service (`basic-web-service/`)
 
-Simple web service deployment with health checks.
+**Status**: ✅ **Full Featured Example**
 
-### Microservices (`microservices/`)
+Complete web service deployment with health checks and comprehensive configuration.
 
-Multi-service application with dependencies and networking.
+**Features**:
+- Service deployment with Docker containers
+- Port mapping and environment variables
+- HTTP health verification
+- Variable management
+- Both .cw and .hcl syntax examples
 
-### Development Environment (`dev-environment/`)
-
-Local development setup with multiple tools and services.
-
-### Production Deployment (`production/`)
-
-Production-ready configuration with security and monitoring.
-
-## Running Examples
-
-Each example directory contains:
-
-- `main.cw` - Main configuration
-- `variables.cwvars` - Variable overrides
-- `README.md` - Specific instructions
-
-To run an example:
-
+**Usage**:
 ```bash
 cd examples/basic-web-service
-clockwork plan
-clockwork apply
+uv run clockwork plan      # Preview deployment
+uv run clockwork apply     # Deploy service
 ```
+
+**What it deploys**:
+- nginx:1.25-alpine container on port 3000
+- HTTP health check verification
+- Configurable via variables.cwvars
+
+## File Structure
+
+Each example directory contains:
+- `main.cw` - Main service configuration
+- `variables.cwvars` - Variable definitions and defaults
+- `README.md` - Example-specific documentation
+
+## Requirements
+
+- Docker installed and running
+- uv package manager
+- Clockwork CLI
+
+## Quick Start
+
+1. **Try hello-world first** (simplest)
+2. **Then basic-web-service** (full features)
+3. **Modify variables.cwvars** to customize
