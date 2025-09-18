@@ -18,8 +18,11 @@ The simplest possible Clockwork service deployment - perfect for getting started
 ## Usage
 
 ```bash
+# Plan deployment (dry-run)
+uv run clockwork plan main.cw
+
 # Deploy
-uv run clockwork apply --auto-approve
+uv run clockwork apply main.cw
 
 # Test
 curl http://localhost:8080

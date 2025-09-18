@@ -1,16 +1,15 @@
 """
 Unit tests for Clockwork models.
 
-Tests the core Pydantic models and their validation logic.
+Tests the core Pydantic models and their validation logic for the pyinfra-based architecture.
 """
 
 import pytest
 from datetime import datetime
 from clockwork.models import (
     IR, Variable, Provider, Resource, Module, Output,
-    ActionList, ActionStep, ArtifactBundle, Artifact, ExecutionStep,
     ClockworkState, ResourceState, ExecutionRecord,
-    ValidationResult, ValidationIssue, EnvFacts
+    ClockworkConfig, ExecutionStatus, ResourceType
 )
 
 
@@ -28,12 +27,12 @@ class TestIRModels:
     def test_resource_creation(self):
         """Test Resource model creation."""
         resource = Resource(
-            type="service",
+            type=ResourceType.SERVICE,
             name="web_server",
             config={"port": 8080},
             tags={"env": "prod"}
         )
-        assert resource.type == "service"
+        assert resource.type == ResourceType.SERVICE
         assert resource.name == "web_server"
         assert resource.config["port"] == 8080
     
@@ -42,7 +41,7 @@ class TestIRModels:
         ir = IR(
             version="1.0",
             variables={"port": Variable(name="port", type="number", default=8080)},
-            resources={"web": Resource(type="service", name="web")},
+            resources={"web": Resource(type=ResourceType.SERVICE, name="web")},
             metadata={"source": "test"}
         )
         assert ir.version == "1.0"
@@ -50,76 +49,48 @@ class TestIRModels:
         assert "web" in ir.resources
 
 
-class TestActionModels:
-    """Test Action and ActionList models."""
-    
-    def test_action_step_creation(self):
-        """Test ActionStep model creation."""
-        step = ActionStep(
-            name="fetch_repo",
-            args={"url": "https://github.com/user/repo", "ref": "main"}
-        )
-        assert step.name == "fetch_repo"
-        assert step.args["url"] == "https://github.com/user/repo"
-    
-    def test_action_list_creation(self):
-        """Test ActionList model creation."""
-        action_list = ActionList(
-            version="1",
-            steps=[
-                ActionStep(name="fetch_repo", args={"url": "test"}),
-                ActionStep(name="build_image", args={"tag": "latest"})
-            ]
-        )
-        assert action_list.version == "1"
-        assert len(action_list.steps) == 2
-    
-    def test_action_list_serialization(self):
-        """Test ActionList JSON serialization."""
-        action_list = ActionList(
-            version="1",
-            steps=[ActionStep(name="test", args={"key": "value"})]
-        )
-        json_str = action_list.to_json()
-        assert '"version": "1"' in json_str
-        assert '"name": "test"' in json_str
+class TestConfigurationModels:
+    """Test configuration and settings models."""
 
+    def test_clockwork_config_creation(self):
+        """Test ClockworkConfig model creation."""
+        config = ClockworkConfig(
+            project_name="test-project",
+            version="1.0",
+            log_level="DEBUG",
+            build_dir="/tmp/build",
+            use_agno=True
+        )
+        assert config.project_name == "test-project"
+        assert config.version == "1.0"
+        assert config.log_level == "DEBUG"
+        assert config.build_dir == "/tmp/build"
+        assert config.use_agno is True
 
-class TestArtifactModels:
-    """Test Artifact and ArtifactBundle models."""
-    
-    def test_artifact_creation(self):
-        """Test Artifact model creation."""
-        artifact = Artifact(
-            path="scripts/test.sh",
-            mode="0755",
-            purpose="test_script",
-            lang="bash",
-            content="#!/bin/bash\necho 'test'"
-        )
-        assert artifact.path == "scripts/test.sh"
-        assert artifact.mode == "0755"
-        assert artifact.lang == "bash"
-    
-    def test_artifact_bundle_creation(self):
-        """Test ArtifactBundle model creation."""
-        bundle = ArtifactBundle(
-            version="1",
-            artifacts=[
-                Artifact(
-                    path="test.sh", mode="0755", purpose="test",
-                    lang="bash", content="echo test"
-                )
-            ],
-            steps=[
-                ExecutionStep(purpose="test", run={"cmd": ["bash", "test.sh"]})
-            ],
-            vars={"TEST_VAR": "value"}
-        )
-        assert bundle.version == "1"
-        assert len(bundle.artifacts) == 1
-        assert len(bundle.steps) == 1
-        assert bundle.vars["TEST_VAR"] == "value"
+    def test_clockwork_config_defaults(self):
+        """Test ClockworkConfig default values."""
+        config = ClockworkConfig()
+        # Note: project_name may be influenced by environment variables
+        assert config.version == "1.0"
+        assert config.log_level in ["INFO", "DEBUG"]  # May be set by test environment
+        assert ".clockwork/build" in config.build_dir
+        assert config.use_agno is True
+
+    def test_clockwork_config_from_env(self):
+        """Test ClockworkConfig loading from environment variables."""
+        import os
+        # Set test environment variables
+        os.environ['CLOCKWORK_PROJECT_NAME'] = 'env-project'
+        os.environ['CLOCKWORK_LOG_LEVEL'] = 'WARNING'
+
+        try:
+            config = ClockworkConfig()
+            assert config.project_name == 'env-project'
+            assert config.log_level == 'WARNING'
+        finally:
+            # Clean up
+            os.environ.pop('CLOCKWORK_PROJECT_NAME', None)
+            os.environ.pop('CLOCKWORK_LOG_LEVEL', None)
 
 
 class TestStateModels:
@@ -129,13 +100,13 @@ class TestStateModels:
         """Test ResourceState model creation."""
         state = ResourceState(
             resource_id="web_service",
-            type="service",
-            status="success",
+            type=ResourceType.SERVICE,
+            status=ExecutionStatus.SUCCESS,
             config={"port": 8080}
         )
         assert state.resource_id == "web_service"
-        assert state.type == "service"
-        assert state.status == "success"
+        assert state.type == ResourceType.SERVICE
+        assert state.status == ExecutionStatus.SUCCESS
     
     def test_clockwork_state_creation(self):
         """Test ClockworkState model creation."""
@@ -143,59 +114,166 @@ class TestStateModels:
             version="1.0",
             current_resources={
                 "web": ResourceState(
-                    resource_id="web", type="service", status="success"
+                    resource_id="web",
+                    type=ResourceType.SERVICE,
+                    status=ExecutionStatus.SUCCESS
                 )
             }
         )
         assert state.version == "1.0"
         assert "web" in state.current_resources
+        assert len(state.current_resources) == 1
 
 
-class TestValidationModels:
-    """Test validation result models."""
-    
-    def test_validation_issue_creation(self):
-        """Test ValidationIssue model creation."""
-        issue = ValidationIssue(
-            level="error",
-            message="Missing required field",
-            field_path="resources.web.config.port"
+class TestExecutionModels:
+    """Test execution-related models."""
+
+    def test_execution_record_creation(self):
+        """Test ExecutionRecord model creation."""
+        record = ExecutionRecord(
+            run_id="run_20240101_120000",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            status=ExecutionStatus.SUCCESS,
+            action_list_checksum="abc123",
+            artifact_bundle_checksum="def456",
+            logs=["Step 1 completed", "Step 2 completed"]
         )
-        assert issue.level == "error"
-        assert issue.message == "Missing required field"
-    
-    def test_validation_result_creation(self):
-        """Test ValidationResult model creation."""
-        result = ValidationResult(
-            valid=False,
-            issues=[
-                ValidationIssue(level="error", message="Error 1"),
-                ValidationIssue(level="warning", message="Warning 1")
-            ]
-        )
-        assert result.valid is False
-        assert len(result.errors) == 1
-        assert len(result.warnings) == 1
+        assert record.run_id == "run_20240101_120000"
+        assert record.status == ExecutionStatus.SUCCESS
+        assert len(record.logs) == 2
+
+    def test_execution_status_enum(self):
+        """Test ExecutionStatus enum values."""
+        assert ExecutionStatus.PENDING == "pending"
+        assert ExecutionStatus.RUNNING == "running"
+        assert ExecutionStatus.SUCCESS == "success"
+        assert ExecutionStatus.FAILED == "failed"
+        assert ExecutionStatus.SKIPPED == "skipped"
+
+    def test_resource_type_enum(self):
+        """Test ResourceType enum values."""
+        assert ResourceType.SERVICE == "service"
+        assert ResourceType.FILE == "file"
+        assert ResourceType.DIRECTORY == "directory"
+        assert ResourceType.NETWORK == "network"
+        assert ResourceType.CUSTOM == "custom"
 
 
-class TestEnvFactsModel:
-    """Test EnvFacts model."""
-    
-    def test_env_facts_creation(self):
-        """Test EnvFacts model creation."""
-        facts = EnvFacts(
-            os_type="Darwin",
-            architecture="arm64",
-            available_runtimes=["python3", "bash", "uv"],
-            docker_available=True,
-            podman_available=False,
-            kubernetes_available=False,
-            working_directory="/Users/test/project"
+class TestModelIntegration:
+    """Test model integration and relationships."""
+
+    def test_state_with_execution_history(self):
+        """Test ClockworkState with execution history."""
+        execution_record = ExecutionRecord(
+            run_id="test_run",
+            started_at=datetime.now(),
+            status=ExecutionStatus.SUCCESS,
+            action_list_checksum="abc",
+            artifact_bundle_checksum="def",
+            logs=["Completed successfully"]
         )
-        assert facts.os_type == "Darwin"
-        assert facts.architecture == "arm64"
-        assert "python3" in facts.available_runtimes
-        assert facts.docker_available is True
+
+        state = ClockworkState(
+            version="1.0",
+            execution_history=[execution_record]
+        )
+
+        assert len(state.execution_history) == 1
+        assert state.execution_history[0].run_id == "test_run"
+        assert state.execution_history[0].status == ExecutionStatus.SUCCESS
+
+    def test_resource_state_with_timestamps(self):
+        """Test ResourceState with timestamp handling."""
+        now = datetime.now()
+        resource_state = ResourceState(
+            resource_id="test_resource",
+            type=ResourceType.SERVICE,
+            status=ExecutionStatus.SUCCESS,
+            last_applied=now,
+            last_verified=now,
+            config={"test": "value"}
+        )
+
+        assert resource_state.last_applied == now
+        assert resource_state.last_verified == now
+        assert resource_state.config["test"] == "value"
+
+    def test_ir_model_completeness(self):
+        """Test complete IR model with all fields."""
+        ir = IR(
+            version="1.0",
+            metadata={"generated_by": "test", "timestamp": "2024-01-01"},
+            variables={
+                "env": Variable(name="env", type="string", default="production")
+            },
+            providers=[
+                Provider(name="docker", source="local")
+            ],
+            resources={
+                "web": Resource(
+                    type=ResourceType.SERVICE,
+                    name="web",
+                    config={"image": "nginx"},
+                    depends_on=["db"],
+                    tags={"tier": "frontend"}
+                )
+            },
+            modules={
+                "networking": Module(
+                    name="networking",
+                    source="./modules/network",
+                    inputs={"vpc_cidr": "10.0.0.0/16"}
+                )
+            },
+            outputs={
+                "web_url": Output(
+                    name="web_url",
+                    value="http://localhost:8080",
+                    description="Web application URL"
+                )
+            }
+        )
+
+        assert ir.version == "1.0"
+        assert "env" in ir.variables
+        assert len(ir.providers) == 1
+        assert "web" in ir.resources
+        assert "networking" in ir.modules
+        assert "web_url" in ir.outputs
+        assert ir.resources["web"].depends_on == ["db"]
+        assert ir.resources["web"].tags["tier"] == "frontend"
+
+    def test_model_serialization(self):
+        """Test model serialization and deserialization."""
+        resource_state = ResourceState(
+            resource_id="test",
+            type=ResourceType.FILE,
+            status=ExecutionStatus.SUCCESS
+        )
+
+        # Test serialization
+        data = resource_state.model_dump()
+        assert data["resource_id"] == "test"
+        assert data["type"] == "file"
+        assert data["status"] == "success"
+
+        # Test deserialization
+        new_resource_state = ResourceState.model_validate(data)
+        assert new_resource_state.resource_id == "test"
+        assert new_resource_state.type == ResourceType.FILE
+        assert new_resource_state.status == ExecutionStatus.SUCCESS
+
+    def test_state_update_timestamp(self):
+        """Test state timestamp update functionality."""
+        state = ClockworkState(version="1.0")
+        original_timestamp = state.updated_at
+
+        # Update timestamp
+        state.update_timestamp()
+
+        # Timestamp should be updated
+        assert state.updated_at > original_timestamp
 
 
 if __name__ == "__main__":

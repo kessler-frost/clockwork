@@ -3,9 +3,8 @@ Centralized Pydantic models for Clockwork task orchestration platform.
 
 This module contains the core data models used throughout the Clockwork pipeline:
 - IR (Intermediate Representation) from intake
-- ActionList from assembly  
-- ArtifactBundle from forge
 - State management models for task execution
+- Configuration and validation models
 """
 
 from typing import Dict, List, Any, Optional, Union, Literal
@@ -21,27 +20,14 @@ import json
 # =============================================================================
 
 class ActionType(str, Enum):
-    """Supported action types in Clockwork."""
+    """Supported action types in Clockwork (kept for backwards compatibility)."""
+    # Core types used in new architecture
+    CUSTOM = "custom"
+    # Legacy types - kept for compatibility but not actively used
     FETCH_REPO = "fetch_repo"
     BUILD_IMAGE = "build_image"
     ENSURE_SERVICE = "ensure_service"
     VERIFY_HTTP = "verify_http"
-    EXECUTE_SCRIPT = "execute_script"
-    COPY_FILES = "copy_files"
-    SET_ENVIRONMENT = "set_environment"
-    CREATE_NAMESPACE = "create_namespace"
-    APPLY_CONFIG = "apply_config"
-    WAIT_FOR_READY = "wait_for_ready"
-    CLEANUP = "cleanup"
-    # Additional types from forge module
-    FILE_OPERATION = "file_operation"
-    CREATE_DIRECTORY = "create_directory"
-    VERIFY_CHECK = "verify_check"
-    NETWORK_REQUEST = "network_request"
-    SYSTEM_COMMAND = "system_command"
-    DATA_PROCESSING = "data_processing"
-    API_CALL = "api_call"
-    CUSTOM = "custom"
 
 
 class ResourceType(str, Enum):
@@ -133,135 +119,10 @@ class IR(BaseModel):
         return v
 
 
-# =============================================================================
-# Assembly Models (ActionList)
-# =============================================================================
-
-class ActionStep(BaseModel):
-    """Individual step in the ActionList matching README data contract."""
-    name: str
-    type: ActionType = ActionType.CUSTOM
-    args: Dict[str, Any] = Field(default_factory=dict)
-    depends_on: List[str] = Field(default_factory=list)
+# Assembly models removed - no longer used in simplified pyinfra-based architecture
 
 
-class Action(BaseModel):
-    """Individual action in the execution plan."""
-    name: str
-    type: ActionType
-    args: Dict[str, Any] = Field(default_factory=dict)
-    depends_on: List[str] = Field(default_factory=list)
-    timeout: int = 300  # seconds
-    retries: int = 3
-    retry_delay: int = 5  # seconds
-    condition: Optional[str] = None  # condition for execution
-    
-    @validator('timeout')
-    def validate_timeout(cls, v):
-        """Validate timeout is positive."""
-        if v <= 0:
-            raise ValueError("Timeout must be positive")
-        return v
-
-    @validator('retries')
-    def validate_retries(cls, v):
-        """Validate retries is non-negative."""
-        if v < 0:
-            raise ValueError("Retries must be non-negative")
-        return v
-
-
-class ActionList(BaseModel):
-    """Ordered list of actions from assembly phase.
-    
-    Matches README data contract format:
-    {
-      "version": "1",
-      "steps": [
-        {"name": "fetch_repo", "args": {"url": "...", "ref": "main"}},
-        {"name": "build_image", "args": {"contextVar": "..."}}
-      ]
-    }
-    """
-    version: str = "1"
-    steps: List[ActionStep] = Field(default_factory=list)
-    metadata: Dict[str, Any] = Field(default_factory=dict)
-    created_at: datetime = Field(default_factory=datetime.now)
-
-    def to_json(self) -> str:
-        """Convert to JSON string for serialization."""
-        return json.dumps(self.model_dump(), indent=2, default=str)
-
-    @classmethod
-    def from_json(cls, json_str: str) -> 'ActionList':
-        """Create from JSON string."""
-        data = json.loads(json_str)
-        return cls.model_validate(data)
-
-
-# =============================================================================
-# Forge Models (ArtifactBundle)
-# =============================================================================
-
-class Artifact(BaseModel):
-    """Individual artifact (script/file) in the bundle."""
-    path: str
-    mode: str = "0644"  # file permissions
-    purpose: str  # which action this artifact serves
-    lang: str  # programming language
-    content: str
-    checksum: Optional[str] = None
-
-    @validator('path')
-    def validate_path(cls, v):
-        """Validate path is a string."""
-        if not isinstance(v, str):
-            raise ValueError(f"Path must be a string, got {type(v)}: {v}")
-        return v
-        
-    @validator('mode')
-    def validate_mode(cls, v):
-        """Validate file mode format."""
-        if not v.startswith('0') or len(v) != 4:
-            raise ValueError("Mode must be in format '0644'")
-        return v
-
-
-class ExecutionStep(BaseModel):
-    """Execution step for artifacts matching README data contract.
-    
-    Example:
-    {"purpose":"fetch_repo", "run":{"cmd":["bash","scripts/01_fetch_repo.sh"]}}
-    """
-    purpose: str
-    run: Dict[str, Any]  # command configuration, must contain "cmd" key
-
-
-class ArtifactBundle(BaseModel):
-    """Complete bundle of artifacts from compiler agent.
-    
-    Matches README data contract format:
-    {
-      "version": "1",
-      "artifacts": [{"path":"...","mode":"0755","purpose":"...","lang":"...","content":"..."}],
-      "steps": [{"purpose":"...","run":{"cmd":["..."]}}],
-      "vars": {"KEY":"value"}
-    }
-    """
-    version: str = "1"
-    artifacts: List[Artifact] = Field(default_factory=list)
-    steps: List[ExecutionStep] = Field(default_factory=list)
-    vars: Dict[str, Any] = Field(default_factory=dict)
-
-    def to_json(self) -> str:
-        """Convert to JSON string for serialization."""
-        return json.dumps(self.model_dump(), indent=2, default=str)
-
-    @classmethod
-    def from_json(cls, json_str: str) -> 'ArtifactBundle':
-        """Create from JSON string."""
-        data = json.loads(json_str)
-        return cls.model_validate(data)
+# Forge models removed - no longer used in simplified pyinfra-based architecture
 
 
 # =============================================================================
@@ -480,11 +341,7 @@ __all__ = [
     # IR Models
     'Variable', 'Provider', 'Resource', 'Module', 'Output', 'IR',
     
-    # Assembly Models  
-    'Action', 'ActionStep', 'ActionList',
-    
-    # Forge Models
-    'Artifact', 'ExecutionStep', 'ArtifactBundle',
+    # Note: Assembly and Forge models removed in simplified architecture
     
     # State Models
     'ResourceState', 'ExecutionRecord', 'ClockworkState',

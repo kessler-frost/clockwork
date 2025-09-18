@@ -21,7 +21,7 @@ This example demonstrates deploying a simple nginx web service using Clockwork.
 ### Quick Start
 ```bash
 # Deploy the service
-uv run clockwork apply --auto-approve
+uv run clockwork apply main.cw
 
 # Verify it's running
 docker ps | grep web
@@ -34,10 +34,10 @@ docker stop web && docker rm web
 ### Step by Step
 ```bash
 # 1. Preview what will be deployed
-uv run clockwork plan
+uv run clockwork plan main.cw
 
 # 2. Deploy the service
-uv run clockwork apply
+uv run clockwork apply main.cw
 
 # 3. Test the service
 curl http://localhost:3000

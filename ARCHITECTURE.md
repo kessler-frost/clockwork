@@ -1,215 +1,176 @@
 # Clockwork Architecture
 
-Clockwork is a **Factory for Intelligent Declarative Tasks** that converts
-HCL2 configuration files into executable artifacts using a three-phase
-pipeline with optional AI assistance.
+Clockwork is a **simplified declarative infrastructure tool** that converts
+`.cw` configuration files into PyInfra operations for reliable, deterministic
+infrastructure management.
 
 ## 🏗️ System Architecture
 
 ```text
-.cw File → [INTAKE] → IR → [ASSEMBLY] → ActionList → [FORGE] → Artifacts
+.cw File → [PARSE] → PyInfra Operations → [EXECUTE] → Infrastructure
 ```
 
 ### Core Pipeline
 
-1. **INTAKE**: Parse HCL2 `.cw` files into Intermediate Representation (IR)
-2. **ASSEMBLY**: Convert IR into ActionList with dependency resolution
-3. **FORGE**: Compile ActionList into executable artifacts with AI assistance
+Clockwork uses a streamlined two-phase pipeline:
+
+1. **PARSE**: Convert `.cw` configuration files into PyInfra operations
+2. **EXECUTE**: Run PyInfra operations on target infrastructure (local, SSH, Docker, K8s)
 
 ## 🔧 System Components
 
-The system consists of 4 main components:
+### 1. Parser
 
-### 1. Intake
+- Parses `.cw` (HCL-style) configuration files
+- Validates resource definitions and dependencies
+- Converts to PyInfra operations directly
+- Outputs ready-to-execute PyInfra operation list
 
-- Parses `.cw` (HCL-ish) → JSON → validates into **IR** (Pydantic)
-- Resolves references, fills defaults
-- Outputs `IR` + `EnvFacts`
+### 2. PyInfra Operations
 
-### 2. Assembly
+Clockwork provides specialized PyInfra operations for:
 
-- Deterministically computes an **ActionList** (ordered steps) from IR
-- Handles diffs vs observed state
-- Builds desired-state graph with dependencies & ordering
+- **Docker containers**: Service deployment and management
+- **Docker Compose**: Multi-container application stacks
+- **Kubernetes**: Pod and service deployments
+- **Health checks**: HTTP endpoint verification
+- **Terraform**: Infrastructure provisioning (experimental)
 
-### 3. Forge
+### 3. Executor
 
-- Calls the **Compiler Agent** once to produce an **ArtifactBundle**
-- Writes artifacts to `.clockwork/build/**`
-- Validates and executes steps with logging/timeouts
-- Persists `state.json`
+- Runs PyInfra operations on target infrastructure
+- Supports multiple connectors (local, SSH, Docker, K8s)
+- Provides dry-run capabilities for safe planning
+- Manages state and tracks deployment history
 
-### 4. Daemon (optional)
+### 4. State Manager
 
-- Watches services/drift
-- Proposes smallest safe change → applies patch
-- Re-runs the Intake → Assembly → Forge pipeline
+- Tracks deployment state and resource status
+- Enables drift detection and state reconciliation
+- Stores state in `.clockwork/state.json` by default
+- Supports state inspection and reset operations
 
 ## 📁 Project Structure
 
 ```text
 clockwork/
 ├── 📦 clockwork/                   # Core package
-│   ├── 📥 intake/                  # Phase 1: Configuration parsing
-│   │   ├── parser.py              # HCL2 parser for .cw files
-│   │   ├── resolver.py            # Dependency and variable resolution
-│   │   └── validator.py           # Configuration validation
+│   ├── 🔧 pyinfra_ops/            # PyInfra operations
+│   │   ├── __init__.py            # Package initialization
+│   │   ├── compose.py             # Docker Compose operations
+│   │   ├── health.py              # Health check operations
+│   │   ├── kubernetes.py          # Kubernetes operations
+│   │   └── terraform.py           # Terraform operations
 │   │
-│   ├── 🔧 assembly/               # Phase 2: Action planning
-│   │   ├── planner.py             # IR → ActionList conversion
-│   │   └── differ.py              # State difference analysis
-│   │
-│   ├── ⚡ forge/                  # Phase 3: Artifact generation
-│   │   ├── compiler.py            # ActionList → ArtifactBundle
-│   │   ├── agno_agent.py          # AI agent integration (LM Studio)
-│   │   ├── executor.py            # Artifact execution engine
-│   │   ├── runner.py              # Multi-environment runners
-│   │   └── state.py               # State management and persistence
-│   │
-│   ├── 🤖 daemon/                 # Background process management
-│   │   ├── loop.py                # Main daemon loop
-│   │   ├── patch_engine.py        # Auto-fix policy engine
-│   │   └── rate_limiter.py        # Resource management
-│   │
-│   ├── core.py                    # Main ClockworkCore orchestrator
+│   ├── __init__.py                # Package initialization
+│   ├── __main__.py                # CLI entry point
+│   ├── core.py                    # Main pipeline orchestrator
+│   ├── parser.py                  # Configuration parser
+│   ├── state_manager.py           # State management
 │   ├── models.py                  # Pydantic data models
 │   ├── errors.py                  # Exception hierarchy
+│   ├── formatters.py              # Output formatting
 │   └── cli.py                     # Command-line interface
 │
 ├── 📚 docs/                       # Documentation
-│   ├── guides/                    # User guides and tutorials
-│   │   └── AI_INTEGRATION.md      # AI setup and configuration
-│   ├── architecture/              # Technical architecture docs
-│   └── api/                       # API reference documentation
-│
-├── ⚙️ configs/                    # Configuration templates
-│   └── README.md                  # Configuration documentation
+│   ├── guides/                    # User guides
+│   └── README.md                  # Documentation index
 │
 ├── 🧪 tests/                      # Test suite
 │   ├── unit/                      # Fast, isolated unit tests
 │   ├── integration/               # Component integration tests
-│   └── e2e/                       # End-to-end workflow tests
+│   ├── conftest.py                # Shared test fixtures
+│   └── README.md                  # Test documentation
 │
 ├── 📋 examples/                   # Example configurations
-│   └── basic-web-service/         # Sample .cw configuration
+│   ├── hello-world/               # Simple example
+│   └── basic-web-service/         # Full-featured example
 │
-└── 🔧 run_tests.py                # Test runner utility
+├── run_tests.py                   # Test runner utility
+├── pyproject.toml                 # Project configuration
+└── README.md                      # Project overview
 ```
 
 ## 🔄 Data Flow
 
-### 1. Input Processing (INTAKE)
+### 1. Configuration Processing (PARSE)
 
 ```text
-main.cw + variables.cwvars → Parser → Raw Config → Resolver → Validated IR
+main.cw → Parser → Validated Config → PyInfra Operations
 ```
 
 **Key Components:**
 
-- **Parser**: HCL2 syntax parsing and variable substitution
-- **Resolver**: Dependency resolution and reference validation
-- **Validator**: Schema validation and security checks
+- **Parser**: HCL-style syntax parsing and variable substitution
+- **Core**: Dependency resolution and reference validation
+- **Models**: Schema validation and data modeling
+- **PyInfra Ops**: Converts config to PyInfra operations
 
-### 2. Action Planning (ASSEMBLY)
+### 2. Infrastructure Execution (EXECUTE)
 
 ```text
-IR → Planner → Dependency Graph → ActionList (execution-ready)
+PyInfra Operations → Target Selection → Connector → Infrastructure Changes
 ```
 
 **Key Components:**
 
-- **Planner**: Converts declarative IR into imperative actions
-- **Differ**: Compares desired vs current state for minimal changes
-
-### 3. Artifact Generation (FORGE)
-
-```text
-ActionList → Compiler → [AI Agent] → ArtifactBundle → Executor → Results
-```
-
-**Key Components:**
-
-- **Compiler**: Orchestrates artifact generation (with/without AI)
-- **AgnoAgent**: AI-powered script generation via LM Studio
-- **Executor**: Multi-environment artifact execution
-- **StateManager**: Persistent state tracking and drift detection
-
-## 🤖 AI Integration Architecture
-
-### AI Agent Pipeline
-
-```text
-ActionList → Prompt Generation → LM Studio API → JSON Response → ArtifactBundle
-```
-
-**Components:**
-
-- **LM Studio Client**: Direct HTTP integration with local LLM
-- **Structured Output**: Pydantic models ensure type safety
-- **Security Validation**: All AI-generated code undergoes security scanning
-- **Graceful Fallback**: System remains functional without AI
-
-### Supported Models
-
-- **Primary**: `qwen/qwen3-4b-2507` (non-thinking model for clean JSON output)
-- **Alternative**: `qwen/qwen3-4b-thinking-2507` (thinking model with filtering)
+- **Target Manager**: Selects appropriate infrastructure target
+- **Connector**: Handles connection to target (local, SSH, Docker, K8s)
+- **Operation Executor**: Runs PyInfra operations with proper ordering
+- **State Tracker**: Records changes and maintains deployment state
 
 ## 🛡️ Security Architecture
 
 ### Multi-Layer Security
 
-1. **Input Validation**: HCL2 syntax and schema validation
-2. **Runtime Restrictions**: Allowlisted executables and restricted paths
-3. **AI Code Scanning**: Pattern detection for dangerous operations
-4. **Sandbox Execution**: Isolated execution environments
-5. **State Integrity**: Cryptographic state validation
+1. **Input Validation**: HCL syntax and schema validation
+2. **Operation Sandboxing**: PyInfra operations run in controlled environments
+3. **Path Restrictions**: File operations limited to allowed directories
+4. **State Integrity**: Cryptographic validation of state files
+5. **Dry-run Safety**: All changes can be previewed before execution
 
 ### Security Zones
 
-- **Development**: Relaxed validation, AI enabled, broad permissions
-- **Production**: Strict validation, AI disabled, minimal permissions
+- **Development**: Relaxed validation, verbose logging, local-only by default
+- **Production**: Strict validation, minimal permissions, comprehensive auditing
 
 ## 📊 Performance Characteristics
 
 ### Pipeline Performance
 
-- **INTAKE**: ~50ms (HCL2 parsing + validation)
-- **ASSEMBLY**: ~100ms (dependency resolution + planning)
-- **FORGE**: 1-30s (AI generation varies by complexity)
+- **PARSE**: ~50ms (configuration parsing + validation)
+- **EXECUTE**: Variable (depends on infrastructure complexity and target)
 
 ### Scalability
 
-- **Parallel Execution**: Multi-threaded artifact execution
+- **Parallel Operations**: PyInfra handles parallel execution internally
 - **Resource Limits**: Configurable memory and CPU constraints
-- **Caching**: Aggressive caching of parsed configs and resolved dependencies
+- **Caching**: State caching reduces redundant operations
 
 ## 🔌 Extension Points
 
-### Plugin Architecture
+### Custom Operations
 
-- **Custom Runners**: Implement `Runner` interface for new execution environments
-- **AI Providers**: Extend `AgnoAgent` for different LLM providers
-- **Validators**: Add custom validation rules via `Validator` interface
+- **PyInfra Operations**: Implement custom operations following PyInfra patterns
+- **Connectors**: Add support for new infrastructure targets
+- **Validators**: Extend validation rules for custom resource types
 - **State Backends**: Pluggable state storage (filesystem, database, cloud)
 
 ### Configuration
 
-All components support:
+All components support configuration via:
 
 - **Environment variables**: Configure all aspects via environment variables
-- **Runtime overrides**: CLI arguments override environment variables
-- **Hot reloading**: Configuration changes without restart
+- **Command-line arguments**: Override environment variables at runtime
+- **Configuration files**: Use `.env` files for persistent settings
 
 Key environment variables:
 
 - `CLOCKWORK_PROJECT_NAME`: Project identifier
 - `CLOCKWORK_LOG_LEVEL`: Logging verbosity (DEBUG, INFO, WARNING, ERROR)
-- `CLOCKWORK_LM_STUDIO_URL`: LM Studio server endpoint
-- `CLOCKWORK_LM_STUDIO_MODEL`: AI model identifier
-- `CLOCKWORK_USE_AGNO`: Enable/disable AI integration
+- `CLOCKWORK_TARGET`: Default deployment target
 - `CLOCKWORK_PARALLEL_LIMIT`: Maximum parallel operations
 - `CLOCKWORK_DEFAULT_TIMEOUT`: Default timeout for operations
-- `CLOCKWORK_BUILD_DIR`: Artifact output directory
 - `CLOCKWORK_STATE_FILE`: State persistence file path
 
 ## 🚀 Deployment Patterns
@@ -220,7 +181,7 @@ Key environment variables:
 # Set environment variables or use .env file
 export CLOCKWORK_PROJECT_NAME=myproject
 export CLOCKWORK_LOG_LEVEL=DEBUG
-clockwork compile examples/basic-web-service/main.cw
+uv run clockwork apply examples/basic-web-service/main.cw
 ```
 
 ### Production Deployment
@@ -229,15 +190,17 @@ clockwork compile examples/basic-web-service/main.cw
 # Production environment variables
 export CLOCKWORK_PROJECT_NAME=production-app
 export CLOCKWORK_LOG_LEVEL=INFO
-export CLOCKWORK_USE_AGNO=false
+export CLOCKWORK_TARGET=production
 export CLOCKWORK_STATE_FILE=/var/lib/clockwork/state.json
-clockwork daemon
+uv run clockwork apply --target production configs/production.cw
 ```
 
 ### CI/CD Integration
 
 ```bash
-clockwork validate configs/ && clockwork plan --dry-run && clockwork apply
+# Validate, plan, then apply
+uv run clockwork plan configs/app.cw
+uv run clockwork apply configs/app.cw
 ```
 
 ## 🔄 Detailed Architecture Flow
@@ -250,253 +213,137 @@ clockwork validate configs/ && clockwork plan --dry-run && clockwork apply
                                   │  providers, etc.  │
                                   └─────────┬─────────┘
                                             │
-                                            │ 1) change detected / manual run
+                                            │ 1) file change / manual run
                                             ▼
-┌──────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                        Intake                                                │
-│  ┌─────────────────────────┐   ┌──────────────────────────┐   ┌───────────────────────────┐ │
-│  │ Loader                  │   │ Linter & Schema Check    │   │ Module/Provider Resolver │ │
-│  │ • reads .cw/.cwvars     │   │ • HCL schema + types     │   │ • resolves imports        │ │
-│  │ • merges env/overrides  │   │ • required fields        │   │ • version pinning         │ │
-│  └────────────┬────────────┘   └───────────┬──────────────┘   └──────────────┬────────────┘ │
-│               │                            │                               (downloads/caches)│
-│               └───────────────┬────────────┴───────────────────────────────────┬─────────────┘
-│                               │                                                │
-│                               ▼                                                ▼
-│                         normalized .cw                                   provider metadata     │
-└───────────────┬───────────────────────────────────────────────────────────────────────────────┘
-                │ 2) parse/normalize
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                                    Parse Phase                               │
+│  ┌─────────────────────────┐   ┌──────────────────────────┐                 │
+│  │ Configuration Loader    │   │ PyInfra Operation Gen    │                 │
+│  │ • reads .cw/.cwvars     │   │ • converts to operations │                 │
+│  │ • merges env/overrides  │   │ • validates dependencies │                 │
+│  │ • resolves variables    │   │ • prepares execution     │                 │
+│  └────────────┬────────────┘   └───────────┬──────────────┘                 │
+│               │                            │                                │
+│               └───────────────┬────────────┴───────────────────────────────┘
+│                               │
+│                               ▼
+│                         PyInfra Operations
+└───────────────┬───────────────────────────────────────────────────────────────
+                │ 2) execute on target
                 ▼
-┌──────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                      Assembly                                                │
-│  ┌──────────────────────────┐   ┌──────────────────────────┐   ┌───────────────────────────┐ │
-│  │ Parser (HCL → AST)       │   │ Validator                │   │ Model Builder             │ │
-│  │ • tokens → AST           │   │ • cross-resource rules   │   │ • desired-state graph     │ │
-│  │                          │   │ • references/expressions │   │ • deps & ordering         │ │
-│  └────────────┬─────────────┘   └────────────┬─────────────┘   └──────────────┬────────────┘ │
-│               │                               │                               │               │
-│               ▼                               ▼                               ▼               │
-│             AST                         validated AST                  Desired State Model     │
-└───────────────┬───────────────────────────────────────────────────────────────────────────────┘
-                │ 3) plan/execute
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                                Execute Phase                                │
+│  ┌──────────────────────────┐   ┌──────────────────────────┐               │
+│  │ Target Connection        │   │ Operation Execution      │               │
+│  │ • local/SSH/Docker/K8s   │   │ • runs PyInfra ops       │               │
+│  │ • establishes connection │   │ • handles dependencies   │               │
+│  │ • validates permissions  │   │ • tracks state changes   │               │
+│  └────────────┬─────────────┘   └────────────┬─────────────┘               │
+│               │                               │                             │
+│               ▼                               ▼                             │
+│         Connected Target                State Updates                       │
+└───────────────┬───────────────────────────────────────────────────────────────
+                │ 3) track results
                 ▼
-┌──────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                          Forge                                               │
-│                (Compiler + Executor fused; no separate IR file or handoff boundary)          │
-│  ┌─────────────────────────┐   ┌─────────────────────────┐   ┌─────────────────────────────┐ │
-│  │ Diff Engine             │   │ Planner                 │   │ Runners / Adapters          │ │
-│  │ • Desired vs Observed   │   │ • action graph          │   │ • Docker / Podman           │ │
-│  │   (from State)          │   │ • ordering + retries    │   │ • k8s (kind)                │ │
-│  │ • computes drift (Δ)    │   │ • idempotency guards    │   │ • SSH / local exec          │ │
-│  └────────────┬────────────┘   └────────────┬────────────┘   └──────────────┬──────────────┘ │
-│               │                             │                              logs/metrics       │
-│               ▼                             ▼                                  │              │
-│         Change Set (Δ)             Executable Action Plan  ───────────────▶ Telemetry Sink    │
-│                                                                                               │
-│  ┌─────────────────────────┐                                                                │ │
-│  │ State/Artifact Store    │  (SQLite/JSON; caches, lockfiles)                              │ │
-│  │ • resource instances    │  • provider locks • action results • module build cache        │ │
-│  └─────────────────────────┘                                                                │ │
-└───────────────┬──────────────────────────────────────────────────────────────────────────────┘
-                │ 4) run loop / reconcile
-                ▼
-┌──────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                         Daemon                                               │
-│  • Watches repo/files/timers                                                                   │
-│  • Triggers full cycle on change or drift                                                      │
-│  • Patches .cw when needed (recording discovered values)                                       │
-│                                                                                                │
-│  Cycle it drives (each tick):                                                                  │
-│    core.load  →  core.planrun  →  compile  →  execute                                          │
-│        │               │                │          │                                           │
-│        └───────────────┴────────────────┴──────────┴── updates State/Artifacts + Telemetry ─▶ │
-│                                                                                                │
-└───────────────┬────────────────────────────────────────────────────────────────────────────────┘
-                │ 5) feedback
-                │   (if Daemon wrote patches / drift found)
-                └───────────────────────────────► back to **Intake** (start over with new .cw)
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                                State Management                              │
+│  • Records operation results and resource states                            │
+│  • Enables drift detection and state inspection                             │
+│  • Provides rollback and troubleshooting capabilities                       │
+│                                                                              │
+│  State file: .clockwork/state.json                                          │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Simple Pipeline (Without Daemon)
+### Simple Pipeline Flow
 
 ```text
                 ┌─────────────── .cw (HCL) ────────────────┐
                 │                                           │
                 ▼                                           │
            ┌───────────┐        ┌───────────┐               │
-           │  Intake   │  IR +  │ Assembly  │─── ActionList ─┘
-           │ parse→IR  │  facts │ plan/diff │
+           │   Parse   │ ops +  │  Execute  │─── Results ───┘
+           │ .cw → ops │ state  │ PyInfra   │
            └─────┬─────┘        └─────┬─────┘
                  │                    │
                  ▼                    ▼
                            ┌──────────────────┐
-                           │      Forge       │
-                           │ compile + execute│
-                           │ (validate bundle │
-                           │  → write files   │
-                           │  → run steps)    │
+                           │   Infrastructure │
+                           │   (local/remote) │
+                           │                  │
                            └──────┬───────────┘
                                   │
-                         logs + manifest + state
+                         logs + state updates
                                   │
                                   ▼
-                         .clockwork/{build,logs,state.json}
+                         .clockwork/state.json
 ```
 
 ## 📋 Data Contracts
 
-### ActionList (Assembly → Forge)
+### PyInfra Operations
+
+The parser generates standard PyInfra operations that can be executed directly:
+
+```python
+# Example: Docker container operation
+docker.containers(
+    name="myapp",
+    image="nginx:1.25-alpine",
+    ports=["3000:80"],
+    environment={"APP_ENV": "production"},
+    restart_policy="unless-stopped",
+    state.cwd="/app"
+)
+
+# Example: Health check operation
+http.request(
+    url="http://localhost:3000",
+    method="GET",
+    expected_status=200,
+    timeout=30
+)
+```
+
+### State File Format
 
 ```json
 {
-  "version": "1",
-  "steps": [
+  "version": "1.0",
+  "project": "myproject",
+  "last_applied": "2024-01-15T10:30:00Z",
+  "resources": {
+    "docker_container_myapp": {
+      "type": "docker_container",
+      "status": "running",
+      "last_changed": "2024-01-15T10:30:00Z",
+      "checksum": "abc123..."
+    }
+  },
+  "operations": [
     {
-      "name": "fetch_repo",
-      "args": {
-        "url": "https://github.com/user/myapp",
-        "ref": "main"
-      }
-    },
-    {
-      "name": "build_image",
-      "args": {
-        "contextVar": "APP_WORKDIR",
-        "tags": ["myapp:latest"]
-      }
-    },
-    {
-      "name": "ensure_service",
-      "args": {
-        "name": "myapp",
-        "imageVar": "IMAGE_REF",
-        "ports": [{"external": 8080, "internal": 8080}],
-        "env": {"APP_ENV": "prod"},
-        "logging": {
-          "driver": "json-file",
-          "opts": {"max-size": "10m", "max-file": "3"}
-        }
-      }
-    },
-    {
-      "name": "verify_http",
-      "args": {
-        "url": "http://localhost:8080",
-        "expect_status": 200
-      }
+      "name": "ensure_container",
+      "status": "completed",
+      "duration": 2.5,
+      "changes": ["created container myapp"]
     }
   ]
 }
 ```
 
-### ArtifactBundle (Forge ← Compiler Agent)
-
-```json
-{
-  "version": "1",
-  "artifacts": [
-    {
-      "path": "scripts/01_fetch_repo.sh",
-      "mode": "0755",
-      "purpose": "fetch_repo",
-      "lang": "bash",
-      "content": "..."
-    },
-    {
-      "path": "scripts/02_build_image.py",
-      "mode": "0755",
-      "purpose": "build_image",
-      "lang": "python",
-      "content": "..."
-    },
-    {
-      "path": "scripts/03_ensure_service.ts",
-      "mode": "0644",
-      "purpose": "ensure_service",
-      "lang": "deno",
-      "content": "..."
-    },
-    {
-      "path": "scripts/90_verify_http.go",
-      "mode": "0755",
-      "purpose": "verify_http",
-      "lang": "go",
-      "content": "..."
-    }
-  ],
-  "steps": [
-    {
-      "purpose": "fetch_repo",
-      "run": {"cmd": ["bash", "scripts/01_fetch_repo.sh"]}
-    },
-    {
-      "purpose": "build_image",
-      "run": {"cmd": ["python3", "scripts/02_build_image.py"]}
-    },
-    {
-      "purpose": "ensure_service",
-      "run": {"cmd": ["deno", "run", "--allow-all", "scripts/03_ensure_service.ts"]}
-    },
-    {
-      "purpose": "verify_http",
-      "run": {"cmd": ["./scripts/90_verify_http.go"]}
-    }
-  ],
-  "vars": {
-    "REPO_URL": "https://github.com/user/myapp",
-    "REPO_REF": "main",
-    "TAG": "myapp:latest",
-    "NAME": "myapp",
-    "INTERNAL_PORT": 8080,
-    "EXTERNAL_PORT": 8080,
-    "URL": "http://localhost:8080"
-  }
-}
-```
-
-### Forge Validations
-
-- Paths confined to `.clockwork/build/**`
-- Allowlisted runtimes only (`bash`, `python3`, `deno`, `go build && run`, etc.)
-- Every `steps[].purpose` matches an ActionList step
-- Executable bits/shebang sanity; no writes outside allowed roots
-
-## 🤖 Daemon Intelligence & Auto-Fix Policy
-
-**Goal:** Keep long-running services healthy with the smallest safe change.
-
-### Decision Rule
-
-1. **Artifact-only patch** (preferred)
-2. **.cw patch** (if desired state must change)
-3. **Runbook** (manual step if risky)
-
-### Default Policy
-
-- **Auto-apply**: artifact patches to retries/healthchecks/logging
-- **Require approval**: `.cw` changes to ports, mounts, privileges
-- **Never auto**: destructive ops or secrets rotation → runbook
-- **Budgets**: ≤2 auto-fixes/hour/task; cooldown after each fix
-
-## 🏗️ Detailed Project Structure
-
-```text
-clockwork/
-  intake/{loader,linter,resolver}.py
-  assembly/{parser,validator,model}.py
-  forge/{diff,planner,runner,state}.py
-  daemon/loop.py
-  core.py, config.py, cli.py
-```
-
 ## 🎯 Design Rationale
 
-This architecture keeps Clockwork small and intuitive. Intake, Assembly, and
-Forge form a simple one-shot pipeline. Daemon is optional but powerful for
-long-running services, patching `.cw` as needed. Everything remains
-deterministic and user-editable, with clear separation between agent proposals
-and core validation/execution.
+This architecture prioritizes simplicity and reliability over complexity. The two-phase
+pipeline (Parse → Execute) leverages PyInfra's mature ecosystem while providing a
+declarative interface that's easy to understand and maintain.
 
-This architecture provides a robust, secure, and extensible foundation for
-intelligent task automation with clear separation of concerns and comprehensive
-error handling.
+Key benefits:
+
+- **Familiar PyInfra patterns**: Leverages existing PyInfra knowledge and tooling
+- **Simple mental model**: Two phases are easier to understand than complex multi-stage pipelines
+- **Reliable execution**: PyInfra's battle-tested execution engine handles edge cases
+- **Extensible**: Easy to add new operations and connectors following PyInfra patterns
+- **Debuggable**: Clear separation between parsing and execution phases
+
+This architecture provides a solid foundation for declarative infrastructure management
+with the reliability of PyInfra and the simplicity of a focused tool.

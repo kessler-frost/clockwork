@@ -5,10 +5,10 @@ Clockwork Test Runner
 This script provides easy access to run different types of tests:
 - Unit tests (fast, isolated)
 - Integration tests (component interactions)
-- Manual E2E test (comprehensive verification)
+- Demo test (verify core functionality)
 
 Usage:
-    python run_tests.py [unit|integration|manual|all]
+    python run_tests.py [unit|integration|demo|all]
 """
 
 import sys
@@ -51,42 +51,22 @@ def run_integration_tests():
     )
 
 
-def run_e2e_tests():
-    """Run end-to-end tests."""
-    # Set PYTHONPATH to include current directory for imports
-    import os
-    env = os.environ.copy()
-    env["PYTHONPATH"] = str(Path.cwd())
-    
-    return run_command(
-        ["uv", "run", "pytest", "tests/e2e/", "-v"],
-        "Running end-to-end tests"
-    )
-
-
-def run_manual_e2e_test():
-    """Run manual end-to-end test directly."""
-    # Set PYTHONPATH to include current directory for imports
-    import os
-    env = os.environ.copy()
-    env["PYTHONPATH"] = str(Path.cwd())
-    
-    print(f"\n🚀 Running manual end-to-end test")
-    print(f"Command: PYTHONPATH={Path.cwd()} uv run python tests/e2e/test_manual_e2e.py")
+def run_demo_test():
+    """Run demo command to verify core functionality."""
+    print(f"\n🚀 Running demo test to verify core functionality")
+    print(f"Command: uv run clockwork demo --text-only")
     print("-" * 60)
-    
+
     try:
-        import subprocess
         result = subprocess.run(
-            ["uv", "run", "python", "tests/e2e/test_manual_e2e.py"],
-            env=env,
-            check=True, 
+            ["uv", "run", "clockwork", "demo", "--text-only"],
+            check=True,
             capture_output=False
         )
-        print(f"✅ Manual end-to-end test completed successfully")
+        print(f"✅ Demo test completed successfully")
         return True
     except subprocess.CalledProcessError as e:
-        print(f"❌ Manual end-to-end test failed with exit code {e.returncode}")
+        print(f"❌ Demo test failed with exit code {e.returncode}")
         return False
     except FileNotFoundError:
         print(f"❌ Command not found: uv")
@@ -97,27 +77,27 @@ def run_all_tests():
     """Run all tests."""
     print("🧪 Running complete Clockwork test suite")
     print("=" * 60)
-    
+
     success = True
-    
+
     # Run unit tests
     if not run_unit_tests():
         success = False
-    
+
     # Run integration tests
     if not run_integration_tests():
         success = False
-    
-    # Run E2E tests
-    if not run_e2e_tests():
+
+    # Run demo test
+    if not run_demo_test():
         success = False
-    
+
     print("\n" + "=" * 60)
     if success:
         print("🎉 All tests completed successfully!")
     else:
         print("💥 Some tests failed. Check the output above.")
-    
+
     return success
 
 
@@ -129,8 +109,8 @@ def main():
         epilog="""
 Examples:
     python run_tests.py unit        # Run only unit tests
-    python run_tests.py integration # Run only integration tests  
-    python run_tests.py manual      # Run manual E2E test
+    python run_tests.py integration # Run only integration tests
+    python run_tests.py demo        # Run demo command test
     python run_tests.py all         # Run all tests (default)
         """
     )
@@ -139,7 +119,7 @@ Examples:
         "test_type",
         nargs="?",
         default="all",
-        choices=["unit", "integration", "e2e", "manual", "all"],
+        choices=["unit", "integration", "demo", "all"],
         help="Type of tests to run (default: all)"
     )
     
@@ -157,10 +137,8 @@ Examples:
         success = run_unit_tests()
     elif args.test_type == "integration":
         success = run_integration_tests()
-    elif args.test_type == "e2e":
-        success = run_e2e_tests()
-    elif args.test_type == "manual":
-        success = run_manual_e2e_test()
+    elif args.test_type == "demo":
+        success = run_demo_test()
     elif args.test_type == "all":
         success = run_all_tests()
     

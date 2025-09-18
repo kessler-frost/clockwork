@@ -18,7 +18,8 @@ The simplest possible Clockwork deployment - perfect for getting started.
 **Usage**:
 ```bash
 cd examples/hello-world
-uv run clockwork apply --auto-approve
+uv run clockwork plan main.cw
+uv run clockwork apply main.cw
 curl http://localhost:8080
 ```
 
@@ -38,8 +39,8 @@ Complete web service deployment with health checks and comprehensive configurati
 **Usage**:
 ```bash
 cd examples/basic-web-service
-uv run clockwork plan      # Preview deployment
-uv run clockwork apply     # Deploy service
+uv run clockwork plan main.cw      # Preview deployment
+uv run clockwork apply main.cw     # Deploy service
 ```
 
 **What it deploys**:

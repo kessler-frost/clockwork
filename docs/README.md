@@ -16,9 +16,9 @@ Technical architecture and design documents:
 
 Step-by-step guides and tutorials:
 
-- [AI Integration Guide](./guides/AI_INTEGRATION.md) - Complete LM Studio + Agno setup
+- [AI Integration Guide](./guides/AI_INTEGRATION.md) - **DEPRECATED** (PyInfra-based architecture)
 - Getting started tutorials
-- Advanced configuration guides
+- Configuration guides
 
 ### 🔧 [API Reference](./api/)
 
@@ -31,9 +31,9 @@ Detailed API documentation:
 ## 🚀 Quick Links
 
 - **Getting Started**: See the main [README.md](../README.md)
-- **AI Integration**: [AI Integration Guide](./guides/AI_INTEGRATION.md)
-- **Configuration**: [Configuration Reference](../configs/README.md)
+- **Architecture**: [Technical Architecture](../ARCHITECTURE.md)
 - **Examples**: [Basic Web Service](../examples/basic-web-service/)
+- **Testing**: [Test Suite](../tests/README.md)
 
 ## 📖 Documentation Standards
 

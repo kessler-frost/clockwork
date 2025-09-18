@@ -1,40 +1,54 @@
 """
-Clockwork CLI - Command Line Interface for intelligent task execution.
+Simplified Clockwork CLI with PyInfra Integration
 
-Provides the main entry point and command definitions for the Clockwork tool.
-Commands: plan, build, apply, verify
+Provides core deployment functionality:
+- clockwork apply <file.cw> - Parse .cw and execute with pyinfra
+- clockwork plan <file.cw> - Parse .cw and run pyinfra dry-run
+- clockwork watch <file.cw> - Watch file changes and auto-apply
+- clockwork facts <target> - Show pyinfra facts for target
 """
 
 import typer
 import shutil
 import json
+import os
+import sys
+import time
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax
 from rich import print as rich_print
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
+from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.table import Table
+from rich.live import Live
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+
+# PyInfra imports
+from pyinfra import host
+from pyinfra.api import Config, State
+from pyinfra.api.connect import connect_all
+from pyinfra.api.operations import run_ops
+from pyinfra.api.facts import get_facts
+from pyinfra.api.inventory import Inventory
+from pyinfra.api.host import Host
+from pyinfra.connectors.local import LocalConnector
+from pyinfra.connectors.ssh import SSHConnector
+from pyinfra.connectors.docker import DockerConnector
 
 from .core import ClockworkCore
-from .models import ClockworkConfig, ActionType
+from .models import IR, ResourceType
 from .__init__ import __version__
-from .daemon.cli import daemon_app
-from .formatters import TerraformStyleFormatter
-from datetime import datetime
-
 
 # Initialize Rich console for beautiful output
 console = Console()
 app = typer.Typer(
     name="clockwork",
-    help="Factory for intelligent declarative tasks with Terraform-style output",
+    help="Simplified Clockwork - Declarative infrastructure with PyInfra",
     add_completion=False,
 )
-
-
-# Add daemon subcommand
-app.add_typer(daemon_app, name="daemon", help="Daemon commands for continuous reconciliation")
 
 
 def version_callback(value: bool):
@@ -54,19 +68,14 @@ def main(
     debug: bool = typer.Option(False, "--debug", help="Enable debug logging"),
 ):
     """
-    Clockwork - Factory for intelligent declarative tasks.
-    
-    Clockwork builds intelligent declarative tasks: Intake → Assembly → Forge
-    - Intake: Parse .cw task definitions into Intermediate Representation (IR)
-    - Assembly: Plan actions from IR (ActionList) with drift detection  
-    - Forge: Compile and execute task artifacts
-    
-    Configuration is handled through environment variables or .env files.
-    Output displayed in Terraform-style format by default. Use --json for programmatic usage.
+    Clockwork - Simplified declarative infrastructure with PyInfra integration.
+
+    Parse .cw files and execute them using PyInfra for robust infrastructure management.
+    Supports multiple targets: @local, @docker, @ssh for flexible deployment.
     """
     # Setup logging based on verbosity
     import logging
-    
+
     if debug:
         logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         console.print("[dim]Debug logging enabled[/dim]")
@@ -75,1540 +84,712 @@ def main(
         console.print("[dim]Verbose mode enabled[/dim]")
     else:
         logging.basicConfig(level=logging.WARNING, format='%(levelname)s - %(message)s')
-    
+
     # Store global settings for commands to access
-    import os
     os.environ['CLOCKWORK_VERBOSE'] = str(verbose)
     os.environ['CLOCKWORK_DEBUG'] = str(debug)
 
 
 @app.command()
-def plan(
-    path: Path = typer.Argument(".", help="Path to .cw configuration files"),
-    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Save plan to file"),
-    var: List[str] = typer.Option([], "--var", help="Set variables (KEY=VALUE)"),
-    dry_run: bool = typer.Option(True, "--dry-run/--no-dry-run", help="Show plan without applying"),
-    json_output: bool = typer.Option(False, "--json", help="Output plan as JSON instead of Terraform-style"),
-    detailed: bool = typer.Option(False, "--detailed", "-d", help="Show detailed plan with validation info"),
-):
-    """
-    Generate and display execution plan from .cw files in Terraform-style format.
-    
-    Runs Intake → Assembly pipeline with enhanced parser and validator to show
-    what actions would be executed. Uses Terraform-style output by default.
-    """
-    if not json_output:
-        console.print("[bold blue]🔍 Planning...[/bold blue]")
-    
-    try:
-        # Initialize core
-        core = ClockworkCore()
-        
-        # Parse variables with enhanced support
-        variables = parse_variables(var, load_cwvars=True, config_path=path)
-        
-        # Run intake with validation details
-        if detailed and not json_output:
-            console.print("[dim]Running intake phase with enhanced validation...[/dim]")
-        
-        ir = core.intake(path, variables)
-        
-        # Run assembly with drift analysis if available
-        if detailed and not json_output:
-            console.print("[dim]Running assembly phase with dependency analysis...[/dim]")
-        
-        action_list = core.assembly(ir)
-        
-        # Prepare plan data
-        plan_data = {
-            "timestamp": datetime.now().isoformat(),
-            "config_path": str(path),
-            "variables_applied": variables,
-            "total_actions": len(action_list.steps),
-            "actions": [
-                {
-                    "name": action.name,
-                    "type": getattr(action, 'type', ActionType.CUSTOM).value if hasattr(getattr(action, 'type', None), 'value') else str(getattr(action, 'type', 'unknown')),
-                    "args": action.args,
-                    "depends_on": getattr(action, 'depends_on', [])
-                }
-                for action in action_list.steps
-            ]
-        }
-        
-        # Add validation information if detailed
-        if detailed:
-            try:
-                # Re-run validation to get detailed results
-                validation_result = core.validator.validate_ir(ir)
-                
-                # Use current validation result format
-                is_valid = validation_result.valid
-                errors = validation_result.errors if hasattr(validation_result, 'errors') else []
-                warnings = validation_result.warnings if hasattr(validation_result, 'warnings') else []
-                
-                plan_data["validation"] = {
-                    "valid": is_valid,
-                    "warnings": [w.message if hasattr(w, 'message') else str(w) for w in warnings],
-                    "errors": [e.message if hasattr(e, 'message') else str(e) for e in errors]
-                }
-            except Exception as e:
-                plan_data["validation"] = {"error": str(e)}
-        
-        # Output plan
-        if json_output:
-            console.print(json.dumps(plan_data, indent=2))
-        else:
-            display_enhanced_plan(ir, action_list, plan_data, detailed)
-        
-        # Save to file if requested
-        if output:
-            output.write_text(json.dumps(plan_data, indent=2))
-            if not json_output:
-                console.print(f"[green]Plan saved to {output}[/green]")
-        
-        if not json_output:
-            console.print("[green]✅ Planning completed successfully[/green]")
-        
-    except Exception as e:
-        error_msg = f"Planning failed: {e}"
-        if json_output:
-            console.print(json.dumps({"error": error_msg}, indent=2))
-        else:
-            console.print(f"[red]❌ {error_msg}[/red]")
-        raise typer.Exit(1)
-
-
-@app.command()
-def build(
-    path: Path = typer.Argument(".", help="Path to .cw configuration files"),
-    output_dir: Optional[Path] = typer.Option(None, "--output", "-o", help="Build output directory"),
-    var: List[str] = typer.Option([], "--var", help="Set variables (KEY=VALUE)"),
-    force: bool = typer.Option(False, "--force", help="Force rebuild even if up-to-date"),
-    json_output: bool = typer.Option(False, "--json", help="Output build results as JSON instead of Terraform-style"),
-    runner_type: str = typer.Option("local", "--runner", help="Runner type (local, docker, podman, ssh, kubernetes)"),
-):
-    """
-    Compile .cw configuration into executable artifacts with Terraform-style output.
-    
-    Runs Intake → Assembly → Forge (compile only) with enhanced compiler.
-    Shows build progress in Terraform-style format by default.
-    """
-    if not json_output:
-        console.print("[bold blue]🔨 Building...[/bold blue]")
-    
-    try:
-        # Initialize core
-        core = ClockworkCore()
-        
-        # Parse variables with enhanced support
-        variables = parse_variables(var, load_cwvars=True, config_path=path)
-        
-        # Run full pipeline except execution
-        if not json_output:
-            console.print("[dim]Running intake and assembly phases...[/dim]")
-        
-        ir = core.intake(path, variables)
-        action_list = core.assembly(ir)
-        
-        if not json_output:
-            console.print("[dim]Compiling artifacts with enhanced compiler...[/dim]")
-        
-        # Enhanced compilation with runner configuration
-        artifact_bundle = core.forge_compile(action_list)
-        
-        # Configure runner type if specified
-        if runner_type != "local":
-            # Update artifact bundle with runner-specific configurations
-            for artifact in artifact_bundle.artifacts:
-                if not hasattr(artifact, 'runner_config'):
-                    artifact.runner_config = {}
-                artifact.runner_config['runner_type'] = runner_type
-        
-        # Save artifacts
-        build_dir = output_dir or Path(".clockwork/build")
-        core.save_artifacts(artifact_bundle, build_dir)
-        
-        # Prepare build results
-        build_data = {
-            "timestamp": datetime.now().isoformat(),
-            "config_path": str(path),
-            "build_dir": str(build_dir),
-            "variables_applied": variables,
-            "runner_type": runner_type,
-            "artifacts": [
-                {
-                    "path": artifact.path,
-                    "language": artifact.lang,
-                    "purpose": artifact.purpose,
-                    "mode": artifact.mode,
-                    "size_bytes": len(artifact.content)
-                }
-                for artifact in artifact_bundle.artifacts
-            ],
-            "total_artifacts": len(artifact_bundle.artifacts)
-        }
-        
-        # Output results
-        if json_output:
-            console.print(json.dumps(build_data, indent=2))
-        else:
-            display_enhanced_build_results(action_list, artifact_bundle, build_dir, build_data)
-        
-        if not json_output:
-            console.print("[green]✅ Build completed successfully[/green]")
-        
-    except Exception as e:
-        error_msg = f"Build failed: {e}"
-        if json_output:
-            console.print(json.dumps({"error": error_msg}, indent=2))
-        else:
-            console.print(f"[red]❌ {error_msg}[/red]")
-        raise typer.Exit(1)
-
-
-@app.command()
 def apply(
-    path: Path = typer.Argument(".", help="Path to .cw configuration files"),
+    config_file: Path = typer.Argument(..., help="Path to .cw configuration file"),
+    target: str = typer.Option("@local", "--target", "-t", help="Target: @local, @docker:<container>, @ssh:<host>"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be applied without executing"),
+    parallel: int = typer.Option(1, "--parallel", "-p", help="Number of parallel operations"),
+    verbose: bool = typer.Option(False, "--verbose", help="Enable verbose PyInfra output"),
     var: List[str] = typer.Option([], "--var", help="Set variables (KEY=VALUE)"),
-    force: bool = typer.Option(False, "--force", help="Skip confirmation prompts"),
-    timeout_per_step: int = typer.Option(300, help="Timeout per step in seconds"),
-    auto_approve: bool = typer.Option(False, "--auto-approve", help="Skip approval prompt"),
-    json_output: bool = typer.Option(False, "--json", help="Output results as JSON instead of Terraform-style"),
-    runner_type: str = typer.Option("local", "--runner", help="Runner type (local, docker, podman, ssh, kubernetes)"),
-    parallel: bool = typer.Option(False, "--parallel", help="Enable parallel execution where possible"),
 ):
     """
-    Apply .cw configuration by building and executing artifacts with Terraform-style output.
-    
-    Runs the complete pipeline: Intake → Assembly → Forge (compile + execute).
-    Shows execution progress in Terraform-style format by default.
-    """
-    if not json_output:
-        console.print("[bold blue]🚀 Applying...[/bold blue]")
-    
-    try:
-        # Initialize core
-        core = ClockworkCore()
-        
-        # Parse variables with enhanced support
-        variables = parse_variables(var, load_cwvars=True, config_path=path)
-        
-        # Run planning first
-        if not json_output:
-            console.print("[dim]Running intake and assembly phases...[/dim]")
-        
-        ir = core.intake(path, variables)
-        action_list = core.assembly(ir)
-        
-        # Prepare execution data
-        execution_data = {
-            "timestamp": datetime.now().isoformat(),
-            "config_path": str(path),
-            "variables_applied": variables,
-            "runner_type": runner_type,
-            "parallel_execution": parallel,
-            "timeout_per_step": timeout_per_step,
-            "total_actions": len(action_list.steps)
-        }
-        
-        # Show plan and ask for confirmation
-        if not json_output:
-            console.print("\n[bold yellow]📋 Execution Plan:[/bold yellow]")
-            display_enhanced_plan(ir, action_list, {}, detailed=False)
-            
-            if not auto_approve:
-                confirm = typer.confirm("\nDo you want to apply these changes?")
-                if not confirm:
-                    execution_data["status"] = "cancelled"
-                    execution_data["message"] = "Apply cancelled by user"
-                    if json_output:
-                        console.print(json.dumps(execution_data, indent=2))
-                    else:
-                        console.print("[yellow]Apply cancelled by user[/yellow]")
-                    raise typer.Exit(0)
-        
-        # Compile with enhanced compiler
-        if not json_output:
-            console.print("\n[bold blue]🔨 Compiling artifacts with enhanced compiler...[/bold blue]")
-        
-        artifact_bundle = core.forge_compile(action_list)
-        
-        # Configure runner system
-        if runner_type != "local":
-            for artifact in artifact_bundle.artifacts:
-                if not hasattr(artifact, 'runner_config'):
-                    artifact.runner_config = {}
-                artifact.runner_config['runner_type'] = runner_type
-                artifact.runner_config['parallel'] = parallel
-        
-        # Execute with enhanced runner system
-        if not json_output:
-            console.print(f"[bold blue]⚡ Executing artifacts using {runner_type} runner...[/bold blue]")
-        
-        start_time = datetime.now()
-        results = core.forge_execute(artifact_bundle, timeout_per_step)
-        end_time = datetime.now()
-        
-        # Properly evaluate execution results
-        successful_steps = len([r for r in results if _is_execution_result_successful(r)])
-        failed_steps = len(results) - successful_steps
-        overall_success = failed_steps == 0 and len(results) > 0
+    Parse .cw configuration and execute with PyInfra.
 
-        # Update execution data
-        execution_data.update({
-            "status": "completed" if overall_success else "failed",
-            "start_time": start_time.isoformat(),
-            "end_time": end_time.isoformat(),
-            "execution_duration_seconds": (end_time - start_time).total_seconds(),
-            "results": results,
-            "successful_steps": successful_steps,
-            "failed_steps": failed_steps
-        })
-        
-        # Output results
-        if json_output:
-            console.print(json.dumps(execution_data, indent=2, default=str))
+    Converts Clockwork .cw files to PyInfra operations and executes them
+    against the specified target infrastructure.
+    """
+    console.print(f"[bold blue]🚀 {'Planning' if dry_run else 'Applying'} {config_file}[/bold blue]")
+
+    try:
+        # Parse variables
+        variables = parse_variables(var)
+
+        # Initialize ClockworkCore
+        core = ClockworkCore()
+
+        if dry_run:
+            # Generate plan only
+            python_code = core.plan(Path(config_file), variables, [target])
+            console.print(Panel(python_code, title="Execution Plan (PyInfra Code)", border_style="blue"))
+            console.print(f"[green]✅ Plan completed successfully[/green]")
         else:
-            display_enhanced_execution_results(results, execution_data)
-            # Show appropriate completion message based on actual results
-            if overall_success:
+            # Apply configuration
+            results = core.apply(Path(config_file), variables, [target])
+
+            # Show results
+            success = True
+            for result in results:
+                if result.get("success", False):
+                    console.print(f"[green]✅ {result.get('command', 'Operation')} completed successfully[/green]")
+                else:
+                    console.print(f"[red]❌ {result.get('command', 'Operation')} failed[/red]")
+                    if result.get("stderr"):
+                        console.print(f"[red]Error: {result['stderr']}[/red]")
+                    success = False
+
+            if success:
                 console.print("[green]✅ Apply completed successfully[/green]")
             else:
-                console.print(f"[red]❌ Apply completed with {failed_steps} failed step(s)[/red]")
+                console.print("[red]❌ Execution failed[/red]")
                 raise typer.Exit(1)
-        
+
     except Exception as e:
-        error_msg = f"Apply failed: {e}"
-        if json_output:
-            error_data = {
-                "status": "failed",
-                "error": error_msg,
-                "timestamp": datetime.now().isoformat()
-            }
-            console.print(json.dumps(error_data, indent=2))
-        else:
-            console.print(f"[red]❌ {error_msg}[/red]")
+        console.print(f"[red]❌ Error: {e}[/red]")
+        if os.environ.get('CLOCKWORK_DEBUG') == 'True':
+            import traceback
+            console.print("[dim]" + traceback.format_exc() + "[/dim]")
         raise typer.Exit(1)
 
 
 @app.command()
-def verify(
-    path: Path = typer.Argument(".", help="Path to .cw configuration files"),
+def plan(
+    config_file: Path = typer.Argument(..., help="Path to .cw configuration file"),
+    target: str = typer.Option("@local", "--target", "-t", help="Target: @local, @docker:<container>, @ssh:<host>"),
     var: List[str] = typer.Option([], "--var", help="Set variables (KEY=VALUE)"),
-    timeout: int = typer.Option(60, help="Verification timeout in seconds"),
-    json_output: bool = typer.Option(False, "--json", help="Output verification results as JSON instead of Terraform-style"),
-    runner_type: str = typer.Option("local", "--runner", help="Runner type for verification"),
-    parallel: bool = typer.Option(True, "--parallel/--sequential", help="Run verifications in parallel"),
 ):
     """
-    Run verification steps to check task completion and health with Terraform-style output.
-    
-    Executes only the verification actions from the plan. Shows verification
-    results in Terraform-style format by default.
+    Show execution plan without applying changes (dry-run).
+
+    Parses the .cw file and shows what PyInfra operations would be executed
+    without actually making any changes to the target infrastructure.
     """
-    if not json_output:
-        console.print("[bold blue]🔍 Verifying...[/bold blue]")
-    
+    # Set debug mode so we can see detailed errors
+    os.environ['CLOCKWORK_DEBUG'] = 'True'
+
+    # Call apply with dry_run=True
+    apply(config_file, target, dry_run=True, parallel=1, verbose=False, var=var)
+
+
+@app.command()
+def watch(
+    config_file: Path = typer.Argument(..., help="Path to .cw configuration file"),
+    target: str = typer.Option("@local", "--target", "-t", help="Target: @local, @docker:<container>, @ssh:<host>"),
+    var: List[str] = typer.Option([], "--var", help="Set variables (KEY=VALUE)"),
+    interval: int = typer.Option(2, "--interval", help="Minimum seconds between re-applies"),
+):
+    """
+    Watch .cw file for changes and automatically re-apply.
+
+    Monitors the specified .cw file for modifications and automatically
+    re-executes the configuration when changes are detected.
+    """
+    console.print(f"[bold blue]👁️  Watching {config_file} for changes[/bold blue]")
+    console.print(f"[dim]Target: {target}[/dim]")
+    console.print(f"[dim]Press Ctrl+C to stop watching[/dim]\n")
+
+    if not config_file.exists():
+        console.print(f"[red]❌ Configuration file not found: {config_file}[/red]")
+        raise typer.Exit(1)
+
+    last_apply_time = 0
+
+    class ConfigFileHandler(FileSystemEventHandler):
+        def on_modified(self, event):
+            nonlocal last_apply_time
+
+            if event.is_directory:
+                return
+
+            # Check if the modified file is our config file
+            if Path(event.src_path) == config_file.absolute():
+                current_time = time.time()
+
+                # Rate limiting - don't apply too frequently
+                if current_time - last_apply_time < interval:
+                    return
+
+                console.print(f"\n[yellow]📝 Change detected in {config_file}[/yellow]")
+
+                try:
+                    # Auto-apply with dry_run=False
+                    apply(config_file, target, dry_run=False, parallel=1, verbose=False, var=var)
+                    last_apply_time = current_time
+                except Exception as e:
+                    console.print(f"[red]❌ Auto-apply failed: {e}[/red]")
+
+                console.print(f"\n[dim]Continuing to watch {config_file}...[/dim]")
+
+    # Setup file watcher
+    event_handler = ConfigFileHandler()
+    observer = Observer()
+    observer.schedule(event_handler, str(config_file.parent), recursive=False)
+
     try:
-        # Initialize core  
-        core = ClockworkCore()
-        
-        # Parse variables with enhanced support
-        variables = parse_variables(var, load_cwvars=True, config_path=path)
-        
-        # Run verification with enhanced runner system
-        if not json_output:
-            console.print(f"[dim]Running verification using {runner_type} runner...[/dim]")
-        
-        ir = core.intake(path, variables)
-        action_list = core.assembly(ir)
-        
-        # Configure verification with runner settings
-        start_time = datetime.now()
-        results = core.verify_only(action_list, timeout)
-        end_time = datetime.now()
-        
-        # Prepare verification data
-        verification_data = {
-            "timestamp": datetime.now().isoformat(),
-            "config_path": str(path),
-            "variables_applied": variables,
-            "runner_type": runner_type,
-            "parallel_execution": parallel,
-            "timeout_seconds": timeout,
-            "start_time": start_time.isoformat(),
-            "end_time": end_time.isoformat(),
-            "verification_duration_seconds": (end_time - start_time).total_seconds(),
-            "results": results,
-            "total_checks": len(results),
-            "passed_checks": len([r for r in results if r.get("passed", False)]),
-            "failed_checks": len([r for r in results if not r.get("passed", True)])
-        }
-        
-        # Output results
-        if json_output:
-            console.print(json.dumps(verification_data, indent=2, default=str))
-        else:
-            display_enhanced_verification_results(results, verification_data)
-            console.print("[green]✅ Verification completed[/green]")
-        
-    except Exception as e:
-        error_msg = f"Verification failed: {e}"
-        if json_output:
-            error_data = {
-                "status": "failed",
-                "error": error_msg,
-                "timestamp": datetime.now().isoformat()
+        observer.start()
+
+        # Initial apply
+        console.print("[dim]Performing initial apply...[/dim]")
+        apply(config_file, target, dry_run=False, parallel=1, verbose=False, var=var)
+        last_apply_time = time.time()
+
+        console.print(f"\n[green]✅ Now watching {config_file} for changes...[/green]")
+
+        # Keep watching until interrupted
+        while True:
+            time.sleep(1)
+
+    except KeyboardInterrupt:
+        console.print("\n[yellow]👋 Stopping file watcher[/yellow]")
+        observer.stop()
+
+    observer.join()
+
+
+@app.command()
+def facts(
+    target: str = typer.Argument(..., help="Target: @local, @docker:<container>, @ssh:<host>"),
+    fact_name: Optional[str] = typer.Option(None, "--fact", help="Specific fact to show (e.g., 'server.Os')"),
+    json_output: bool = typer.Option(False, "--json", help="Output facts as JSON"),
+):
+    """
+    Show PyInfra facts for the specified target.
+
+    Connects to the target and gathers system information using PyInfra's
+    fact gathering capabilities. Useful for understanding target state.
+    """
+    console.print(f"[bold blue]📊 Gathering facts from {target}[/bold blue]")
+
+    try:
+        # For now, provide a simplified facts implementation
+        if target == "@local":
+            # Get basic local system facts
+            import platform
+            import socket
+            import os
+
+            facts_data = {
+                "server.Os": platform.system(),
+                "server.OsVersion": platform.release(),
+                "server.Arch": platform.machine(),
+                "server.Hostname": socket.gethostname(),
+                "server.User": os.getenv("USER", "unknown"),
+                "server.HomeDir": os.path.expanduser("~"),
+                "server.WorkingDir": os.getcwd()
             }
-            console.print(json.dumps(error_data, indent=2))
+
+            if fact_name:
+                if fact_name in facts_data:
+                    if json_output:
+                        console.print(json.dumps({fact_name: facts_data[fact_name]}, indent=2))
+                    else:
+                        console.print(f"[bold cyan]{fact_name}:[/bold cyan] {facts_data[fact_name]}")
+                else:
+                    console.print(f"[red]❌ Unknown fact: {fact_name}[/red]")
+                    console.print(f"[dim]Available facts: {', '.join(facts_data.keys())}[/dim]")
+                    raise typer.Exit(1)
+            else:
+                if json_output:
+                    console.print(json.dumps(facts_data, indent=2))
+                else:
+                    # Display facts in a nice table
+                    table = Table(title=f"Facts for {target}")
+                    table.add_column("Fact", style="cyan")
+                    table.add_column("Value", style="white")
+
+                    for fact, value in facts_data.items():
+                        table.add_row(fact, str(value))
+
+                    console.print(table)
+
         else:
-            console.print(f"[red]❌ {error_msg}[/red]")
+            console.print("[yellow]⚠️  Remote fact gathering not yet implemented[/yellow]")
+            console.print(f"[dim]Target: {target}[/dim]")
+            console.print("[dim]PyInfra fact gathering will be implemented in a future version[/dim]")
+
+    except Exception as e:
+        console.print(f"[red]❌ Failed to gather facts: {e}[/red]")
+        if os.environ.get('CLOCKWORK_DEBUG') == 'True':
+            import traceback
+            console.print("[dim]" + traceback.format_exc() + "[/dim]")
+        raise typer.Exit(1)
+
+
+@app.command()
+def state(
+    action: str = typer.Argument(..., help="Action: show, diff, drift, cleanup"),
+    target: str = typer.Option("@local", "--target", "-t", help="Target: @local, @docker:<container>, @ssh:<host>"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+    config_file: Optional[Path] = typer.Option(None, "--config", help="Path to .cw configuration file for drift detection"),
+):
+    """
+    State management commands for Clockwork.
+
+    Available actions:
+    - show: Display current state and health summary
+    - diff: Show differences between current and last state
+    - drift: Detect configuration drift against current facts
+    - cleanup: Clean up old state snapshots and fact files
+    """
+    console.print(f"[bold blue]🔍 State {action}[/bold blue]")
+
+    try:
+        from .core import ClockworkCore
+
+        # Initialize core with current directory
+        core = ClockworkCore()
+
+        if action == "show":
+            # Show current state
+            summary = core.state_manager.get_state_summary()
+
+            if json_output:
+                console.print(json.dumps(summary, indent=2, default=str))
+            else:
+                # Display state summary in a nice format
+                if "error" in summary:
+                    console.print(f"[red]❌ {summary['error']}[/red]")
+                    return
+
+                # Health summary
+                health_panel = Panel(
+                    f"Health Score: [bold green]{summary.get('health_score', 0):.1f}%[/bold green]\n"
+                    f"Total Resources: {summary.get('total_resources', 0)}\n"
+                    f"Resources with Drift: {summary.get('resources_with_drift', 0)}\n"
+                    f"Stale Resources: {summary.get('stale_resources', 0)}\n"
+                    f"Failed Resources: {summary.get('failed_resources', 0)}",
+                    title="🏥 Health Summary",
+                    border_style="green" if summary.get('health_score', 0) > 80 else "yellow"
+                )
+                console.print(health_panel)
+
+                # Last execution info
+                if summary.get('last_execution'):
+                    last_exec = summary['last_execution']
+                    status_color = "green" if last_exec['status'] == 'success' else "red"
+                    exec_panel = Panel(
+                        f"Run ID: {last_exec['run_id']}\n"
+                        f"Status: [{status_color}]{last_exec['status']}[/{status_color}]\n"
+                        f"Started: {last_exec['started_at']}\n"
+                        f"Completed: {last_exec.get('completed_at', 'N/A')}",
+                        title="⏱️ Last Execution",
+                        border_style=status_color
+                    )
+                    console.print(exec_panel)
+
+                # Storage info
+                storage_panel = Panel(
+                    f"State File Size: {summary.get('state_file_size', 0)} bytes\n"
+                    f"Fact Snapshots: {summary.get('fact_snapshots_count', 0)}\n"
+                    f"State Backups: {summary.get('state_backups_count', 0)}\n"
+                    f"Last Updated: {summary.get('last_updated', 'N/A')}",
+                    title="💾 Storage Info",
+                    border_style="blue"
+                )
+                console.print(storage_panel)
+
+        elif action == "diff":
+            # Show state differences
+            current_state = core.get_current_state()
+            if not current_state:
+                console.print("[yellow]⚠️ No current state found[/yellow]")
+                return
+
+            # Load previous state (simplified - would need proper versioning)
+            console.print("[dim]State diff functionality - showing current state summary[/dim]")
+            console.print(f"Current state has {len(current_state.current_resources)} resources")
+
+            if json_output:
+                state_dict = current_state.model_dump()
+                console.print(json.dumps(state_dict, indent=2, default=str))
+            else:
+                # Display resource summary
+                if current_state.current_resources:
+                    table = Table(title="Current Resources")
+                    table.add_column("Resource ID", style="cyan")
+                    table.add_column("Type", style="yellow")
+                    table.add_column("Status", style="white")
+                    table.add_column("Last Applied", style="dim")
+
+                    for resource_id, resource in current_state.current_resources.items():
+                        status_color = "green" if resource.status.value == "success" else "red"
+                        table.add_row(
+                            resource_id,
+                            resource.type.value,
+                            f"[{status_color}]{resource.status.value}[/{status_color}]",
+                            resource.last_applied.strftime("%Y-%m-%d %H:%M:%S") if resource.last_applied else "N/A"
+                        )
+
+                    console.print(table)
+
+        elif action == "drift":
+            # Detect drift
+            if not config_file:
+                console.print("[red]❌ Configuration file required for drift detection[/red]")
+                console.print("[dim]Use --config to specify a .cw file[/dim]")
+                raise typer.Exit(1)
+
+            console.print(f"[dim]Detecting drift for configuration: {config_file}[/dim]")
+
+            # Create inventory from target
+            inventory = create_inventory_from_target(target)
+
+            # Get current resource states
+            current_state = core.get_current_state()
+            if not current_state:
+                console.print("[yellow]⚠️ No current state found - run 'apply' first[/yellow]")
+                return
+
+            # Detect drift
+            drifted_resources = core.state_manager.detect_drift(inventory, current_state.current_resources)
+
+            if drifted_resources:
+                console.print(f"[red]🚨 Drift detected in {len(drifted_resources)} resources[/red]")
+
+                if json_output:
+                    console.print(json.dumps({"drifted_resources": drifted_resources}, indent=2))
+                else:
+                    for resource_id in drifted_resources:
+                        console.print(f"[red]• {resource_id}[/red]")
+            else:
+                console.print("[green]✅ No drift detected[/green]")
+
+        elif action == "cleanup":
+            # Clean up old files
+            console.print("[dim]Cleaning up old state snapshots and fact files...[/dim]")
+
+            keep_days = 30  # Could be made configurable
+            core.state_manager.cleanup_old_snapshots(keep_days=keep_days)
+
+            console.print(f"[green]✅ Cleanup completed (kept files from last {keep_days} days)[/green]")
+
+        else:
+            console.print(f"[red]❌ Unknown action: {action}[/red]")
+            console.print("[dim]Available actions: show, diff, drift, cleanup[/dim]")
+            raise typer.Exit(1)
+
+    except Exception as e:
+        console.print(f"[red]❌ State {action} failed: {e}[/red]")
+        if os.environ.get('CLOCKWORK_DEBUG') == 'True':
+            import traceback
+            console.print("[dim]" + traceback.format_exc() + "[/dim]")
         raise typer.Exit(1)
 
 
 # =============================================================================
-# Display Helper Functions
+# Helper Functions
 # =============================================================================
 
-
-def display_enhanced_plan(ir, action_list, plan_data: Dict[str, Any], detailed: bool = False):
-    """Display enhanced execution plan using Terraform-style formatting."""
-    formatter = TerraformStyleFormatter(console)
-    
-    # Use formatter to display plan with actual IR
-    plan_output = formatter.format_plan(ir)
-    console.print(plan_output)
-    
-    # Show validation information if available
-    if detailed and "validation" in plan_data:
-        validation = plan_data["validation"]
-        if "error" not in validation:
-            if validation["warnings"]:
-                warning_panel = Panel(
-                    "\n".join(validation["warnings"]),
-                    title="Validation Warnings",
-                    style="yellow"
-                )
-                console.print(warning_panel)
-            
-            if validation["errors"]:
-                error_panel = Panel(
-                    "\n".join(validation["errors"]),
-                    title="Validation Errors",
-                    style="red"
-                )
-                console.print(error_panel)
-    
-    # Show variables applied
-    if "variables_applied" in plan_data and plan_data["variables_applied"]:
-        console.print("\n[bold blue]Variables Applied:[/bold blue]")
-        for k, v in plan_data["variables_applied"].items():
-            console.print(f"  {k} = {v}")
-
-
-
-def display_enhanced_build_results(action_list, artifact_bundle, build_dir, build_data: Dict[str, Any]):
-    """Display enhanced build results using Terraform-style formatting."""
-    formatter = TerraformStyleFormatter(console)
-    
-    # Prepare artifacts info for formatter
-    artifacts_info = {
-        'artifacts': [
-            {
-                'path': artifact.path,
-                'lang': artifact.lang,
-                'purpose': artifact.purpose,
-                'mode': artifact.mode,
-                'size_bytes': len(artifact.content)
-            }
-            for artifact in artifact_bundle.artifacts
-        ]
-    }
-    
-    # Use formatter to display build results
-    build_output = formatter.format_build(action_list, artifacts_info)
-    console.print(build_output)
-    
-    console.print(f"\n[green]Artifacts saved to: {build_dir}[/green]")
-    
-    # Show runner configuration if specified
-    if "runner_type" in build_data and build_data["runner_type"] != "local":
-        console.print(f"\n[bold blue]Runner Configuration:[/bold blue] Artifacts configured for {build_data['runner_type']} runner")
-
-
-
-def _is_execution_result_successful(result: Dict[str, Any]) -> bool:
-    """
-    Check if an execution result indicates success.
-
-    Args:
-        result: Execution result dictionary
-
-    Returns:
-        True if the result indicates success, False otherwise
-    """
-    if isinstance(result, dict):
-        # Check status field first (from ExecutionResult.to_dict())
-        if "status" in result:
-            return result["status"] == "success"
-        # Check success field as fallback
-        if "success" in result:
-            return result["success"] is True
-        # Check exit_code as another indicator
-        if "exit_code" in result:
-            return result["exit_code"] == 0
-        # If none of the above, consider it failed
-        return False
-
-    # Handle ExecutionResult objects directly
-    if hasattr(result, 'is_success'):
-        return result.is_success()
-    if hasattr(result, 'status'):
-        return result.status == "success"
-
-    # Default to failure if we can't determine success
-    return False
-
-
-def display_enhanced_execution_results(results, execution_data: Dict[str, Any]):
-    """Display enhanced execution results using Terraform-style formatting."""
-    formatter = TerraformStyleFormatter(console)
-    
-    # Transform results for the formatter
-    execution_results = []
-    success_count = 0
-    failed_count = 0
-    
-    # Process actual results - fail if no valid results
-    if not results:
-        raise ValueError("No execution results provided - execution may have failed")
-
-    for result in results:
-        # Properly determine success from result
-        success = _is_execution_result_successful(result)
-        if success:
-            success_count += 1
-            status = "success"
-        else:
-            failed_count += 1
-            status = "failed"
-        
-        execution_results.append({
-            'resource_name': result.get("step", result.get("artifact_name", "unknown")),
-            'operation': 'apply',
-            'status': status,
-            'error': result.get("error_message", result.get("stderr", result.get("error", ""))) if not success else None
-        })
-    
-    # Use formatter to display apply results
-    apply_output = formatter.format_apply(execution_results, success_count, failed_count)
-    console.print(apply_output)
-    
-    # Show execution summary
-    if execution_data:
-        total_duration = execution_data.get("execution_duration_seconds", 0)
-        
-        summary_text = f"Total Duration: {total_duration:.2f}s"
-        
-        if "runner_type" in execution_data:
-            summary_text += f"\nRunner: {execution_data['runner_type']}"
-        
-        summary_color = "green" if failed_count == 0 else "yellow" if success_count > failed_count else "red"
-        
-        summary_panel = Panel(
-            summary_text,
-            title="Execution Summary",
-            style=summary_color
-        )
-        console.print(summary_panel)
-
-
-
-def display_enhanced_verification_results(results, verification_data: Dict[str, Any]):
-    """Display enhanced verification results using Terraform-style formatting."""
-    formatter = TerraformStyleFormatter(console)
-    
-    # Transform results for the formatter
-    verification_results = []
-    drift_detected = False
-    
-    for result in results:
-        passed = result.get("passed", False)
-        has_drift = not passed  # Failed verification indicates drift
-        
-        if has_drift:
-            drift_detected = True
-        
-        verification_results.append({
-            'resource_name': result.get("check", "unknown"),
-            'drift_detected': has_drift,
-            'last_verified': result.get("timestamp"),
-            'drift_details': [result.get("message", "")] if has_drift and result.get("message") else []
-        })
-    
-    # Use formatter to display verification results
-    verify_output = formatter.format_verify(verification_results, drift_detected)
-    console.print(verify_output)
-    
-    # Show verification summary
-    if verification_data:
-        total_duration = verification_data.get("verification_duration_seconds", 0)
-        
-        summary_text = f"Duration: {total_duration:.2f}s"
-        
-        if "runner_type" in verification_data:
-            summary_text += f"\nRunner: {verification_data['runner_type']}"
-        
-        passed = verification_data.get("passed_checks", 0)
-        failed = verification_data.get("failed_checks", 0)
-        summary_color = "green" if failed == 0 else "yellow" if passed > failed else "red"
-        
-        summary_panel = Panel(
-            summary_text,
-            title="Verification Summary",
-            style=summary_color
-        )
-        console.print(summary_panel)
-
-
-# =============================================================================
-# Variable Handling Utilities
-# =============================================================================
-
-def parse_variables(var_list: List[str], load_cwvars: bool = True, config_path: Path = None) -> Dict[str, Any]:
-    """
-    Parse variables from command line and optionally load .cwvars files.
-    
-    Args:
-        var_list: List of KEY=VALUE strings from command line
-        load_cwvars: Whether to load .cwvars files
-        config_path: Path to look for .cwvars files
-        
-    Returns:
-        Dictionary of parsed variables
-        
-    Raises:
-        typer.Exit: If variable parsing fails
-    """
+def parse_variables(var_list: List[str]) -> Dict[str, Any]:
+    """Parse variables from command line."""
     variables = {}
-    
-    # Load .cwvars files first if requested
-    if load_cwvars and config_path:
-        try:
-            from .intake.parser import Parser
-            parser = Parser()
-            cwvars_files = parser.find_cwvars_files(config_path)
-            
-            for cwvars_file in cwvars_files:
-                try:
-                    vars_data = parser.parse_cwvars_file(cwvars_file)
-                    variables.update(vars_data)
-                    console.print(f"[dim]Loaded variables from {cwvars_file}[/dim]")
-                except Exception as e:
-                    console.print(f"[yellow]Warning: Failed to load {cwvars_file}: {e}[/yellow]")
-                    
-        except Exception as e:
-            console.print(f"[yellow]Warning: Failed to load .cwvars files: {e}[/yellow]")
-    
-    # Parse command line variables (these override .cwvars)
+
     for var_str in var_list:
         if "=" not in var_str:
             console.print(f"[red]Error: Invalid variable format '{var_str}'. Use KEY=VALUE[/red]")
             raise typer.Exit(1)
         key, value = var_str.split("=", 1)
-        
+
         # Try to parse as JSON for complex types, fall back to string
         try:
             parsed_value = json.loads(value)
             variables[key] = parsed_value
         except json.JSONDecodeError:
             variables[key] = value
-    
+
     return variables
 
 
-def display_enhanced_status(clockwork_state, status_data: Dict[str, Any], detailed: bool = False):
-    """
-    Display enhanced status information using Terraform-style formatting.
-    
-    Args:
-        clockwork_state: The actual ClockworkState object
-        status_data: Status data dictionary
-        detailed: Whether to show detailed information
-    """
-    if not status_data["state_exists"]:
-        console.print("[yellow]No state found. Run 'clockwork apply' first.[/yellow]")
-        return
-    
-    formatter = TerraformStyleFormatter(console)
-    
-    try:
-        # Use formatter to display status with actual ClockworkState
-        status_output = formatter.format_status(clockwork_state)
-        console.print(status_output)
-        
-    except Exception as e:
-        # Error with Terraform-style formatting
-        console.print(f"[red]Error displaying status: {e}[/red]")
-        console.print(f"[cyan]Resources managed:[/cyan] {len(clockwork_state.current_resources) if clockwork_state else 0}")
-    
-    # Health information (keep existing panels for additional info)
-    if detailed and "health" in status_data:
-        health = status_data["health"]
-        if "error" not in health:
-            health_score = health.get("health_score", 0)
-            health_color = "green" if health_score >= 80 else "yellow" if health_score >= 60 else "red"
-            
-            health_panel = Panel(
-                f"Health Score: [{health_color}]{health_score:.1f}%[/{health_color}]\n"
-                f"Total Resources: {health.get('total_resources', 0)}\n"
-                f"Healthy Resources: {health.get('healthy_resources', 0)}\n"
-                f"Failed Resources: {health.get('failed_resources', 0)}",
-                title="System Health",
-                style=health_color
-            )
-            console.print(health_panel)
-    
-    # Cache statistics
-    if detailed and "cache_stats" in status_data:
-        cache = status_data["cache_stats"]
-        if cache["cache_exists"]:
-            console.print("\n[bold blue]Resolver Cache:[/bold blue]")
-            console.print(f"  Path: {cache['cache_path']}")
-            console.print(f"  Size: {cache['total_size_mb']} MB ({cache['file_count']} files)")
-            console.print(f"  Cached: {cache['cached_modules']} modules, {cache['cached_providers']} providers")
-    
-    # Drift information
-    if "drift" in status_data:
-        drift = status_data["drift"]
-        if "error" not in drift:
-            summary = drift.get("summary", {})
-            resources_with_drift = summary.get("resources_with_drift", 0)
-            total_resources = summary.get("total_resources_checked", 0)
-            
-            if resources_with_drift > 0:
-                drift_color = "red"
-                drift_status = f"⚠️ {resources_with_drift}/{total_resources} resources have drift"
-            else:
-                drift_color = "green"
-                drift_status = f"✅ No drift detected ({total_resources} resources checked)"
-            
-            drift_panel = Panel(
-                drift_status,
-                title="Drift Detection",
-                style=drift_color
-            )
-            console.print(drift_panel)
-            
-            # Show immediate attention items if any
-            immediate_attention = drift.get("immediate_action_required", [])
-            if immediate_attention and detailed:
-                attention_text = "\n".join([
-                    f"• {item.get('resource_id', 'unknown')} ({item.get('severity', 'unknown')})"
-                    for item in immediate_attention[:5]
-                ])
-                
-                attention_panel = Panel(
-                    attention_text,
-                    title="Resources Requiring Immediate Attention",
-                    style="red"
-                )
-                console.print(attention_panel)
+def create_inventory_from_target(target: str) -> Inventory:
+    """Create PyInfra inventory from target specification."""
 
-# =============================================================================
-# Additional Commands
-# =============================================================================
+    if target == "@local":
+        # Local execution
+        hosts = ["@local"]
+        host_data = {"@local": {}}
+        inventory = Inventory((hosts, host_data))
 
-@app.command()
-def status(
-    path: Path = typer.Argument(".", help="Path to .cw configuration files"),
-    detailed: bool = typer.Option(False, "--detailed", "-d", help="Show detailed status including drift and health"),
-    drift_check: bool = typer.Option(False, "--drift", help="Include drift detection in status"),
-    json_output: bool = typer.Option(False, "--json", help="Output status as JSON instead of Terraform-style"),
-    var: List[str] = typer.Option([], "--var", help="Set variables (KEY=VALUE)"),
-):
-    """Show current status of declared tasks in Terraform-style format with optional drift detection."""
-    if not json_output:
-        console.print("[bold blue]📊 Status[/bold blue]")
-    
-    try:
-        core = ClockworkCore()
-        
-        # Parse variables
-        variables = parse_variables(var)
-        
-        # Get basic state
-        state = core.get_current_state()
-        
-        status_data = {
-            "timestamp": datetime.now().isoformat(),
-            "config_path": str(path),
-            "state_exists": state is not None
-        }
-        
-        if not state:
-            status_data["message"] = "No state found. Run 'clockwork apply' first."
-            status_data["resources"] = []
-            status_data["health"] = {"score": 0.0, "status": "unknown"}
+    elif target.startswith("@docker:"):
+        # Docker container execution
+        container_name = target[8:]  # Remove "@docker:" prefix
+        hosts = [container_name]
+        host_data = {container_name: {
+            "pyinfra_connector": "docker"
+        }}
+        inventory = Inventory((hosts, host_data))
+
+    elif target.startswith("@ssh:"):
+        # SSH execution
+        ssh_target = target[5:]  # Remove "@ssh:" prefix
+
+        # Parse SSH target (user@host:port or host)
+        if "@" in ssh_target:
+            user_host, port = ssh_target.split(":", 1) if ":" in ssh_target else (ssh_target, "22")
+            user, hostname = user_host.split("@", 1)
         else:
-            # Basic resource status
-            resources = []
-            for resource_id, resource_state in state.current_resources.items():
-                resource_data = {
-                    "id": resource_id,
-                    "type": resource_state.type,
-                    "status": resource_state.status,
-                    "last_applied": resource_state.last_applied.isoformat() if resource_state.last_applied else None,
-                    "last_verified": resource_state.last_verified.isoformat() if resource_state.last_verified else None
-                }
-                resources.append(resource_data)
-            
-            status_data["resources"] = resources
-            status_data["total_resources"] = len(resources)
-            
-            # Get health summary
-            if detailed:
-                health_summary = core.get_state_health()
-                status_data["health"] = health_summary
-                
-            
-            # Perform drift detection if requested
-            if drift_check or detailed:
-                console.print("[dim]Performing drift detection...[/dim]")
-                drift_report = core.detect_drift()
-                status_data["drift"] = drift_report
-        
-        # Output results
-        if json_output:
-            console.print(json.dumps(status_data, indent=2, default=str))
-        else:
-            display_enhanced_status(state, status_data, detailed)
-        
-    except Exception as e:
-        error_msg = f"Failed to get status: {e}"
-        if json_output:
-            console.print(json.dumps({"error": error_msg}, indent=2))
-        else:
-            console.print(f"[red]❌ {error_msg}[/red]")
-        raise typer.Exit(1)
+            hostname, port = ssh_target.split(":", 1) if ":" in ssh_target else (ssh_target, "22")
+            user = os.getenv("USER", "root")
 
+        hosts = [hostname]
+        host_data = {hostname: {
+            "ssh_user": user,
+            "ssh_port": int(port)
+        }}
+        inventory = Inventory((hosts, host_data))
 
-@app.command() 
-def init(
-    name: str = typer.Argument(..., help="Project name"),
-    path: Path = typer.Argument(".", help="Directory to initialize"),
-):
-    """Initialize a new Clockwork project."""
-    console.print(f"[bold blue]🏗️  Initializing Clockwork project '{name}'[/bold blue]")
-    
-    try:
-        project_path = path / name if path != Path(".") else path
-        project_path.mkdir(exist_ok=True)
-        
-        # Create basic project structure
-        (project_path / ".clockwork").mkdir(exist_ok=True)
-        (project_path / "modules").mkdir(exist_ok=True)
-        
-        # Create main.cw example
-        main_cw = project_path / "main.cw"
-        main_cw.write_text(f'''# {name} - Clockwork Task Configuration
-
-variable "app_name" {{
-  type        = "string"
-  default     = "{name}"
-  description = "Application name"
-}}
-
-variable "port" {{
-  type    = "number"
-  default = 8080
-}}
-
-resource "service" "app" {{
-  name    = var.app_name
-  image   = "nginx:latest"
-  ports   = [{{
-    external = var.port
-    internal = 80
-  }}]
-  
-  health_check {{
-    path     = "/"
-    interval = "30s"
-  }}
-}}
-
-output "app_url" {{
-  value = "http://localhost:${{var.port}}"
-}}
-''')
-        
-        # Create .clockworkignore
-        ignore_file = project_path / ".clockworkignore" 
-        ignore_file.write_text("""# Clockwork ignore file
-.git/
-*.log
-.clockwork/build/
-.clockwork/cache/
-""")
-        
-        # Create .env file for environment configuration
-        env_file = project_path / ".env"
-        env_content = f'''# {name} Environment Configuration
-# Clockwork uses environment variables for configuration
-
-# LM Studio Configuration
-CLOCKWORK_LM_STUDIO_URL=http://localhost:1234/v1
-CLOCKWORK_LM_STUDIO_MODEL=llama-3.1-8b-instruct
-
-# Build Configuration
-CLOCKWORK_BUILD_DIR=.clockwork/build
-CLOCKWORK_STATE_FILE=.clockwork/state.json
-
-# Default timeout in seconds
-CLOCKWORK_DEFAULT_TIMEOUT=300
-
-# Enable Agno for AI-powered execution
-CLOCKWORK_USE_AGNO=true
-'''
-        env_file.write_text(env_content)
-        console.print(f"[green]Created {env_file}[/green]")
-        
-        console.print(f"[green]✅ Project '{name}' initialized at {project_path}[/green]")
-        console.print(f"\nNext steps:")
-        console.print(f"  cd {project_path}")
-        console.print(f"  clockwork plan")
-        console.print(f"  clockwork apply")
-        
-    except Exception as e:
-        console.print(f"[red]❌ Failed to initialize project: {e}[/red]")
-        raise typer.Exit(1)
-
-
-def safe_input(prompt: str = "") -> str:
-    """Safely handle input() calls in non-interactive environments."""
-    import sys
-    try:
-        if not sys.stdin.isatty():
-            # Non-interactive environment, return empty string
-            return ""
-        return input(prompt)
-    except EOFError:
-        # Handle EOF gracefully
-        return ""
-
-@app.command()
-def demo(
-    output_dir: Optional[Path] = typer.Option(None, "--output", "-o", help="Directory for demo files (default: ./.clockwork-demo)"),
-    interactive: bool = typer.Option(True, "--interactive/--no-interactive", help="Enable interactive mode with pauses"),
-    cleanup: bool = typer.Option(True, "--cleanup/--no-cleanup", help="Clean up demo files at the end (default: True)"),
-    text_only: bool = typer.Option(False, "--text-only", help="Run demo in non-interactive mode with automatic error fixing"),
-):
-    """
-    Run an interactive demonstration of Clockwork workflow.
-    
-    Creates a sample .cw file and guides you through the complete Clockwork
-    pipeline: plan → build → verify → apply → verify. Perfect for learning
-    how Clockwork works.
-    
-    Use --text-only for non-interactive mode with automatic error fixing.
-    """    
-    console.print("[bold blue]🎯 Clockwork Demo - Interactive Tutorial[/bold blue]")
-    console.print("\nWelcome to Clockwork! This demo will guide you through a complete workflow.")
-    console.print("You'll learn how to use .cw files to declare tasks and let Clockwork execute them.\n")
-    
-    # Handle text_only mode settings and auto-detect non-interactive environments
-    import sys
-    if text_only:
-        interactive = False
-        console.print("[dim]Running in text-only mode with automatic execution...[/dim]")
-    elif not sys.stdin.isatty():
-        # Auto-enable text-only mode in non-interactive environments
-        interactive = False
-        text_only = True
-        console.print("[dim]Non-interactive environment detected, running in text-only mode...[/dim]")
-    
-    # Setup demo directory
-    if output_dir:
-        demo_dir = output_dir
-        demo_dir.mkdir(parents=True, exist_ok=True)
     else:
-        demo_dir = Path("./.clockwork-demo")
-        if demo_dir.exists():
-            if interactive:
-                overwrite = typer.confirm(f"Demo directory {demo_dir} already exists. Overwrite?")
-                if not overwrite:
-                    console.print("[yellow]Demo cancelled.[/yellow]")
-                    raise typer.Exit(0)
-            elif not text_only:
-                console.print(f"[yellow]Demo directory {demo_dir} already exists. Removing...[/yellow]")
-            shutil.rmtree(demo_dir)
-        demo_dir.mkdir(parents=True)
-    
-    console.print(f"[green]📁 Demo directory created: {demo_dir}[/green]\n")
+        raise ValueError(f"Unsupported target format: {target}. Use @local, @docker:<container>, or @ssh:<host>")
 
-    # Create .clockwork subdirectory for build output
-    clockwork_dir = demo_dir / ".clockwork"
-    clockwork_dir.mkdir(exist_ok=True)
-    (clockwork_dir / "build").mkdir(exist_ok=True)
-    (clockwork_dir / "cache").mkdir(exist_ok=True)
+    return inventory
+
+
+def convert_ir_to_pyinfra_ops(ir: IR) -> List[Dict[str, Any]]:
+    """Convert Clockwork IR to PyInfra operations."""
+    operations = []
+
+    for resource_name, resource in ir.resources.items():
+        if resource.type == ResourceType.FILE:
+            # File operation
+            file_path = resource.config.get("path", f"/tmp/{resource.name}")
+            content = resource.config.get("content", "")
+
+            operations.append({
+                "name": f"Create file {resource.name}",
+                "operation": "files.put",
+                "args": [content, file_path],
+                "kwargs": {"mode": "644"},
+                "resource": resource
+            })
+
+        elif resource.type == ResourceType.DIRECTORY:
+            # Directory operation
+            dir_path = resource.config.get("path", f"/tmp/{resource.name}")
+
+            operations.append({
+                "name": f"Create directory {resource.name}",
+                "operation": "files.directory",
+                "args": [dir_path],
+                "kwargs": {"mode": "755"},
+                "resource": resource
+            })
+
+        elif resource.type == ResourceType.SERVICE:
+            # Service operation (using systemd or docker)
+            service_name = resource.config.get("name", resource.name)
+            image = resource.config.get("image")
+
+            if image:
+                # Docker service
+                operations.append({
+                    "name": f"Ensure Docker service {service_name}",
+                    "operation": "docker.container",
+                    "args": [service_name],
+                    "kwargs": {
+                        "image": image,
+                        "ports": resource.config.get("ports", []),
+                        "environment": resource.config.get("environment", {})
+                    },
+                    "resource": resource
+                })
+            else:
+                # System service
+                operations.append({
+                    "name": f"Ensure service {service_name}",
+                    "operation": "systemd.service",
+                    "args": [service_name],
+                    "kwargs": {"running": True, "enabled": True},
+                    "resource": resource
+                })
+
+        elif resource.type == ResourceType.CHECK:
+            # Health check operations using our custom pyinfra ops
+            from clockwork.pyinfra_ops import health
+
+            check_type = resource.config.get("type", "http")
+
+            if check_type == "http" or "url" in resource.config:
+                # HTTP health check
+                url = resource.config.get("url", "")
+                expected_status = resource.config.get("expected_status", 200)
+                timeout = resource.config.get("timeout", 30)
+                retries = resource.config.get("retries", 3)
+
+                operations.append({
+                    "name": f"HTTP health check {resource.name}",
+                    "operation": "clockwork.pyinfra_ops.health.http_health_check",
+                    "args": [],
+                    "kwargs": {
+                        "url": url,
+                        "expected_status": expected_status,
+                        "timeout": timeout,
+                        "retries": retries
+                    },
+                    "resource": resource
+                })
+
+            elif check_type == "file" or "file_path" in resource.config:
+                # File health check
+                file_path = resource.config.get("file_path", "")
+                should_exist = resource.config.get("should_exist", True)
+                min_size = resource.config.get("min_size")
+                max_age = resource.config.get("max_age")
+
+                operations.append({
+                    "name": f"File health check {resource.name}",
+                    "operation": "clockwork.pyinfra_ops.health.file_health_check",
+                    "args": [],
+                    "kwargs": {
+                        "file_path": file_path,
+                        "should_exist": should_exist,
+                        "min_size": min_size,
+                        "max_age": max_age
+                    },
+                    "resource": resource
+                })
+
+            elif check_type == "tcp" or ("host_address" in resource.config and "port" in resource.config):
+                # TCP health check
+                host_address = resource.config.get("host_address", "")
+                port = resource.config.get("port", 80)
+                timeout = resource.config.get("timeout", 10)
+                retries = resource.config.get("retries", 3)
+
+                operations.append({
+                    "name": f"TCP health check {resource.name}",
+                    "operation": "clockwork.pyinfra_ops.health.tcp_health_check",
+                    "args": [],
+                    "kwargs": {
+                        "host_address": host_address,
+                        "port": port,
+                        "timeout": timeout,
+                        "retries": retries
+                    },
+                    "resource": resource
+                })
+
+            else:
+                # Generic verification operation
+                operations.append({
+                    "name": f"Verify {resource.name}",
+                    "operation": "server.shell",
+                    "args": ["echo 'Verification completed'"],
+                    "kwargs": {},
+                    "resource": resource
+                })
+
+        else:
+            # Generic operation
+            operations.append({
+                "name": f"Process {resource.name}",
+                "operation": "server.shell",
+                "args": [f"echo 'Processing {resource.name}'"],
+                "kwargs": {},
+                "resource": resource
+            })
+
+    return operations
+
+
+def show_execution_plan(operations: List[Dict[str, Any]], dry_run: bool):
+    """Display the execution plan in a readable format."""
+    if dry_run:
+        console.print("\n[bold yellow]📋 Execution Plan (Dry Run):[/bold yellow]")
+    else:
+        console.print("\n[bold cyan]📋 Execution Plan:[/bold cyan]")
+
+    table = Table()
+    table.add_column("Step", style="cyan", width=4)
+    table.add_column("Operation", style="white")
+    table.add_column("Resource", style="yellow")
+    table.add_column("Details", style="dim")
+
+    for i, op in enumerate(operations, 1):
+        resource = op["resource"]
+        details = f"Type: {resource.type.value}"
+        if "args" in op and op["args"]:
+            details += f", Args: {op['args']}"
+
+        table.add_row(
+            str(i),
+            op["operation"],
+            f"{resource.type.value}.{resource.name}",
+            details
+        )
+
+    console.print(table)
+    console.print(f"\n[dim]Total operations: {len(operations)}[/dim]")
+
+
+def execute_pyinfra_operations(inventory: Inventory, operations: List[Dict[str, Any]],
+                             dry_run: bool, parallel: int, verbose: bool) -> bool:
+    """Execute PyInfra operations against the inventory."""
+
+    if dry_run:
+        console.print("\n[yellow]🔍 Dry Run Mode - Showing what would be executed[/yellow]")
+
+        # For dry run, just show the operations without executing
+        for i, op in enumerate(operations, 1):
+            resource = op["resource"]
+            console.print(f"[cyan]{i}.[/cyan] [white]{op['name']}[/white]")
+            console.print(f"   [dim]Operation:[/dim] {op['operation']}")
+            console.print(f"   [dim]Args:[/dim] {op.get('args', [])}")
+            if op.get('kwargs'):
+                console.print(f"   [dim]Options:[/dim] {op.get('kwargs', {})}")
+            console.print()
+
+        console.print("[green]✅ Dry run completed - no changes made[/green]")
+        return True
+
+    # For actual execution, we'd set up PyInfra properly
+    # This is a simplified implementation that shows the structure
+    console.print("\n[blue]⚡ Executing operations...[/blue]")
 
     try:
-        # Step 1: Explain and create sample .cw file
-        step_explain_clockwork(demo_dir, interactive, text_only)
-        
-        # Step 2: Plan phase
-        step_plan_demo(demo_dir, interactive, text_only)
-        
-        # Step 3: Build phase  
-        step_build_demo(demo_dir, interactive, text_only)
-        
-        # Step 4: Verify phase (pre-apply)
-        step_verify_demo(demo_dir, interactive, text_only, "pre-apply")
-        
-        # Step 5: Apply phase
-        step_apply_demo(demo_dir, interactive, text_only)
-        
-        # Step 6: Verify phase (post-apply)
-        step_verify_demo(demo_dir, interactive, text_only, "post-apply")
-        
-        # Step 7: Show results and cleanup
-        step_show_results(demo_dir, interactive, text_only, cleanup)
-        
-        console.print("\n[bold green]🎉 Demo completed successfully![/bold green]")
-        console.print("\n[bold cyan]Next Steps:[/bold cyan]")
-        console.print("• Try modifying the demo.cw file and re-running the commands")
-        console.print("• Create your own .cw files for real tasks")
-        console.print("• Configure Clockwork using environment variables or .env files")
-        console.print("• Read the documentation for advanced features")
-        console.print("• Run 'clockwork init my-project' to start a new project")
-        
-    except KeyboardInterrupt:
-        console.print("\n[yellow]Demo interrupted by user.[/yellow]")
-        if cleanup and demo_dir.exists():
-            shutil.rmtree(demo_dir)
-            console.print(f"[dim]Cleaned up demo directory: {demo_dir}[/dim]")
-        raise typer.Exit(1)
-    except Exception as e:
-        console.print(f"\n[red]❌ Demo failed: {e}[/red]")
-        if cleanup and demo_dir.exists():
-            shutil.rmtree(demo_dir)
-            console.print(f"[dim]Cleaned up demo directory: {demo_dir}[/dim]")
-        raise typer.Exit(1)
-
-
-def run_clockwork_command(demo_dir: Path, command_args: List[str], timeout: int = 90, text_only: bool = False, show_spinner: bool = True) -> tuple[bool, str, str]:
-    """Helper function to run real Clockwork commands for the demo."""
-    import subprocess
-    import sys
-    import os
-    
-    # Initialize spinner variables
-    progress = None
-    spinner_task = None
-    
-    # Show spinner during command execution
-    if show_spinner:
-        command_name = command_args[0] if command_args else "command"
-        progress = Progress(
+        # Show progress
+        with Progress(
             SpinnerColumn(),
-            TextColumn(f"[cyan]► Running {command_name} command...[/cyan]"),
+            TextColumn("[progress.description]{task.description}"),
             console=console,
-            transient=True
-        )
-        progress.start()
-        spinner_task = progress.add_task("running", total=None)
-    
-    try:
-        # Build the actual command to run - use uv run to ensure dependencies are available
-        # Run clockwork commands in the demo directory as the working directory
-        cmd = ["uv", "run", "clockwork"] + command_args
+            transient=False
+        ) as progress:
 
-        # Stop spinner before running subprocess to avoid interference
-        if progress:
-            progress.stop()
-            progress = None
+            task = progress.add_task("Executing operations...", total=len(operations))
 
-        # Run the actual Clockwork command with the demo directory as working directory
-        result = subprocess.run(
-            cmd,
-            cwd=demo_dir,  # Run from the demo directory
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            env=os.environ.copy()
-        )
-        
-        success = result.returncode == 0
-        stdout = result.stdout or ""
-        stderr = result.stderr or ""
-        
-        # Debug output if command fails
-        if not success:
-            console.print(f"[dim]Command failed: {' '.join(cmd)}[/dim]")
-            console.print(f"[dim]Return code: {result.returncode}[/dim]")
-            console.print(f"[dim]Stdout: {stdout}[/dim]")
-            console.print(f"[dim]Stderr: {stderr}[/dim]")
-        
-        return success, stdout, stderr
-        
-    except subprocess.TimeoutExpired:
-        # Stop spinner on timeout
-        if progress:
-            progress.stop()
-        
-        error_msg = f"Command timed out after {timeout} seconds"
-        console.print(f"[red]❌ {error_msg}[/red]")
-        return False, "", error_msg
-        
-    except Exception as e:
-        # Stop spinner on error
-        if progress:
-            progress.stop()
-        
-        error_msg = f"Error executing command: {e}"
-        console.print(f"[red]❌ {error_msg}[/red]")
-        return False, "", error_msg
+            for i, op in enumerate(operations):
+                progress.update(task, description=f"[cyan]{op['name']}[/cyan]")
 
+                # Simulate execution based on operation type
+                import time
+                time.sleep(0.5)  # Simulate work
 
-
-
-
-
-def step_explain_clockwork(demo_dir: Path, interactive: bool, text_only: bool = False):
-    """Step 1: Explain Clockwork and create sample .cw file."""
-    console.print("[bold yellow]📚 Step 1: Understanding Clockwork[/bold yellow]")
-    console.print("""
-Clockwork is a 'Factory for Intelligent Declarative Tasks'. Instead of writing
-scripts that describe HOW to do something, you write .cw files that describe
-WHAT you want to achieve. Clockwork figures out the how.
-
-The pipeline has three phases:
-• [cyan]Intake[/cyan]: Parse your .cw files and understand what you want
-• [cyan]Assembly[/cyan]: Plan the steps needed to achieve your goals  
-• [cyan]Forge[/cyan]: Execute the plan and make it happen
-
-Dependencies are automatically resolved to ensure proper execution order.
-The Terraform-style output clearly shows these relationships.
-
-Let's create a .cw file that starts a service, lets it run for 30 seconds, captures output, and then shuts it down:
-""")
-    
-    # Create sample .cw file with simple, declarative file management
-    sample_cw_content = '''# Clockwork Demo - File and Directory Management
-
-variable "project_name" {
-  type    = "string"
-  default = "clockwork-demo"
-}
-
-variable "message" {
-  type    = "string" 
-  default = "Hello from Clockwork! This demonstrates declarative task automation."
-}
-
-# I want a directory to organize my demo files
-resource "directory" "demo_output" {
-  path = "./demo-output"
-  description = "Output directory for demo files"
-}
-
-# I want a configuration file with project settings
-resource "file" "config" {
-  path = "./demo-output/config.json"
-  content = jsonencode({
-    name        = var.project_name
-    message     = var.message
-    created_at  = timestamp()
-    version     = "1.0"
-  })
-  depends_on = ["directory.demo_output"]
-}
-
-# I want a README file explaining what this is
-resource "file" "readme" {
-  path = "./demo-output/README.md"
-  content = <<-EOF
-# ${var.project_name}
-
-${var.message}
-
-## Created Files
-
-- `config.json` - Project configuration
-- `README.md` - This file
-
-Generated by Clockwork at ${timestamp()}
-  EOF
-  depends_on = ["directory.demo_output"]
-}
-
-# I want to verify all files were created
-resource "check" "files_exist" {
-  description = "Verify all demo files were created successfully"
-  depends_on = ["file.config", "file.readme"]
-}
-
-# Tell me what happened
-output "demo_directory" {
-  value = directory.demo_output.path
-}
-
-output "files_created" {
-  value = [
-    file.config.path,
-    file.readme.path
-  ]
-}
-
-output "demo_status" {
-  value = "Demo completed successfully - check the demo-output directory!"
-}'''
-    
-    demo_cw_file = demo_dir / "demo.cw"
-    demo_cw_file.write_text(sample_cw_content)
-    
-    # Show the file with syntax highlighting
-    console.print(f"[green]Created {demo_cw_file}[/green]")
-    console.print("\n[bold cyan]Contents of demo.cw:[/bold cyan]")
-    
-    syntax = Syntax(sample_cw_content, "hcl", theme="monokai", line_numbers=True)
-    console.print(syntax)
-    
-    if interactive and not text_only:
-        console.print("\n[dim]Press Enter to continue to the planning phase...[/dim]")
-        safe_input()
-    elif text_only:
-        console.print("\n[green]✓ Step 1 complete - .cw file created[/green]")
-
-
-def step_plan_demo(demo_dir: Path, interactive: bool, text_only: bool = False):
-    """Step 2: Run plan command and explain output."""
-    console.print("\n[bold yellow]📋 Step 2: Planning Phase[/bold yellow]")
-    console.print("""
-The 'plan' command analyzes your .cw file and shows you what Clockwork
-would do WITHOUT actually doing it. This is like a "dry run" that lets
-you review the plan before execution.
-
-Running: clockwork plan
-""")
-    
-    if interactive and not text_only:
-        console.print("[dim]Press Enter to run the plan command...[/dim]")
-        safe_input()
-    elif text_only:
-        console.print("[blue]► Step 2/7: Running plan command...[/blue]")
-    
-    # Run the plan command
-    success, stdout, stderr = run_clockwork_command(demo_dir, ["plan", "--detailed"], text_only=text_only)
-    
-    if success:
-        console.print("[green]Command executed successfully[/green]")
-        console.print("\n[bold cyan]Plan Output:[/bold cyan]")
-        console.print(stdout)
-        
-        if stderr:
-            console.print("\n[yellow]Warnings/Errors:[/yellow]")
-            console.print(stderr)
-    else:
-        error_msg = "Clockwork command not available. Please ensure clockwork is properly installed and accessible."
-        console.print(f"[red]❌ {error_msg}[/red]")
-        console.print(f"[red]Error details: {stderr}[/red]")
-        raise RuntimeError(f"Demo failed: {error_msg}")
-    
-    console.print("""
-[bold cyan]What happened?[/bold cyan]
-• Clockwork parsed the .cw file (Intake phase)
-• It planned the sequence of actions needed (Assembly phase)
-• It showed you what would be executed without doing it
-• Dependencies are correctly ordered:
-  - demo_directory (step 1) - no dependencies
-  - config_file (step 2) - depends on demo_directory  
-  - readme (step 3) - depends on demo_directory
-  - files_exist (step 4) - depends on config_file and readme
-
-The Terraform-style output clearly shows the dependency relationships!
-""")
-    
-    if interactive and not text_only:
-        console.print("[dim]Press Enter to continue to the build phase...[/dim]")
-        safe_input()
-    elif text_only:
-        console.print("[green]✓ Step 2 complete - Plan generated successfully[/green]")
-
-
-def step_build_demo(demo_dir: Path, interactive: bool, text_only: bool = False):
-    """Step 3: Run build command and explain artifacts."""
-    console.print("\n[bold yellow]🔨 Step 3: Build Phase[/bold yellow]")
-    console.print("""
-The 'build' command compiles your plan into executable artifacts.
-These are the actual scripts and configurations that will be run.
-
-Running: clockwork build
-""")
-    
-    if interactive and not text_only:
-        console.print("[dim]Press Enter to run the build command...[/dim]")
-        safe_input()
-    elif text_only:
-        console.print("[blue]► Step 3/7: Running build command...[/blue]")
-    
-    # Run the build command
-    success, stdout, stderr = run_clockwork_command(demo_dir, ["build"], text_only=text_only)
-    
-    if success:
-        console.print("[green]Command executed successfully[/green]")
-        console.print("\n[bold cyan]Build Output:[/bold cyan]")
-        console.print(stdout)
-        
-        if stderr:
-            console.print("\n[yellow]Warnings/Errors:[/yellow]")
-            console.print(stderr)
-            
-        # Show the artifacts directory
-        artifacts_dir = demo_dir / ".clockwork" / "build"
-        if artifacts_dir.exists():
-            console.print(f"\n[bold cyan]Generated Artifacts in {artifacts_dir}:[/bold cyan]")
-            for artifact in artifacts_dir.rglob("*"):
-                if artifact.is_file():
-                    console.print(f"  📄 {artifact.relative_to(artifacts_dir)}")
-    else:
-        error_msg = "Clockwork build command failed. Please ensure clockwork is properly installed and LM Studio is running."
-        console.print(f"[red]❌ {error_msg}[/red]")
-        console.print(f"[red]Error details: {stderr}[/red]")
-        raise RuntimeError(f"Demo failed: {error_msg}")
-    
-    console.print("""
-[bold cyan]What happened?[/bold cyan]
-• Clockwork compiled your plan into executable artifacts
-• These artifacts are stored in .clockwork/build/
-• Each artifact contains the instructions for one action
-• The artifacts are ready to be executed
-""")
-    
-    if interactive and not text_only:
-        console.print("[dim]Press Enter to continue to verification...[/dim]")
-        safe_input()
-    elif text_only:
-        console.print("[green]✓ Step 3 complete - Artifacts built successfully[/green]")
-
-
-def step_verify_demo(demo_dir: Path, interactive: bool, text_only: bool, phase: str):
-    """Step 4 & 6: Run verify command."""
-    if phase == "pre-apply":
-        console.print("\n[bold yellow]🔍 Step 4: Pre-Apply Verification[/bold yellow]")
-        console.print("""
-Before applying changes, let's verify the current state.
-This check should show that our target files don't exist yet.
-
-Running: clockwork verify
-""")
-    else:
-        console.print("\n[bold yellow]✅ Step 6: Post-Apply Verification[/bold yellow]")
-        console.print("""
-After applying changes, let's verify that everything worked.
-This check should confirm that our files were created successfully.
-
-Running: clockwork verify
-""")
-    
-    if interactive and not text_only:
-        console.print("[dim]Press Enter to run the verify command...[/dim]")
-        safe_input()
-    elif text_only:
-        step_num = "4" if phase == "pre-apply" else "6"
-        console.print(f"[blue]► Step {step_num}/7: Running verify command ({phase})...[/blue]")
-    
-    # Run the verify command
-    success, stdout, stderr = run_clockwork_command(demo_dir, ["verify"], text_only=text_only)
-    
-    if success:
-        console.print("[green]Command executed successfully[/green]")
-        console.print("\n[bold cyan]Verification Output:[/bold cyan]")
-        console.print(stdout)
-        
-        if stderr:
-            console.print("\n[yellow]Warnings/Errors:[/yellow]")
-            console.print(stderr)
-    else:
-        error_msg = "Clockwork verify command failed. Please ensure clockwork is properly installed and LM Studio is running."
-        console.print(f"[red]❌ {error_msg}[/red]")
-        console.print(f"[red]Error details: {stderr}[/red]")
-        raise RuntimeError(f"Demo failed: {error_msg}")
-    
-    if phase == "pre-apply":
-        console.print("""
-[bold cyan]What happened?[/bold cyan]
-• Clockwork checked if the target files already exist
-• Since this is a fresh demo, they shouldn't exist yet
-• This shows the "before" state
-""")
-    else:
-        console.print("""
-[bold cyan]What happened?[/bold cyan]
-• Clockwork verified that all the files were created successfully
-• This confirms that the apply phase worked correctly
-• Your declarative tasks have been achieved!
-""")
-    
-    if interactive and not text_only:
-        if phase == "pre-apply":
-            console.print("[dim]Press Enter to continue to the apply phase...[/dim]")
-        else:
-            console.print("[dim]Press Enter to see the results...[/dim]")
-        safe_input()
-    elif text_only:
-        if phase == "pre-apply":
-            console.print("[green]✓ Step 4 complete - Pre-apply verification done[/green]")
-        else:
-            console.print("[green]✓ Step 6 complete - Post-apply verification passed[/green]")
-
-
-def step_apply_demo(demo_dir: Path, interactive: bool, text_only: bool = False):
-    """Step 5: Run apply command."""
-    console.print("\n[bold yellow]🚀 Step 5: Apply Phase[/bold yellow]")
-    console.print("""
-Now for the main event! The 'apply' command executes the plan and
-makes your declarations reality. This is where Clockwork actually
-creates the files and directories you specified.
-
-Running: clockwork apply --auto-approve
-""")
-    
-    if interactive and not text_only:
-        console.print("[dim]Press Enter to run the apply command...[/dim]")
-        safe_input()
-    elif text_only:
-        console.print("[blue]► Step 5/7: Running apply command...[/blue]")
-    
-    # Run the apply command
-    success, stdout, stderr = run_clockwork_command(demo_dir, ["apply", "--auto-approve"], timeout=300, text_only=text_only)
-    
-    if success:
-        console.print("[green]Command executed successfully[/green]")
-        console.print("\n[bold cyan]Apply Output:[/bold cyan]")
-        console.print(stdout)
-        
-        if stderr:
-            # Filter out spurious error messages in demo
-            filtered_stderr = stderr
-            if "Process exited with code 1" in stderr and "Apply complete" in stdout:
-                # Skip process exit errors when apply actually succeeded
-                stderr_lines = stderr.split('\n')
-                filtered_lines = [line for line in stderr_lines if "Process exited with code 1" not in line and line.strip()]
-                filtered_stderr = '\n'.join(filtered_lines)
-            
-            if filtered_stderr.strip():
-                console.print("\n[yellow]Warnings/Errors:[/yellow]")
-                console.print(filtered_stderr)
-    else:
-        error_msg = "Clockwork apply command failed. Please ensure clockwork is properly installed and LM Studio is running."
-        console.print(f"[red]❌ {error_msg}[/red]")
-        console.print(f"[red]Error details: {stderr}[/red]")
-        raise RuntimeError(f"Demo failed: {error_msg}")
-    
-    console.print("""
-[bold cyan]What happened?[/bold cyan]
-• Clockwork executed all the artifacts from the build phase
-• It created the directory and files as specified in demo.cw
-• The execution followed the dependency order you declared
-• Your infrastructure/files now match your declaration!
-""")
-    
-    if interactive and not text_only:
-        console.print("[dim]Press Enter to verify the results...[/dim]")
-        safe_input()
-    elif text_only:
-        console.print("[green]✓ Step 5 complete - Apply executed successfully[/green]")
-
-
-
-
-def step_show_results(demo_dir: Path, interactive: bool, text_only: bool, cleanup: bool):
-    """Step 7: Show the actual results and provide cleanup guidance."""
-    console.print("\n[bold yellow]🎯 Step 7: Results & Verification[/bold yellow]")
-    console.print("""
-Let's look at what Clockwork actually created for us:
-""")
-    
-    # Show the created files and verify actual success
-    output_dir = demo_dir / "demo-output"
-    if output_dir.exists():
-        console.print(f"[green]✅ Directory created: {output_dir}[/green]")
-
-        expected_files = ["config.json", "README.md"]
-        found_files = []
-
-        for file_path in output_dir.iterdir():
-            if file_path.is_file():
-                found_files.append(file_path.name)
-                console.print(f"[green]✅ File created: {file_path}[/green]")
-
-                # Show file contents
-                if file_path.suffix in ['.json', '.md', '.txt']:
-                    console.print(f"\n[bold cyan]Contents of {file_path.name}:[/bold cyan]")
+                # For files.put operations, we could actually create the files
+                if op["operation"] == "files.put" and len(op.get("args", [])) >= 2:
+                    content, file_path = op["args"][0], op["args"][1]
                     try:
-                        content = file_path.read_text()
-                        if file_path.suffix == '.json':
-                            # Pretty print JSON
-                            formatted = json.dumps(json.loads(content), indent=2)
-                            syntax = Syntax(formatted, "json", theme="monokai")
-                        elif file_path.suffix == '.md':
-                            syntax = Syntax(content, "markdown", theme="monokai")
-                        else:
-                            syntax = Syntax(content, "text", theme="monokai")
-                        console.print(syntax)
+                        Path(file_path).parent.mkdir(parents=True, exist_ok=True)
+                        Path(file_path).write_text(content)
+                        console.print(f"[green]✓[/green] Created file: {file_path}")
                     except Exception as e:
-                        console.print(f"[red]Error reading file: {e}[/red]")
-                    console.print()
+                        console.print(f"[red]✗[/red] Failed to create file {file_path}: {e}")
+                        return False
 
-        # Check if all expected files were created
-        missing_files = [f for f in expected_files if f not in found_files]
-        if missing_files:
-            console.print(f"[red]❌ Missing expected files: {', '.join(missing_files)}[/red]")
-            console.print("[red]The apply operation may have reported success incorrectly![/red]")
-    else:
-        console.print("[red]❌ Output directory not found! Apply operation failed despite success message.[/red]")
-        console.print("[red]This indicates a problem with state management and error reporting.[/red]")
-    
-    # Show the state file
-    state_file = demo_dir / ".clockwork" / "state.json"
-    if state_file.exists():
-        console.print(f"[cyan]📊 Clockwork state tracked in: {state_file}[/cyan]")
-        console.print("[dim]This file keeps track of what Clockwork has created[/dim]")
-    
-    console.print("""
-[bold cyan]How to verify success:[/bold cyan]
-• Check that the demo-output directory exists
-• Verify the config.json and README.md files were created
-• Look at the .clockwork/state.json file to see Clockwork's tracking
-• Try running 'clockwork status' to see the current state
+                # For files.directory operations
+                elif op["operation"] == "files.directory" and len(op.get("args", [])) >= 1:
+                    dir_path = op["args"][0]
+                    try:
+                        Path(dir_path).mkdir(parents=True, exist_ok=True)
+                        console.print(f"[green]✓[/green] Created directory: {dir_path}")
+                    except Exception as e:
+                        console.print(f"[red]✗[/red] Failed to create directory {dir_path}: {e}")
+                        return False
 
-[bold cyan]Understanding what happened:[/bold cyan]
-• You declared WHAT you wanted (files and directories)
-• Clockwork figured out HOW to create them
-• It handled dependencies automatically (directory before files)
-• It tracked the state so it knows what it created
-""")
-    
-    if cleanup:
-        if interactive and not text_only:
-            if typer.confirm(f"\nClean up demo files in {demo_dir}?"):
-                shutil.rmtree(demo_dir)
-                console.print(f"[green]🧹 Cleaned up demo directory: {demo_dir}[/green]")
-            else:
-                console.print(f"[cyan]Demo files preserved in: {demo_dir}[/cyan]")
-                console.print("[dim]You can explore them or run commands manually[/dim]")
-        else:
-            shutil.rmtree(demo_dir)
-            console.print(f"[green]🧹 Cleaned up demo directory: {demo_dir}[/green]")
-    else:
-        console.print(f"[cyan]Demo files preserved in: {demo_dir}[/cyan]")
-        console.print("[dim]You can explore them or run the clockwork commands manually[/dim]")
-    
-    if text_only:
-        console.print("[green]✓ Step 7 complete - Results verified and demo complete[/green]")
+                # For other operations, just log what would happen
+                else:
+                    console.print(f"[yellow]~[/yellow] Would execute: {op['operation']} with args {op.get('args', [])}")
+
+                progress.advance(task)
+
+        return True
+
+    except Exception as e:
+        console.print(f"[red]❌ Execution failed: {e}[/red]")
+        return False
 
 
 if __name__ == "__main__":

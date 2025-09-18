@@ -12,7 +12,7 @@ from rich.panel import Panel
 from datetime import datetime
 
 from .models import (
-    Resource, ResourceState, ActionList, ActionStep, ExecutionStatus,
+    Resource, ResourceState, ExecutionStatus,
     ResourceType, ClockworkState, IR
 )
 
@@ -106,7 +106,7 @@ class TerraformStyleFormatter:
         
         return str(output)
 
-    def format_build(self, action_list: ActionList, artifacts_info: Optional[Dict[str, Any]] = None) -> str:
+    def format_build(self, action_list: Dict[str, Any], artifacts_info: Optional[Dict[str, Any]] = None) -> str:
         """
         Format build operation showing compilation of artifacts.
         
@@ -123,29 +123,32 @@ class TerraformStyleFormatter:
         output.append("Clockwork is building the following artifacts:\n\n", style=self.colors['header'])
         
         # Show actions being compiled
-        for i, step in enumerate(action_list.steps, 1):
+        steps = action_list.get('steps', [])
+        for i, step in enumerate(steps, 1):
+            step_name = step.get('name', f'step_{i}')
             output.append(f"  {i}. ", style=self.colors['comment'])
-            output.append(f"Compiling action: {step.name}\n", style=self.colors['create'])
-            
+            output.append(f"Compiling action: {step_name}\n", style=self.colors['create'])
+
             # Show key arguments
-            if step.args:
-                key_args = self._extract_key_args(step.args)
+            step_args = step.get('args', {})
+            if step_args:
+                key_args = self._extract_key_args(step_args)
                 for key, value in key_args.items():
                     output.append(f"     {key} = {self._format_value(value)}\n", style=self.colors['attribute'])
-        
+
         output.append("\n")
-        
+
         # Artifacts summary
         if artifacts_info:
             output.append("Generated artifacts:\n", style=self.colors['header'])
-            
+
             if 'artifacts' in artifacts_info:
                 for artifact in artifacts_info['artifacts']:
                     output.append(f"  + {artifact.get('path', 'unknown')}", style=self.colors['create'])
                     output.append(f" ({artifact.get('lang', 'text')}, {artifact.get('mode', '644')})\n", style=self.colors['comment'])
-        
+
         # Build summary
-        total_steps = len(action_list.steps)
+        total_steps = len(steps)
         output.append(f"\nBuild complete: {total_steps} actions compiled into executable artifacts.\n", style=self.colors['header'])
         
         return str(output)

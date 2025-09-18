@@ -124,115 +124,7 @@ class ResolutionError(IntakeError):
         super().__init__(message, **kwargs)
 
 
-class AssemblyError(ClockworkError):
-    """Errors during the assembly phase."""
-    
-    def __init__(self, message: str, **kwargs):
-        if 'error_code' not in kwargs:
-            kwargs['error_code'] = "ASSEMBLY_ERROR"
-        super().__init__(message, **kwargs)
-
-
-class PlanningError(AssemblyError):
-    """Errors during action planning."""
-    
-    def __init__(
-        self, 
-        message: str, 
-        resource_id: Optional[str] = None,
-        dependency_cycle: Optional[List[str]] = None,
-        **kwargs
-    ):
-        context = kwargs.get('context', {})
-        if resource_id:
-            context['resource_id'] = resource_id
-        if dependency_cycle:
-            context['dependency_cycle'] = dependency_cycle
-        
-        kwargs['context'] = context
-        if 'error_code' not in kwargs:
-            kwargs['error_code'] = "PLANNING_ERROR"
-        
-        super().__init__(message, **kwargs)
-
-
-class ForgeError(ClockworkError):
-    """Errors during the forge phase."""
-    
-    def __init__(self, message: str, **kwargs):
-        # Don't override error_code if it's already provided
-        if 'error_code' not in kwargs:
-            kwargs['error_code'] = "FORGE_ERROR"
-        super().__init__(message, **kwargs)
-
-
-class CompilerError(ForgeError):
-    """Errors during artifact compilation."""
-    
-    def __init__(
-        self, 
-        message: str, 
-        action_name: Optional[str] = None,
-        compilation_stage: Optional[str] = None,
-        **kwargs
-    ):
-        context = kwargs.get('context', {})
-        if action_name:
-            context['action_name'] = action_name
-        if compilation_stage:
-            context['compilation_stage'] = compilation_stage
-        
-        kwargs['context'] = context
-        if 'error_code' not in kwargs:
-            kwargs['error_code'] = "COMPILER_ERROR"
-        
-        super().__init__(message, **kwargs)
-
-
-class ExecutionError(ForgeError):
-    """Errors during artifact execution."""
-    
-    def __init__(
-        self, 
-        message: str, 
-        artifact_name: Optional[str] = None,
-        runner_type: Optional[str] = None,
-        exit_code: Optional[int] = None,
-        **kwargs
-    ):
-        context = kwargs.get('context', {})
-        if artifact_name:
-            context['artifact_name'] = artifact_name
-        if runner_type:
-            context['runner_type'] = runner_type
-        if exit_code is not None:
-            context['exit_code'] = exit_code
-        
-        kwargs['context'] = context
-        if 'error_code' not in kwargs:
-            kwargs['error_code'] = "EXECUTION_ERROR"
-        
-        super().__init__(message, **kwargs)
-
-
-class SecurityValidationError(ForgeError):
-    """Errors during security validation."""
-    
-    def __init__(
-        self, 
-        message: str, 
-        security_violations: Optional[List[str]] = None,
-        **kwargs
-    ):
-        context = kwargs.get('context', {})
-        if security_violations:
-            context['security_violations'] = security_violations
-        
-        kwargs['context'] = context
-        if 'error_code' not in kwargs:
-            kwargs['error_code'] = "SECURITY_ERROR"
-        
-        super().__init__(message, **kwargs)
+# Assembly and Forge errors removed - no longer used in simplified architecture
 
 
 # =============================================================================
@@ -262,47 +154,7 @@ class StateError(ClockworkError):
         super().__init__(message, **kwargs)
 
 
-class DaemonError(ClockworkError):
-    """Errors in daemon operations."""
-    
-    def __init__(
-        self, 
-        message: str, 
-        daemon_state: Optional[str] = None,
-        **kwargs
-    ):
-        context = kwargs.get('context', {})
-        if daemon_state:
-            context['daemon_state'] = daemon_state
-        
-        kwargs['context'] = context
-        if 'error_code' not in kwargs:
-            kwargs['error_code'] = "DAEMON_ERROR"
-        
-        super().__init__(message, **kwargs)
-
-
-class RunnerError(ClockworkError):
-    """Errors in runner systems."""
-    
-    def __init__(
-        self, 
-        message: str, 
-        runner_type: Optional[str] = None,
-        environment_issue: Optional[str] = None,
-        **kwargs
-    ):
-        context = kwargs.get('context', {})
-        if runner_type:
-            context['runner_type'] = runner_type
-        if environment_issue:
-            context['environment_issue'] = environment_issue
-        
-        kwargs['context'] = context
-        if 'error_code' not in kwargs:
-            kwargs['error_code'] = "RUNNER_ERROR"
-        
-        super().__init__(message, **kwargs)
+# Daemon and Runner errors removed - no longer used in simplified architecture
 
 
 class ConfigurationError(ClockworkError):
@@ -411,21 +263,6 @@ COMMON_SUGGESTIONS = {
         "Verify version constraints are correct",
         "Try clearing the resolver cache with 'clockwork cache clear'"
     ],
-    "COMPILER_ERROR": [
-        "Check the action list for invalid configurations",
-        "Verify that all required parameters are provided",
-        "Review the compilation logs for detailed error information"
-    ],
-    "EXECUTION_ERROR": [
-        "Check that the execution environment has required dependencies",
-        "Verify that the selected runner is properly configured",
-        "Review execution logs for specific failure details"
-    ],
-    "RUNNER_ERROR": [
-        "Verify that the selected runner (Docker, Podman, etc.) is installed",
-        "Check runner configuration and permissions",
-        "Try using a different runner type"
-    ],
     "STATE_ERROR": [
         "Check that the state file is not corrupted",
         "Verify filesystem permissions",
@@ -477,11 +314,9 @@ __all__ = [
     
     # Phase-specific errors
     'IntakeError', 'ParseError', 'ValidationError', 'ResolutionError',
-    'AssemblyError', 'PlanningError',
-    'ForgeError', 'CompilerError', 'ExecutionError', 'SecurityValidationError',
-    
+
     # Infrastructure errors
-    'StateError', 'DaemonError', 'RunnerError', 'ConfigurationError',
+    'StateError', 'ConfigurationError',
     
     # Utilities
     'format_error_chain', 'wrap_external_error', 'create_user_friendly_error',
