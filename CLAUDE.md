@@ -1,9 +1,12 @@
-- "I'm using uv in this repo so run the scripts and cli by keeping that in mind"
-- "Use uv to run python scripts and python based cli (e.g., 'uv run python script.py', 'uv run clockwork --help')"
-- "when generating a plan, keep in mind to allocate spawning separate agents for tasks in the plan that can be parallelized"
-- "don't worry about backward's compatibility and fallback mechanisms"
-- "Always test whether the demo command is broken or not"
-- "Always do cleanup after final testing and demoing is finished"
+## Development Preferences
+
+- **Use uv for all commands**: `uv run python script.py`, `uv run clockwork --help`
+- **Minimize if/else and try/except blocks**: Keep code simple and direct
+- **No backward compatibility concerns**: Don't add fallback mechanisms
+- **Commands auto-detect main.cw**: All commands default to `main.cw` in current directory
+- **Plan should work like Terraform**: Show actual vs desired state, not just generated code
+- **Always test commands after changes**: Ensure basic functionality works
+- **Clean up artifacts after testing**: Remove temporary files and state
 
 ## PyInfra-Based Architecture
 
@@ -11,78 +14,62 @@ Clockwork now uses **PyInfra** for infrastructure management with the following 
 
 ### Key Features
 - **PyInfra Integration**: Direct conversion of .cw files to PyInfra operations
-- **Two-Phase Pipeline**: Simple Parse → Execute workflow
-- **Multi-Target Support**: Local, SSH, Docker, and Kubernetes deployment targets
-- **State Management**: Built-in state tracking and drift detection
-- **Dry-Run Safety**: All operations can be previewed before execution
+- **Two-Phase Pipeline**: Parse → Execute workflow
+- **Multi-Target Support**: @local, @docker:container, @ssh:host
+- **Terraform-like Planning**: Shows current vs desired state with drift detection
+- **Auto Config Detection**: Commands default to main.cw in current directory
 
 ### Configuration
 
-Use environment variables for configuration:
-
-- `CLOCKWORK_PROJECT_NAME`: Project identifier (default: current directory name)
+Key environment variables:
 - `CLOCKWORK_LOG_LEVEL`: Log level (default: INFO)
-- `CLOCKWORK_TARGET`: Default deployment target (default: localhost)
-- `CLOCKWORK_PARALLEL_LIMIT`: Parallel execution limit (default: 4)
-- `CLOCKWORK_DEFAULT_TIMEOUT`: Default operation timeout in seconds (default: 300)
-- `CLOCKWORK_STATE_FILE`: State file location (default: .clockwork/state.json)
+- `CLOCKWORK_TARGET`: Default deployment target (default: @local)
 
-To configure deployment:
+Target deployment:
 ```bash
-CLOCKWORK_TARGET="@docker:mycontainer" uv run clockwork apply examples/basic-web-service/main.cw
+# Deploy to Docker container
+uv run clockwork apply --target @docker:mycontainer
+
+# Deploy to SSH host
+uv run clockwork apply --target @ssh:production-server
 ```
 
-Or use a .env file:
-```bash
-echo "CLOCKWORK_TARGET=@ssh:production-server" >> .env
-uv run clockwork apply examples/basic-web-service/main.cw
-```
+### How It Works
 
-### Integration Details
-- **PyInfra Operations**: Uses standard PyInfra operations for all infrastructure management
-- **Target Support**: @local, @docker:container, @ssh:host for flexible deployment
-- **State Tracking**: Automatic state management with drift detection
-- **Health Checks**: Built-in HTTP, TCP, and file system health verification
-
-### Architecture Changes
-- **Simplified pipeline**: Direct Parse → Execute (no more Intake → Assembly → Forge)
-- **No AI dependency**: Pure PyInfra-based execution, no LLM requirements
-- **Direct execution**: Operations run immediately without artifact generation
-- **State persistence**: Automatic state tracking in .clockwork/state.json
+1. **Parse** `.cw` files → Generate PyInfra Python code
+2. **Plan** - Compare current vs desired state (like `terraform plan`)
+3. **Apply** - Execute PyInfra operations on target infrastructure
+4. **State** - Track deployed resources in `.clockwork/state.json`
 
 ### Usage Examples
 
+All commands auto-detect `main.cw` in current directory:
+
 ```bash
-# Plan deployment (dry-run)
-uv run clockwork plan examples/basic-web-service/main.cw
+# Plan (show what would change)
+uv run clockwork plan
 
-# Apply to local infrastructure
-uv run clockwork apply examples/basic-web-service/main.cw
+# Apply changes
+uv run clockwork apply
 
-# Deploy to remote server via SSH
-uv run clockwork apply --target @ssh:production-server examples/basic-web-service/main.cw
+# Deploy to specific targets
+uv run clockwork apply --target @docker:mycontainer
+uv run clockwork apply --target @ssh:production-server
 
-# Deploy to Docker container
-uv run clockwork apply --target @docker:mycontainer examples/basic-web-service/main.cw
-
-# Watch for changes and auto-apply
-uv run clockwork watch examples/basic-web-service/main.cw
+# Watch for file changes
+uv run clockwork watch
 
 # Check system facts
 uv run clockwork facts @local
 
-# Manage deployment state
+# Manage state
 uv run clockwork state show
-uv run clockwork state drift --config examples/basic-web-service/main.cw
+uv run clockwork destroy
 ```
 
-When testing, always ensure the basic examples work:
+Testing the example:
 ```bash
-# Test hello-world example
-uv run clockwork plan examples/hello-world/main.cw
-uv run clockwork apply examples/hello-world/main.cw
-
-# Test basic-web-service example
-uv run clockwork plan examples/basic-web-service/main.cw
-uv run clockwork apply examples/basic-web-service/main.cw
+cd examples/basic-web-service
+uv run clockwork plan
+uv run clockwork apply --dry-run
 ```

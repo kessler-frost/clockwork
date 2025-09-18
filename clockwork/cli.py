@@ -92,84 +92,48 @@ def main(
 
 @app.command()
 def apply(
-    config_file: Path = typer.Argument(..., help="Path to .cw configuration file"),
+    config_file: Optional[Path] = typer.Argument(None, help="Path to .cw configuration file (defaults to main.cw)"),
     target: str = typer.Option("@local", "--target", "-t", help="Target: @local, @docker:<container>, @ssh:<host>"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be applied without executing"),
     parallel: int = typer.Option(1, "--parallel", "-p", help="Number of parallel operations"),
     verbose: bool = typer.Option(False, "--verbose", help="Enable verbose PyInfra output"),
     var: List[str] = typer.Option([], "--var", help="Set variables (KEY=VALUE)"),
 ):
-    """
-    Parse .cw configuration and execute with PyInfra.
+    """Parse .cw configuration and execute with PyInfra."""
+    config_file = resolve_config_file(config_file)
+    console.print(f"{'Planning' if dry_run else 'Applying'} {config_file}")
 
-    Converts Clockwork .cw files to PyInfra operations and executes them
-    against the specified target infrastructure.
-    """
-    console.print(f"[bold blue]🚀 {'Planning' if dry_run else 'Applying'} {config_file}[/bold blue]")
+    variables = parse_variables(var)
+    core = ClockworkCore()
 
-    try:
-        # Parse variables
-        variables = parse_variables(var)
-
-        # Initialize ClockworkCore
-        core = ClockworkCore()
-
-        if dry_run:
-            # Generate plan only
-            python_code = core.plan(Path(config_file), variables, [target])
-            console.print(Panel(python_code, title="Execution Plan (PyInfra Code)", border_style="blue"))
-            console.print(f"[green]✅ Plan completed successfully[/green]")
-        else:
-            # Apply configuration
-            results = core.apply(Path(config_file), variables, [target])
-
-            # Show results
-            success = True
-            for result in results:
-                if result.get("success", False):
-                    console.print(f"[green]✅ {result.get('command', 'Operation')} completed successfully[/green]")
-                else:
-                    console.print(f"[red]❌ {result.get('command', 'Operation')} failed[/red]")
-                    if result.get("stderr"):
-                        console.print(f"[red]Error: {result['stderr']}[/red]")
-                    success = False
-
-            if success:
-                console.print("[green]✅ Apply completed successfully[/green]")
-            else:
-                console.print("[red]❌ Execution failed[/red]")
-                raise typer.Exit(1)
-
-    except Exception as e:
-        console.print(f"[red]❌ Error: {e}[/red]")
-        if os.environ.get('CLOCKWORK_DEBUG') == 'True':
-            import traceback
-            console.print("[dim]" + traceback.format_exc() + "[/dim]")
-        raise typer.Exit(1)
+    if dry_run:
+        plan_data = core.plan(config_file, variables, [target])
+        display_plan(plan_data)
+    else:
+        results = core.apply(config_file, variables, [target])
+        success = all(result.get("success", False) for result in results)
+        console.print("✅ Apply completed" if success else "❌ Apply failed")
 
 
 @app.command()
 def plan(
-    config_file: Path = typer.Argument(..., help="Path to .cw configuration file"),
+    config_file: Optional[Path] = typer.Argument(None, help="Path to .cw configuration file (defaults to main.cw)"),
     target: str = typer.Option("@local", "--target", "-t", help="Target: @local, @docker:<container>, @ssh:<host>"),
     var: List[str] = typer.Option([], "--var", help="Set variables (KEY=VALUE)"),
 ):
-    """
-    Show execution plan without applying changes (dry-run).
+    """Show execution plan without applying changes."""
+    config_file = resolve_config_file(config_file)
+    console.print(f"Planning changes for {config_file}")
 
-    Parses the .cw file and shows what PyInfra operations would be executed
-    without actually making any changes to the target infrastructure.
-    """
-    # Set debug mode so we can see detailed errors
-    os.environ['CLOCKWORK_DEBUG'] = 'True'
-
-    # Call apply with dry_run=True
-    apply(config_file, target, dry_run=True, parallel=1, verbose=False, var=var)
+    variables = parse_variables(var)
+    core = ClockworkCore()
+    plan_data = core.plan(config_file, variables, [target])
+    display_plan(plan_data)
 
 
 @app.command()
 def watch(
-    config_file: Path = typer.Argument(..., help="Path to .cw configuration file"),
+    config_file: Optional[Path] = typer.Argument(None, help="Path to .cw configuration file (defaults to main.cw)"),
     target: str = typer.Option("@local", "--target", "-t", help="Target: @local, @docker:<container>, @ssh:<host>"),
     var: List[str] = typer.Option([], "--var", help="Set variables (KEY=VALUE)"),
     interval: int = typer.Option(2, "--interval", help="Minimum seconds between re-applies"),
@@ -180,13 +144,12 @@ def watch(
     Monitors the specified .cw file for modifications and automatically
     re-executes the configuration when changes are detected.
     """
+    # Resolve config file path
+    config_file = resolve_config_file(config_file)
+
     console.print(f"[bold blue]👁️  Watching {config_file} for changes[/bold blue]")
     console.print(f"[dim]Target: {target}[/dim]")
     console.print(f"[dim]Press Ctrl+C to stop watching[/dim]\n")
-
-    if not config_file.exists():
-        console.print(f"[red]❌ Configuration file not found: {config_file}[/red]")
-        raise typer.Exit(1)
 
     last_apply_time = 0
 
@@ -476,23 +439,51 @@ def state(
 # Helper Functions
 # =============================================================================
 
+def display_plan(plan_data: Dict[str, Any]) -> None:
+    """Display plan data in a user-friendly format."""
+    changes = plan_data.get("changes", {})
+    summary = plan_data.get("summary", {})
+
+    console.print(f"\nPlan Summary:")
+    console.print(f"+ {summary.get('create', 0)} to create")
+    console.print(f"~ {summary.get('update', 0)} to update")
+    console.print(f"- {summary.get('delete', 0)} to destroy")
+
+    for change in changes.get("create", []):
+        console.print(f"[green]+ {change['resource_id']} ({change['resource_type']})[/green]")
+
+    for change in changes.get("update", []):
+        console.print(f"[yellow]~ {change['resource_id']} ({change['resource_type']})[/yellow]")
+
+    for change in changes.get("delete", []):
+        console.print(f"[red]- {change['resource_id']} ({change['resource_type']})[/red]")
+
+    action = "apply" if plan_data.get("has_changes", False) else "No changes needed"
+    console.print(f"\n{action}")
+
+
+def resolve_config_file(config_file: Optional[Path]) -> Path:
+    """Resolve config file path, defaulting to main.cw in current directory."""
+    if config_file:
+        return config_file
+
+    default_config = Path("main.cw")
+    if default_config.exists():
+        return default_config
+
+    cw_files = list(Path(".").glob("*.cw"))
+    if len(cw_files) == 1:
+        return cw_files[0]
+
+    console.print("❌ No main.cw file found")
+    raise typer.Exit(1)
+
 def parse_variables(var_list: List[str]) -> Dict[str, Any]:
     """Parse variables from command line."""
     variables = {}
-
     for var_str in var_list:
-        if "=" not in var_str:
-            console.print(f"[red]Error: Invalid variable format '{var_str}'. Use KEY=VALUE[/red]")
-            raise typer.Exit(1)
         key, value = var_str.split("=", 1)
-
-        # Try to parse as JSON for complex types, fall back to string
-        try:
-            parsed_value = json.loads(value)
-            variables[key] = parsed_value
-        except json.JSONDecodeError:
-            variables[key] = value
-
+        variables[key] = value
     return variables
 
 
@@ -794,7 +785,7 @@ def execute_pyinfra_operations(inventory: Inventory, operations: List[Dict[str, 
 
 @app.command()
 def destroy(
-    config_file: Path = typer.Argument(..., help="Path to .cw configuration file"),
+    config_file: Optional[Path] = typer.Argument(None, help="Path to .cw configuration file (defaults to main.cw)"),
     target: str = typer.Option("@local", "--target", "-t", help="Target: @local, @docker:<container>, @ssh:<host>"),
     force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation prompt"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be destroyed without executing"),
@@ -814,10 +805,8 @@ def destroy(
 
     console = Console()
 
-    # Validate config file exists
-    if not config_file.exists():
-        console.print(f"[red]❌ Configuration file not found: {config_file}[/red]")
-        raise typer.Exit(1)
+    # Resolve config file path
+    config_file = resolve_config_file(config_file)
 
     try:
         # Initialize core

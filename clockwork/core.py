@@ -252,20 +252,29 @@ class ClockworkCore:
     # Convenience Methods
     # =========================================================================
 
-    def plan(self, path: Path, variables: Optional[Dict[str, Any]] = None, targets: Optional[List[str]] = None) -> str:
-        """
-        Generate a plan (parse only) without executing.
+    def plan(self, path: Path, variables: Optional[Dict[str, Any]] = None, targets: Optional[List[str]] = None) -> Dict[str, Any]:
+        """Generate execution plan showing what changes would be made."""
+        targets = targets or ["@local"]
+        python_code = self.parse(path, variables, targets)
+        desired_resources = self._extract_desired_resources_from_config(path, variables)
+        current_state = self.state_manager.load_state()
 
-        Args:
-            path: Path to .cw configuration files
-            variables: Optional variable overrides
-            targets: Optional list of target hosts
+        plan_changes = self._compare_states({}, current_state, desired_resources, targets)
 
-        Returns:
-            Generated pyinfra Python code that would be executed
-        """
-        logger.info("Generating execution plan (parse only)")
-        return self.parse(path, variables, targets)
+        return {
+            "targets": targets,
+            "config_file": str(path),
+            "timestamp": datetime.now().isoformat(),
+            "changes": plan_changes,
+            "generated_code": python_code,
+            "has_changes": len(plan_changes.get("create", [])) > 0,
+            "summary": {
+                "create": len(plan_changes.get("create", [])),
+                "update": len(plan_changes.get("update", [])),
+                "delete": len(plan_changes.get("delete", [])),
+                "no_change": len(plan_changes.get("no_change", []))
+            }
+        }
 
     def apply(self, path: Path, variables: Optional[Dict[str, Any]] = None,
               targets: Optional[List[str]] = None, timeout_per_step: int = 300) -> List[Dict[str, Any]]:
@@ -386,7 +395,7 @@ class ClockworkCore:
         logger.info("Destroy pipeline completed")
         return results
 
-    def _update_state_after_destroy(self, path: Path, results: List[Dict[str, Any]]):
+    def _update_state_after_destroy(self, path, results):
         """
         Update state after destroy operations to remove destroyed resources.
 
@@ -623,6 +632,51 @@ class ClockworkCore:
             logger.warning(f"Failed to update simple state: {e}")
 
     # =========================================================================
+    # Plan Helper Methods
+    # =========================================================================
+
+    def _extract_desired_resources_from_config(self, path: Path, variables=None) -> Dict[str, Any]:
+        """Extract desired resources from configuration files."""
+        config_content = path.read_text() if path.is_file() else (path / "main.cw").read_text()
+
+        resources = {}
+        lines = config_content.split('\n')
+        current_resource = None
+
+        for line in lines:
+            line = line.strip()
+            if line.startswith('resource '):
+                parts = line.split()
+                resource_type = parts[1].strip('"')
+                resource_name = parts[2].strip('"')
+                current_resource = {"type": resource_type, "name": resource_name, "config": {}}
+                resources[f"{resource_type}.{resource_name}"] = current_resource
+            elif current_resource and "=" in line and not line.startswith('#'):
+                key, value = line.split('=', 1)
+                current_resource["config"][key.strip()] = value.strip().strip('"').strip("'")
+
+        return resources
+
+    def _compare_states(self, current_facts, current_state: Optional[ClockworkState],
+                       desired_resources: Dict[str, Any], targets) -> Dict[str, List[Dict[str, Any]]]:
+        """Compare current state with desired state to generate plan changes."""
+        changes = {"create": [], "update": [], "delete": [], "no_change": []}
+        current_resources = current_state.current_resources if current_state else {}
+
+        for resource_id, desired_resource in desired_resources.items():
+            if resource_id not in current_resources:
+                changes["create"].append({
+                    "resource_id": resource_id,
+                    "action": "create",
+                    "resource_type": desired_resource["type"],
+                    "resource_name": desired_resource["name"],
+                    "config": desired_resource["config"],
+                    "reason": "Resource does not exist"
+                })
+
+        return changes
+
+    # =========================================================================
     # Utility Methods
     # =========================================================================
 
@@ -641,7 +695,7 @@ class ClockworkCore:
         """Context manager entry."""
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, *args):
         """Context manager exit with cleanup."""
         self.cleanup()
 

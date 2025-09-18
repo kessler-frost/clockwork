@@ -2,30 +2,9 @@
 
 This directory contains working examples of using Clockwork for service deployment.
 
-## Examples
+## Basic Web Service (`basic-web-service/`)
 
-### Hello World (`hello-world/`)
-
-**Status**: ✅ **Minimal Working Example**
-
-The simplest possible Clockwork deployment - perfect for getting started.
-
-**Features**:
-- Single nginx:alpine container
-- Minimal configuration
-- Custom environment variables
-
-**Usage**:
-```bash
-cd examples/hello-world
-uv run clockwork plan main.cw
-uv run clockwork apply main.cw
-curl http://localhost:8080
-```
-
-### Basic Web Service (`basic-web-service/`)
-
-**Status**: ✅ **Full Featured Example**
+**Status**: ✅ **Complete Example**
 
 Complete web service deployment with health checks and comprehensive configuration.
 
@@ -44,13 +23,13 @@ uv run clockwork apply main.cw     # Deploy service
 ```
 
 **What it deploys**:
-- nginx:1.25-alpine container on port 3000
+- nginx:latest container on configurable port (default: 8080)
 - HTTP health check verification
 - Configurable via variables.cwvars
 
 ## File Structure
 
-Each example directory contains:
+The example directory contains:
 - `main.cw` - Main service configuration
 - `variables.cwvars` - Variable definitions and defaults
 - `README.md` - Example-specific documentation
@@ -63,6 +42,8 @@ Each example directory contains:
 
 ## Quick Start
 
-1. **Try hello-world first** (simplest)
-2. **Then basic-web-service** (full features)
-3. **Modify variables.cwvars** to customize
+1. **Navigate to the example**: `cd examples/basic-web-service`
+2. **Preview deployment**: `uv run clockwork plan main.cw`
+3. **Deploy service**: `uv run clockwork apply main.cw`
+4. **Test service**: `curl http://localhost:8080`
+5. **Modify variables.cwvars** to customize

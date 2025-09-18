@@ -119,14 +119,26 @@ class PyInfraParser:
 
             # Process outputs
             if 'output' in parsed:
-                for output_name, output_configs in parsed['output'].items():
-                    for output_config in output_configs:
-                        output = Output(
-                            name=output_name,
-                            value=output_config.get('value', ''),
-                            description=output_config.get('description', '')
-                        )
-                        ir.outputs[output_name] = output
+                # hcl2 returns a list of output blocks (similar to resources)
+                if isinstance(parsed['output'], list):
+                    for output_block in parsed['output']:
+                        for output_name, output_config in output_block.items():
+                            output = Output(
+                                name=output_name,
+                                value=output_config.get('value', ''),
+                                description=output_config.get('description', '')
+                            )
+                            ir.outputs[output_name] = output
+                else:
+                    # Fallback for when output is a dictionary (older hcl2 versions)
+                    for output_name, output_configs in parsed['output'].items():
+                        for output_config in output_configs:
+                            output = Output(
+                                name=output_name,
+                                value=output_config.get('value', ''),
+                                description=output_config.get('description', '')
+                            )
+                            ir.outputs[output_name] = output
 
             return ir
 
