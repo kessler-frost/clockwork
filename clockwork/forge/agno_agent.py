@@ -453,9 +453,9 @@ GENERIC:
         # Simple hardcoded resolution for the demo - in production this would
         # come from the variable resolution system
         variable_map = {
-            'var.app_name': 'dev-web-app',
-            'var.image': 'nginx:1.25-alpine',
-            'var.port': '3000'
+            'var.app_name': 'my-web-app',
+            'var.image': 'nginx:latest',
+            'var.port': '8080'
         }
 
         resolved = {}
@@ -532,13 +532,62 @@ GENERIC:
             # Determine action type and generate appropriate artifact
             action_type = getattr(action, 'type', 'unknown')
             action_name = action.name
-            action_args = action.args
+            action_args = self._resolve_variable_references(action.args)
 
             # Create script path
             script_path = f"scripts/{i:02d}_{action_name.replace('.', '_')}.sh"
 
             # Generate script content based on action type and arguments
-            if action_type == 'DIRECTORY' or 'directory' in action_name.lower():
+            # Check for ENSURE_SERVICE action type (handle both enum and string formats)
+            is_ensure_service = (
+                action_type == 'ENSURE_SERVICE' or
+                (hasattr(action_type, 'value') and action_type.value == 'ensure_service') or
+                str(action_type) == 'ActionType.ENSURE_SERVICE' or
+                action_name == 'ensure_service'
+            )
+
+            # Check for verification/check actions
+            is_check_action = (
+                action_type == 'CHECK' or 'check' in action_name.lower() or
+                action_type == 'VERIFY_HTTP' or
+                (hasattr(action_type, 'value') and action_type.value == 'verify_http') or
+                str(action_type) == 'ActionType.VERIFY_HTTP' or
+                action_name == 'verify_http'
+            )
+
+            if is_ensure_service:
+                # Handle Docker service deployment
+                service_name = action_args.get('name', 'service')
+                image = action_args.get('image', 'nginx:latest')
+                ports = action_args.get('ports', [])
+                environment = action_args.get('env', {})
+
+                # Format port mappings from the ports array
+                port_mappings = []
+                for port_config in ports:
+                    if isinstance(port_config, dict):
+                        external = port_config.get('external', '80')
+                        internal = port_config.get('internal', '80')
+                        port_mappings.append(f"{external}:{internal}")
+
+                # For docker_run template, PORTS variable expects just the port mapping (template adds -p)
+                ports_str = ' '.join(port_mappings) if port_mappings else "None"
+
+                # Format environment variables - template expects -e flags included
+                env_vars = []
+                for key, value in environment.items():
+                    env_vars.append(f"-e {key}={value}")
+                env_str = ' '.join(env_vars) if env_vars else "None"
+
+                script_content = self.get_template('docker_run',
+                    image=image,
+                    name=service_name,
+                    ports=ports_str,
+                    env_vars=env_str
+                )
+                purpose = f"Deploy service: {service_name} ({image})"
+
+            elif action_type == 'DIRECTORY' or 'directory' in action_name.lower():
                 path = action_args.get('path', './demo-output')
                 script_content = self.get_template('create_directory', path=path)
                 purpose = f"Create directory: {path}"
@@ -549,16 +598,32 @@ GENERIC:
                 script_content = self.get_template('write_file', path=path, content=content)
                 purpose = f"Create file: {path}"
 
-            elif action_type == 'CHECK' or 'check' in action_name.lower():
-                # For check operations, verify the target path exists
-                target_path = action_args.get('path', './demo-output')
-                if not target_path:
-                    # Try to infer from dependencies
-                    deps = getattr(action, 'depends_on', [])
-                    if deps:
-                        target_path = './demo-output'  # Default for demo
-                script_content = self.get_template('verify_exists', path=target_path)
-                purpose = f"Verify path exists: {target_path}"
+            elif is_check_action:
+                # For check operations, verify HTTP endpoints or paths
+                is_http_check = (
+                    'http' in action_name.lower() or
+                    action_type == 'VERIFY_HTTP' or
+                    (hasattr(action_type, 'value') and action_type.value == 'verify_http') or
+                    str(action_type) == 'ActionType.VERIFY_HTTP' or
+                    action_name == 'verify_http'
+                )
+
+                if is_http_check:
+                    # HTTP endpoint check
+                    url = action_args.get('url', 'http://localhost:8080')
+                    expected_status = action_args.get('expected_status', '200')
+                    script_content = self.get_template('check_http', url=url, expected_status=expected_status)
+                    purpose = f"Verify HTTP endpoint: {url}"
+                else:
+                    # File/directory existence check
+                    target_path = action_args.get('path', './demo-output')
+                    if not target_path:
+                        # Try to infer from dependencies
+                        deps = getattr(action, 'depends_on', [])
+                        if deps:
+                            target_path = './demo-output'  # Default for demo
+                    script_content = self.get_template('verify_exists', path=target_path)
+                    purpose = f"Verify path exists: {target_path}"
 
             else:
                 # Generic task
@@ -725,30 +790,137 @@ CRITICAL REQUIREMENTS:
 
         return prompt
 
+    def _validate_step_purpose(self, purpose: str, step_index: int) -> str:
+        """
+        Validate and sanitize step purpose string.
+
+        Args:
+            purpose: Raw purpose string from AI agent
+            step_index: Index of the step for fallback naming
+
+        Returns:
+            Validated purpose string
+        """
+        if not purpose or not isinstance(purpose, str):
+            logger.warning(f"Step {step_index}: Invalid purpose type, using fallback")
+            return f"Execute step {step_index + 1}"
+
+        # Check for corruption patterns
+        if purpose.strip() in ["", "..??? ...??..", "...???..", "???", "..??..?"]:
+            logger.warning(f"Step {step_index}: Detected corrupted purpose '{purpose}', using fallback")
+            return f"Execute step {step_index + 1}"
+
+        # Check for non-printable characters or excessive special characters
+        if len([c for c in purpose if not c.isprintable()]) > 2:
+            logger.warning(f"Step {step_index}: Purpose contains non-printable characters, using fallback")
+            return f"Execute step {step_index + 1}"
+
+        # Check for overly short or suspicious patterns
+        if len(purpose.strip()) < 3 or purpose.count('?') > 3:
+            logger.warning(f"Step {step_index}: Suspicious purpose pattern '{purpose}', using fallback")
+            return f"Execute step {step_index + 1}"
+
+        return purpose.strip()
+
+    def _validate_step_command(self, command: str, step_index: int) -> List[str]:
+        """
+        Validate and sanitize step command string.
+
+        Args:
+            command: Raw command string from AI agent
+            step_index: Index of the step for fallback naming
+
+        Returns:
+            List of command parts for ExecutionStep
+        """
+        if not command or not isinstance(command, str):
+            logger.warning(f"Step {step_index}: Invalid command type, using fallback")
+            return ["echo", f"Executing step {step_index + 1}"]
+
+        # Check for corruption patterns
+        if command.strip() in ["", "..??..?", "???", "..??? ...??.."]:
+            logger.warning(f"Step {step_index}: Detected corrupted command '{command}', using fallback")
+            return ["echo", f"Executing step {step_index + 1}"]
+
+        # Check for non-printable characters
+        if len([c for c in command if not c.isprintable()]) > 2:
+            logger.warning(f"Step {step_index}: Command contains non-printable characters, using fallback")
+            return ["echo", f"Executing step {step_index + 1}"]
+
+        # Split command safely
+        try:
+            command_parts = command.strip().split()
+            if not command_parts:
+                logger.warning(f"Step {step_index}: Empty command after split, using fallback")
+                return ["echo", f"Executing step {step_index + 1}"]
+            return command_parts
+        except Exception as e:
+            logger.warning(f"Step {step_index}: Failed to split command '{command}': {e}, using fallback")
+            return ["echo", f"Executing step {step_index + 1}"]
+
+    def _validate_artifact_purpose(self, purpose: str, artifact_index: int) -> str:
+        """
+        Validate and sanitize artifact purpose string.
+
+        Args:
+            purpose: Raw purpose string from AI agent
+            artifact_index: Index of the artifact for fallback naming
+
+        Returns:
+            Validated purpose string
+        """
+        if not purpose or not isinstance(purpose, str):
+            logger.warning(f"Artifact {artifact_index}: Invalid purpose type, using fallback")
+            return f"Create artifact {artifact_index + 1}"
+
+        # Check for corruption patterns
+        if purpose.strip() in ["", "..??? ...??..", "...???..", "???", "..??..?"]:
+            logger.warning(f"Artifact {artifact_index}: Detected corrupted purpose '{purpose}', using fallback")
+            return f"Create artifact {artifact_index + 1}"
+
+        # Check for non-printable characters
+        if len([c for c in purpose if not c.isprintable()]) > 2:
+            logger.warning(f"Artifact {artifact_index}: Purpose contains non-printable characters, using fallback")
+            return f"Create artifact {artifact_index + 1}"
+
+        # Check for overly short or suspicious patterns
+        if len(purpose.strip()) < 3 or purpose.count('?') > 3:
+            logger.warning(f"Artifact {artifact_index}: Suspicious purpose pattern '{purpose}', using fallback")
+            return f"Create artifact {artifact_index + 1}"
+
+        return purpose.strip()
+
     def _convert_to_clockwork_format(self, agent_bundle: AgentArtifactBundle) -> ArtifactBundle:
         """Convert agent response to Clockwork ArtifactBundle format."""
         try:
             artifacts = []
             steps = []
 
-            for agent_artifact in agent_bundle.artifacts:
+            for i, agent_artifact in enumerate(agent_bundle.artifacts):
                 # Generate script content based on template using our actual templates
                 script_content = self._generate_script_from_template(agent_artifact)
+
+                # Validate artifact purpose
+                validated_purpose = self._validate_artifact_purpose(agent_artifact.purpose, i)
 
                 artifact = Artifact(
                     path=agent_artifact.path,
                     mode="0755",
-                    purpose=agent_artifact.purpose,
+                    purpose=validated_purpose,
                     lang="bash",
                     content=script_content
                 )
                 artifacts.append(artifact)
 
-            # Convert execution steps
-            for agent_step in agent_bundle.steps:
+            # Convert execution steps with validation
+            for i, agent_step in enumerate(agent_bundle.steps):
+                # Validate and sanitize step data
+                purpose = self._validate_step_purpose(agent_step.purpose, i)
+                command = self._validate_step_command(agent_step.command, i)
+
                 step = ExecutionStep(
-                    purpose=agent_step.purpose,
-                    run={"cmd": agent_step.command.split()}
+                    purpose=purpose,
+                    run={"cmd": command}
                 )
                 steps.append(step)
 
