@@ -17,7 +17,8 @@ from joblib import Parallel, delayed
 
 from .models import (
     IR, ActionList, ArtifactBundle, ClockworkState, ClockworkConfig,
-    Environment, ValidationResult, ExecutionRecord, ResourceState
+    Environment, ValidationResult, ExecutionRecord, ResourceState,
+    ActionType, ResourceType, ExecutionStatus
 )
 from .errors import (
     ClockworkError, IntakeError, AssemblyError, ForgeError, 
@@ -359,7 +360,18 @@ class ClockworkCore:
             # Convert runner results to expected format
             results = []
             for exec_result in execution_results:
-                results.append(exec_result.to_dict() if hasattr(exec_result, 'to_dict') else exec_result)
+                if hasattr(exec_result, 'to_dict'):
+                    result_dict = exec_result.to_dict()
+                    # Ensure proper naming instead of "unknown"
+                    if result_dict.get('artifact_name') == 'unknown' or not result_dict.get('artifact_name'):
+                        # Use the artifact purpose if available
+                        if hasattr(exec_result, 'artifact_name'):
+                            result_dict['artifact_name'] = exec_result.artifact_name
+                        # Add step name for identification
+                        result_dict['step'] = result_dict.get('artifact_name', 'unknown')
+                    results.append(result_dict)
+                else:
+                    results.append(exec_result)
             
             # Update state
             logger.debug("Updating state...")
@@ -466,8 +478,12 @@ class ClockworkCore:
         try:
             # Filter for verification actions
             verify_actions = [
-                action for action in action_list.steps 
-                if action.type.value in ["verify_http", "verify_service", "health_check"]
+                action for action in action_list.steps
+                if hasattr(action, 'type') and (
+                    action.type in [ActionType.VERIFY_HTTP, ActionType.VERIFY_CHECK] or
+                    str(action.type).lower() in ["verify_http", "verify_service", "health_check", "verification", "verify_check", "check"]
+                ) or
+                "verify" in action.name.lower() or "check" in action.name.lower()
             ]
             
             if not verify_actions:
@@ -478,9 +494,24 @@ class ClockworkCore:
             from .models import ActionList as AL
             verify_action_list = AL(steps=verify_actions)
             
-            # Compile and execute verification steps
+            # Compile and execute verification steps using runner
             artifact_bundle = self.forge_compile(verify_action_list)
-            results = self.executor.execute_bundle(artifact_bundle, timeout=timeout)
+
+            # Use runner to execute with timeout support
+            runner = self.runner_factory.create_runner("local", {"timeout": timeout})
+            if not runner.validate_environment():
+                logger.warning("Local runner environment validation failed")
+                return []
+
+            execution_results = runner.execute_bundle(artifact_bundle)
+
+            # Convert runner results to expected format
+            results = []
+            for exec_result in execution_results:
+                results.append(exec_result.to_dict() if hasattr(exec_result, 'to_dict') else exec_result)
+
+            # Cleanup runner resources
+            runner.cleanup()
             
             logger.info(f"Verification completed: {len(results)} checks run")
             return results
@@ -706,6 +737,39 @@ class ClockworkCore:
             logger.error(f"Drift remediation failed: {e}")
             return {"error": str(e)}
     
+    def _is_result_successful(self, result: Dict[str, Any]) -> bool:
+        """
+        Check if an execution result indicates success.
+
+        Args:
+            result: Execution result dictionary from runner
+
+        Returns:
+            True if the result indicates success, False otherwise
+        """
+        # Handle ExecutionResult objects that have been converted to dict
+        if isinstance(result, dict):
+            # Check status field first (from ExecutionResult.to_dict())
+            if "status" in result:
+                return result["status"] == "success"
+            # Check success field as fallback
+            if "success" in result:
+                return result["success"] is True
+            # Check exit_code as another indicator
+            if "exit_code" in result:
+                return result["exit_code"] == 0
+            # If none of the above, consider it failed
+            return False
+
+        # Handle ExecutionResult objects directly
+        if hasattr(result, 'is_success'):
+            return result.is_success()
+        if hasattr(result, 'status'):
+            return result.status == "success"
+
+        # Default to failure if we can't determine success
+        return False
+
     def _ir_to_desired_state(self, ir: IR) -> Dict[str, Any]:
         """
         Convert IR to desired state format for drift detection.
@@ -807,11 +871,16 @@ class ClockworkCore:
             # Use artifact bundle checksum for action list checksum since action_list is not available
             action_list_checksum = artifact_bundle_checksum
             
+            # Properly evaluate execution status from results
+            success_count = sum(1 for r in results if self._is_result_successful(r))
+            total_count = len(results)
+            overall_success = success_count == total_count and total_count > 0
+
             execution_record = ExecutionRecord(
                 run_id=f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
                 started_at=datetime.now(),
                 completed_at=datetime.now(),
-                status="success" if all(r.get("success", False) for r in results) else "failed",
+                status=ExecutionStatus.SUCCESS if overall_success else ExecutionStatus.FAILED,
                 action_list_checksum=action_list_checksum,
                 artifact_bundle_checksum=artifact_bundle_checksum,
                 logs=[str(r) for r in results]
@@ -826,7 +895,6 @@ class ClockworkCore:
                         resource_id = step.purpose
                         
                         # Determine resource type from action step type
-                        from .models import ResourceType, ActionType
                         step_type = getattr(step, 'type', ActionType.CUSTOM)
                         if isinstance(step_type, str):
                             step_type = ActionType(step_type) if step_type in [e.value for e in ActionType] else ActionType.CUSTOM
@@ -840,15 +908,22 @@ class ClockworkCore:
                             ActionType.COPY_FILES: ResourceType.FILE,
                             ActionType.VERIFY_HTTP: ResourceType.VERIFICATION,
                             ActionType.FILE_OPERATION: ResourceType.FILE,
+                            ActionType.CREATE_DIRECTORY: ResourceType.DIRECTORY,
+                            ActionType.VERIFY_CHECK: ResourceType.CHECK,
                         }
                         resource_type = action_to_resource_mapping.get(step_type, ResourceType.CUSTOM)
                         
+                        # Determine status using proper success evaluation
+                        is_successful = self._is_result_successful(result)
+                        status = ExecutionStatus.SUCCESS if is_successful else ExecutionStatus.FAILED
+
                         resource_state = ResourceState(
                             resource_id=resource_id,
-                            type=resource_type.value,
-                            status="success" if result.get("success") else "failed",
+                            type=resource_type,
+                            status=status,
                             last_applied=datetime.now(),
-                            last_verified=datetime.now()
+                            last_verified=datetime.now(),
+                            error_message=result.get("error_message") or result.get("stderr") if not is_successful else None
                         )
                         
                         return (resource_id, resource_state)
@@ -915,7 +990,9 @@ class ClockworkCore:
             "services": {},
             "repositories": {},
             "files": {},
-            "verifications": {}
+            "directories": {},
+            "verifications": {},
+            "checks": {}
         }
         
         # Extract config from metadata or resources
@@ -984,13 +1061,41 @@ class ClockworkCore:
                         "name": resource.config.get("name", resource.name),
                         "checks": resource.config.get("checks", []),
                     }
-                    
+
                     # Add dependencies if specified
                     if resource.depends_on:
                         verification_config["depends_on"] = resource.depends_on
-                    
+
                     return ("verifications", resource.name, verification_config)
-                    
+
+                elif resource_type == "check":
+                    check_config = {
+                        "name": resource.config.get("name", resource.name),
+                        "description": resource.config.get("description", "Check resource verification"),
+                        "type": resource.config.get("type", "file_exists"),
+                        "target": resource.config.get("target", ""),
+                    }
+
+                    # Add dependencies if specified
+                    if resource.depends_on:
+                        check_config["depends_on"] = resource.depends_on
+
+                    return ("checks", resource.name, check_config)
+
+                elif resource_type == "directory":
+                    directory_config = {
+                        "name": resource.name,
+                        "path": resource.config.get("path", ""),
+                        "mode": resource.config.get("mode", "755"),
+                        "description": resource.config.get("description", "Directory resource"),
+                    }
+
+                    # Add dependencies if specified
+                    if resource.depends_on:
+                        directory_config["depends_on"] = resource.depends_on
+
+                    return ("directories", resource.name, directory_config)
+
                 return None
             except Exception as e:
                 logger.error(f"Failed to process resource {resource_name}: {e}")

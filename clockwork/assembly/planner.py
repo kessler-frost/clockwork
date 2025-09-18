@@ -63,9 +63,11 @@ def convert_ir_to_actions(ir_data: Dict[str, Any]) -> ActionList:
         services = ir_data.get("services", {})
         repositories = ir_data.get("repositories", {})
         files = ir_data.get("files", {})
+        directories = ir_data.get("directories", {})
         verifications = ir_data.get("verifications", {})
-        
-        logger.debug(f"Planner received: {len(services)} services, {len(files)} files, {len(verifications)} verifications")
+        checks = ir_data.get("checks", {})
+
+        logger.debug(f"Planner received: {len(services)} services, {len(files)} files, {len(directories)} directories, {len(verifications)} verifications, {len(checks)} checks")
         
         # Keep track of action ordering for dependency resolution
         action_order = []
@@ -95,61 +97,87 @@ def convert_ir_to_actions(ir_data: Dict[str, Any]) -> ActionList:
             ))
             action_order.append(action_name)
         
-        # Step 3: Handle file operations
+        # Step 3: Handle directory operations
+        for directory_name, directory_config in directories.items():
+            action_name = f"create_directory"
+            if len(directories) > 1:
+                action_name = f"create_directory_{directory_name}"
+
+            directory_args = {
+                "name": directory_config.get("name", directory_name),
+                "path": directory_config.get("path", ""),
+                "mode": directory_config.get("mode", "755"),
+                "description": directory_config.get("description", "Directory resource")
+            }
+
+            action_steps.append(ActionStep(
+                name=action_name,
+                type=ActionType.CREATE_DIRECTORY,
+                args=directory_args
+            ))
+            action_order.append(action_name)
+
+            # Track dependencies
+            if directory_config.get("depends_on"):
+                dependency_map[action_name] = directory_config["depends_on"]
+
+        # Step 4: Handle file operations
         for file_name, file_config in files.items():
             action_name = f"file_operation"
             if len(files) > 1:
                 action_name = f"file_operation_{file_name}"
-            
+
             file_args = {
                 "name": file_config.get("name", file_name),
                 "path": file_config.get("path", ""),
                 "type": file_config.get("type", "file"),  # file, directory
                 "mode": file_config.get("mode", "644")
             }
-            
+
             # Add content if specified
             if file_config.get("content"):
                 file_args["content"] = file_config["content"]
-            
+
             action_steps.append(ActionStep(
                 name=action_name,
+                type=ActionType.FILE_OPERATION,
                 args=file_args
             ))
             action_order.append(action_name)
-            
+
             # Track dependencies
             if file_config.get("depends_on"):
                 dependency_map[action_name] = file_config["depends_on"]
         
-        # Step 4: Build images
+        # Step 5: Build images
         for service_name, service_config in services.items():
             if service_config.get("build"):
                 action_name = f"build_image"
                 if len([s for s in services.values() if s.get("build")]) > 1:
                     action_name = f"build_image_{service_name}"
-                
+
                 build_args = {
                     "dockerfile": service_config["build"].get("dockerfile", "Dockerfile"),
                     "context": service_config["build"].get("context", "."),
                     "tags": [service_config.get("image", f"{service_name}:latest")]
                 }
-                
+
                 # Add context variable if repo was fetched
                 if service_config.get("source_repo"):
                     build_args["contextVar"] = "APP_WORKDIR"
-                
+
                 # Add build args if specified
                 if service_config["build"].get("args"):
                     build_args["buildArgs"] = service_config["build"]["args"]
-                
+
                 action_steps.append(ActionStep(
                     name=action_name,
+                    type=ActionType.BUILD_IMAGE,
                     args=build_args
                 ))
                 action_order.append(action_name)
-        
-        # Step 5: Ensure services are running
+
+        # Step 6: Ensure services are running
         for service_name, service_config in services.items():
             action_name = f"ensure_service"
             if len(services) > 1:
@@ -186,6 +214,7 @@ def convert_ir_to_actions(ir_data: Dict[str, Any]) -> ActionList:
             
             action_steps.append(ActionStep(
                 name=action_name,
+                type=ActionType.ENSURE_SERVICE,
                 args=service_args
             ))
             action_order.append(action_name)
@@ -194,46 +223,72 @@ def convert_ir_to_actions(ir_data: Dict[str, Any]) -> ActionList:
             if service_config.get("depends_on"):
                 dependency_map[action_name] = service_config["depends_on"]
         
-        # Step 6: Handle verification checks
+        # Step 7: Handle verification checks
         for verification_name, verification_config in verifications.items():
             action_name = f"verification"
             if len(verifications) > 1:
                 action_name = f"verification_{verification_name}"
-            
+
             verification_args = {
                 "name": verification_config.get("name", verification_name),
                 "checks": verification_config.get("checks", [])
             }
-            
+
             action_steps.append(ActionStep(
                 name=action_name,
+                type=ActionType.VERIFY_CHECK,
                 args=verification_args
             ))
             action_order.append(action_name)
-            
+
             # Track dependencies
             if verification_config.get("depends_on"):
                 dependency_map[action_name] = verification_config["depends_on"]
-        
-        # Step 7: Verify HTTP endpoints
+
+        # Step 8: Handle check resources
+        for check_name, check_config in checks.items():
+            action_name = f"check"
+            if len(checks) > 1:
+                action_name = f"check_{check_name}"
+
+            check_args = {
+                "name": check_config.get("name", check_name),
+                "description": check_config.get("description", "Check resource verification"),
+                "type": check_config.get("type", "file_exists"),
+                "target": check_config.get("target", "")
+            }
+
+            action_steps.append(ActionStep(
+                name=action_name,
+                type=ActionType.VERIFY_CHECK,
+                args=check_args
+            ))
+            action_order.append(action_name)
+
+            # Track dependencies
+            if check_config.get("depends_on"):
+                dependency_map[action_name] = check_config["depends_on"]
+
+        # Step 9: Verify HTTP endpoints
         for service_name, service_config in services.items():
             if service_config.get("health_check"):
                 health_config = service_config["health_check"]
                 action_name = f"verify_http"
                 if len([s for s in services.values() if s.get("health_check")]) > 1:
                     action_name = f"verify_http_{service_name}"
-                
+
                 verify_args = {
                     "url": health_config.get("url", f"http://localhost:8080{health_config.get('path', '/health')}"),
                     "expect_status": health_config.get("status_code", 200)
                 }
-                
+
                 # Add timeout if specified
                 if health_config.get("timeout"):
                     verify_args["timeout"] = health_config["timeout"]
-                
+
                 action_steps.append(ActionStep(
                     name=action_name,
+                    type=ActionType.VERIFY_HTTP,
                     args=verify_args
                 ))
                 action_order.append(action_name)
@@ -371,7 +426,9 @@ def _validate_action_name_and_args(name: str, args: Dict[str, Any]) -> bool:
         "verify_http": ["url"],
         "create_namespace": ["namespace"],
         "file_operation": ["name", "path"],
-        "verification": ["name", "checks"]
+        "create_directory": ["name", "path"],
+        "verification": ["name", "checks"],
+        "check": ["name", "description"]
     }
     
     # Check if the action name matches a known pattern
@@ -465,8 +522,10 @@ def _convert_resource_ref_to_action_name(resource_ref: str, action_names: List[s
     # Map resource types to action prefixes
     type_mapping = {
         'file': 'file_operation',
+        'directory': 'create_directory',
         'service': 'ensure_service',
-        'verification': 'verification'
+        'verification': 'verification',
+        'check': 'check'
     }
     
     if resource_type in type_mapping:

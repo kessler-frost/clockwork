@@ -350,15 +350,20 @@ def apply(
         results = core.forge_execute(artifact_bundle, timeout_per_step)
         end_time = datetime.now()
         
+        # Properly evaluate execution results
+        successful_steps = len([r for r in results if _is_execution_result_successful(r)])
+        failed_steps = len(results) - successful_steps
+        overall_success = failed_steps == 0 and len(results) > 0
+
         # Update execution data
         execution_data.update({
-            "status": "completed",
+            "status": "completed" if overall_success else "failed",
             "start_time": start_time.isoformat(),
             "end_time": end_time.isoformat(),
             "execution_duration_seconds": (end_time - start_time).total_seconds(),
             "results": results,
-            "successful_steps": len([r for r in results if r.get("success", False)]),
-            "failed_steps": len([r for r in results if not r.get("success", True)])
+            "successful_steps": successful_steps,
+            "failed_steps": failed_steps
         })
         
         # Output results
@@ -366,7 +371,12 @@ def apply(
             console.print(json.dumps(execution_data, indent=2, default=str))
         else:
             display_enhanced_execution_results(results, execution_data)
-            console.print("[green]✅ Apply completed successfully[/green]")
+            # Show appropriate completion message based on actual results
+            if overall_success:
+                console.print("[green]✅ Apply completed successfully[/green]")
+            else:
+                console.print(f"[red]❌ Apply completed with {failed_steps} failed step(s)[/red]")
+                raise typer.Exit(1)
         
     except Exception as e:
         error_msg = f"Apply failed: {e}"
@@ -528,6 +538,39 @@ def display_enhanced_build_results(action_list, artifact_bundle, build_dir, buil
 
 
 
+def _is_execution_result_successful(result: Dict[str, Any]) -> bool:
+    """
+    Check if an execution result indicates success.
+
+    Args:
+        result: Execution result dictionary
+
+    Returns:
+        True if the result indicates success, False otherwise
+    """
+    if isinstance(result, dict):
+        # Check status field first (from ExecutionResult.to_dict())
+        if "status" in result:
+            return result["status"] == "success"
+        # Check success field as fallback
+        if "success" in result:
+            return result["success"] is True
+        # Check exit_code as another indicator
+        if "exit_code" in result:
+            return result["exit_code"] == 0
+        # If none of the above, consider it failed
+        return False
+
+    # Handle ExecutionResult objects directly
+    if hasattr(result, 'is_success'):
+        return result.is_success()
+    if hasattr(result, 'status'):
+        return result.status == "success"
+
+    # Default to failure if we can't determine success
+    return False
+
+
 def display_enhanced_execution_results(results, execution_data: Dict[str, Any]):
     """Display enhanced execution results using Terraform-style formatting."""
     formatter = TerraformStyleFormatter(console)
@@ -540,9 +583,10 @@ def display_enhanced_execution_results(results, execution_data: Dict[str, Any]):
     # Process actual results - fail if no valid results
     if not results:
         raise ValueError("No execution results provided - execution may have failed")
-    
+
     for result in results:
-        success = result.get("success", False)
+        # Properly determine success from result
+        success = _is_execution_result_successful(result)
         if success:
             success_count += 1
             status = "success"
@@ -551,10 +595,10 @@ def display_enhanced_execution_results(results, execution_data: Dict[str, Any]):
             status = "failed"
         
         execution_results.append({
-            'resource_name': result.get("step", "unknown"),
+            'resource_name': result.get("step", result.get("artifact_name", "unknown")),
             'operation': 'apply',
             'status': status,
-            'error': result.get("error", result.get("output", "")) if not success else None
+            'error': result.get("error_message", result.get("stderr", result.get("error", ""))) if not success else None
         })
     
     # Use formatter to display apply results
@@ -1003,7 +1047,13 @@ def demo(
         demo_dir.mkdir(parents=True)
     
     console.print(f"[green]📁 Demo directory created: {demo_dir}[/green]\n")
-    
+
+    # Create .clockwork subdirectory for build output
+    clockwork_dir = demo_dir / ".clockwork"
+    clockwork_dir.mkdir(exist_ok=True)
+    (clockwork_dir / "build").mkdir(exist_ok=True)
+    (clockwork_dir / "cache").mkdir(exist_ok=True)
+
     try:
         # Step 1: Explain and create sample .cw file
         step_explain_clockwork(demo_dir, interactive, text_only)
@@ -1072,18 +1122,18 @@ def run_clockwork_command(demo_dir: Path, command_args: List[str], timeout: int 
     
     try:
         # Build the actual command to run - use uv run to ensure dependencies are available
-        # The path argument should come after the command but before options
-        cmd = ["uv", "run", "clockwork"] + command_args + [str(demo_dir)]
-        
+        # Run clockwork commands in the demo directory as the working directory
+        cmd = ["uv", "run", "clockwork"] + command_args
+
         # Stop spinner before running subprocess to avoid interference
         if progress:
             progress.stop()
             progress = None
-            
-        # Run the actual Clockwork command with the working directory set to the main project
+
+        # Run the actual Clockwork command with the demo directory as working directory
         result = subprocess.run(
             cmd,
-            cwd=demo_dir.parent,  # Run from the main clockwork directory
+            cwd=demo_dir,  # Run from the demo directory
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -1482,15 +1532,19 @@ def step_show_results(demo_dir: Path, interactive: bool, text_only: bool, cleanu
 Let's look at what Clockwork actually created for us:
 """)
     
-    # Show the created files
+    # Show the created files and verify actual success
     output_dir = demo_dir / "demo-output"
     if output_dir.exists():
         console.print(f"[green]✅ Directory created: {output_dir}[/green]")
-        
+
+        expected_files = ["config.json", "README.md"]
+        found_files = []
+
         for file_path in output_dir.iterdir():
             if file_path.is_file():
+                found_files.append(file_path.name)
                 console.print(f"[green]✅ File created: {file_path}[/green]")
-                
+
                 # Show file contents
                 if file_path.suffix in ['.json', '.md', '.txt']:
                     console.print(f"\n[bold cyan]Contents of {file_path.name}:[/bold cyan]")
@@ -1508,8 +1562,15 @@ Let's look at what Clockwork actually created for us:
                     except Exception as e:
                         console.print(f"[red]Error reading file: {e}[/red]")
                     console.print()
+
+        # Check if all expected files were created
+        missing_files = [f for f in expected_files if f not in found_files]
+        if missing_files:
+            console.print(f"[red]❌ Missing expected files: {', '.join(missing_files)}[/red]")
+            console.print("[red]The apply operation may have reported success incorrectly![/red]")
     else:
-        console.print("[red]❌ Output directory not found! Something went wrong.[/red]")
+        console.print("[red]❌ Output directory not found! Apply operation failed despite success message.[/red]")
+        console.print("[red]This indicates a problem with state management and error reporting.[/red]")
     
     # Show the state file
     state_file = demo_dir / ".clockwork" / "state.json"

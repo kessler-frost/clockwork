@@ -35,6 +35,8 @@ class ActionType(str, Enum):
     CLEANUP = "cleanup"
     # Additional types from forge module
     FILE_OPERATION = "file_operation"
+    CREATE_DIRECTORY = "create_directory"
+    VERIFY_CHECK = "verify_check"
     NETWORK_REQUEST = "network_request"
     SYSTEM_COMMAND = "system_command"
     DATA_PROCESSING = "data_processing"
@@ -51,7 +53,9 @@ class ResourceType(str, Enum):
     SECRET = "secret"
     CONFIG = "config"
     FILE = "file"
+    DIRECTORY = "directory"
     VERIFICATION = "verification"
+    CHECK = "check"
     CUSTOM = "custom"
 
 

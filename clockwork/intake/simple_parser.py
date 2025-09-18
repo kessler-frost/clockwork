@@ -564,6 +564,10 @@ class SimpleParser:
                         resource_type = ResourceType.CUSTOM
                     elif resource_type_name == "file":
                         resource_type = ResourceType.FILE
+                    elif resource_type_name == "directory":
+                        resource_type = ResourceType.DIRECTORY
+                    elif resource_type_name == "check":
+                        resource_type = ResourceType.CHECK
                     
                     # Process each instance
                     for resource_name, resource_config in resource_instances.items():

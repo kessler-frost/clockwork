@@ -192,9 +192,11 @@ class TerraformStyleFormatter:
         
         output.append("\n")
         
-        # Apply summary
+        # Apply summary with accurate reporting
         total = success_count + failed_count
-        if failed_count == 0:
+        if total == 0:
+            output.append("No resources to apply.\n", style=self.colors['comment'])
+        elif failed_count == 0:
             output.append(f"Apply complete! Resources: {success_count} applied, 0 failed.\n", style=self.colors['create'])
         else:
             output.append(f"Apply finished with errors. Resources: {success_count} applied, {failed_count} failed.\n", style=self.colors['destroy'])
