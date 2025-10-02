@@ -42,26 +42,3 @@ dmypy.json
 .idea/
 *.swp
 *.swo
-
-# Clockwork specific
-.clockwork/
-*.cw.bak
-*.cwvars.bak
-.clockwork-state/
-
-# Clockwork demo directories
-.clockwork-demo/
-demo-test/
-
-# AI models and LM Studio
-models/
-*.gguf
-*.bin
-
-# Environment-specific configuration
-.env.local
-.env.production
-
-# OS
-.DS_Store
-Thumbs.db
