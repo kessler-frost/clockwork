@@ -19,7 +19,9 @@ Verification command to ensure resources are running as specified.
 
 **Example:**
 ```bash
-clockwork evaluate main.py
+# Run from project directory containing main.py
+cd my-project
+clockwork evaluate
 # Output: ✓ All resources running as specified
 #         - nginx_container: running (port 80:80)
 #         - config.json: present at /etc/app/config.json
@@ -88,17 +90,25 @@ Transform Clockwork from one-time deployments to long-lived project management.
 - Updating service configurations while preserving working state
 - Incremental feature additions to deployed applications
 
+**Key Difference from `clockwork apply`:**
+
+The `clockwork update` command allows vague, intent-based specifications without needing the original `main.py`:
+- **`clockwork apply`**: Requires complete, exact resource definitions in `main.py`
+- **`clockwork update`**: Accepts partial, vague specifications in `update.py` and infers changes
+
+This is crucial when you vaguely remember what was deployed but don't have access to the original `main.py` file or exact specifications.
+
 **Example Workflow:**
+
 ```python
-# Initial deployment
-# main.py
+# Initial deployment in main.py
 docker_app = DockerServiceResource(
     name="api-service",
     description="REST API with user schema",
-    # ... initial config
+    # ... complete initial config
 )
 
-# Later: update.py (vague specification)
+# Later: update.py (vague specification - no need to remember exact main.py details)
 docker_app = DockerServiceResource(
     name="api-service",
     description="Add organization schema and update user endpoints",
@@ -108,9 +118,17 @@ docker_app = DockerServiceResource(
 ```
 
 ```bash
-# Clockwork intelligently applies only the changes
-clockwork apply update.py
-# Output: ✓ Added organization schema
+# Initial deployment
+cd my-api-project
+clockwork apply
+
+# Later: apply updates with new clockwork update command
+# Looks for update.py and intelligently merges with deployed state
+# No need to have the original main.py or remember exact details!
+clockwork update
+# Output: ✓ Detected existing deployment: api-service
+#         ✓ Inferred current state from deployed resources
+#         ✓ Added organization schema
 #         ✓ Updated /api/users endpoint to include org_id
 #         ✓ Created /api/organizations endpoints
 #         ✓ Evaluation checks updated
@@ -118,8 +136,8 @@ clockwork apply update.py
 ```
 
 **Implementation Considerations:**
-- Persistent state storage (`.clockwork/state.json`)
-- Diff engine to compare desired vs. current state
+- New `clockwork update` command that looks for `update.py`
+- Diff engine to compare current deployment with update specifications
 - AI-powered intent inference from vague specifications
 - Validation that updates don't break existing functionality
 - Integration with `clockwork evaluate` for continuous verification
