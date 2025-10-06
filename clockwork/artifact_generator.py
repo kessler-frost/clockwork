@@ -118,7 +118,7 @@ class ArtifactGenerator:
         """
         Parse AI response for Docker resources.
 
-        Handles both JSON format and simple string format.
+        Handles both JSON format and simple string format, including markdown code blocks.
 
         Args:
             content: AI-generated content
@@ -127,9 +127,21 @@ class ArtifactGenerator:
         Returns:
             Dict with at least {"image": "..."} key
         """
+        # Strip markdown code blocks if present
+        cleaned_content = content.strip()
+        if cleaned_content.startswith('```'):
+            # Remove opening code block marker (```json or ```)
+            lines = cleaned_content.split('\n')
+            if lines[0].startswith('```'):
+                lines = lines[1:]
+            # Remove closing code block marker
+            if lines and lines[-1].strip() == '```':
+                lines = lines[:-1]
+            cleaned_content = '\n'.join(lines).strip()
+
         try:
             # Try to parse as JSON first
-            parsed = json.loads(content)
+            parsed = json.loads(cleaned_content)
 
             # Ensure it's a dict
             if isinstance(parsed, dict):
@@ -139,7 +151,7 @@ class ArtifactGenerator:
                     return parsed
                 else:
                     logger.warning(f"JSON response missing 'image' key for {resource.name}, using content as image")
-                    return {"image": content}
+                    return {"image": cleaned_content}
             else:
                 # JSON parsed but not a dict (maybe just a string)
                 logger.warning(f"JSON parsed but not a dict for {resource.name}, using as image")
@@ -147,12 +159,12 @@ class ArtifactGenerator:
 
         except json.JSONDecodeError:
             # Not valid JSON, treat as simple string (image name)
-            logger.info(f"Treating Docker response as simple image string for {resource.name}: {content}")
-            return {"image": content}
+            logger.info(f"Treating Docker response as simple image string for {resource.name}: {cleaned_content}")
+            return {"image": cleaned_content}
         except Exception as e:
             logger.error(f"Error parsing Docker response for {resource.name}: {e}")
             # Fallback to treating as image name
-            return {"image": content}
+            return {"image": cleaned_content}
 
     def _build_prompt(self, resource: Any) -> str:
         """Build generation prompt based on resource."""

@@ -12,10 +12,8 @@ Deploys three Docker containers with different configuration approaches:
 
 ## Prerequisites
 
-1. LM Studio running locally (or configure OpenRouter):
+1. OpenRouter API key:
    ```bash
-   # Default: uses LM Studio at http://localhost:1234
-   # Or set OpenRouter:
    export OPENROUTER_API_KEY="your-key-here"
    ```
 

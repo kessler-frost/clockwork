@@ -17,7 +17,7 @@ Fast, isolated tests for individual components:
 
 Component interaction and API integration tests:
 
-- **`test_agno_integration.py`** - AI agent integration with LM Studio
+- **`test_agno_integration.py`** - AI agent integration
 - **`test_integration.py`** - Core pipeline integration
 - Database and external service integration
 
@@ -119,7 +119,7 @@ detailed coverage reports.
 ### Common Issues
 
 1. **Import Errors**: Ensure `PYTHONPATH` includes project root
-2. **AI Integration**: Check LM Studio is running for AI tests
+2. **AI Integration**: Check OpenRouter API key is configured for AI tests
 3. **File Permissions**: Verify test has write access to temp directories
 4. **Environment**: Use appropriate config files for test environment
 

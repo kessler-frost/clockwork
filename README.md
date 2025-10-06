@@ -36,7 +36,6 @@ uv run clockwork apply examples/file-generation/main.py
 
 ## Example
 
-**main.py** - Define resources in Python:
 ```python
 from clockwork.resources import FileResource, ArtifactSize
 
@@ -56,30 +55,11 @@ readme = FileResource(
 )
 ```
 
-**Deploy it:**
 ```bash
 uv run clockwork apply main.py
 ```
 
-**What happens:**
-1. Clockwork loads your resources from `main.py`
-2. AI generates content for `article` (because `content` is not set)
-3. Resources compile to PyInfra operations
-4. PyInfra creates the files on your system
-
-## Architecture
-
-```
-Python Resources → AI Generation → PyInfra Compilation → Deployment
-```
-
-**Simple pipeline:**
-- **Load**: Execute `main.py`, collect Resource instances
-- **Generate**: AI creates content via OpenRouter (only when needed)
-- **Compile**: Resources generate PyInfra operation code (templates)
-- **Deploy**: PyInfra executes the deployment
-
-See [ARCHITECTURE.md](./ARCHITECTURE.md) for details.
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for how it works.
 
 ## CLI
 
@@ -112,10 +92,10 @@ Creates files with optional AI-generated content.
 
 ```python
 FileResource(
-    name="article.md",           # filename
+    name="article.md",
     description="About...",      # what AI should write
     size=ArtifactSize.SMALL,    # SMALL | MEDIUM | LARGE
-    path="/tmp/article.md",      # where to create
+    directory="path/to/dir",     # where to create
     content=None,                # if set, skips AI
     mode="644"                   # file permissions
 )
@@ -135,9 +115,7 @@ DockerServiceResource(
 )
 ```
 
-**AI-Powered Image Suggestions**: When `image` is not specified, Clockwork's AI analyzes the description and suggests an appropriate Docker image (e.g., `nginx:latest`, `redis:7-alpine`).
-
-More resource types coming soon (databases, Kubernetes, etc.).
+**AI-Powered**: When `image` is not specified, AI suggests appropriate Docker images.
 
 ## Configuration
 
@@ -165,145 +143,39 @@ Override via CLI:
 clockwork apply main.py --model "openai/gpt-4o-mini"
 ```
 
-## Development
-
-```bash
-# Run tests
-uv run pytest tests/ -v
-
-# Run specific test
-uv run pytest tests/test_resources.py -v
-
-# Clean up
-rm -rf .clockwork/
-```
-
-See [CLAUDE.md](./CLAUDE.md) for development guide.
-
-## Project Structure
-
-```
-clockwork/
-├── clockwork/
-│   ├── resources/              # Pydantic resource models
-│   │   ├── base.py            # Base Resource class
-│   │   └── file.py            # FileResource
-│   ├── artifact_generator.py  # AI-powered content generation
-│   ├── pyinfra_compiler.py    # PyInfra code generation
-│   ├── core.py                # Pipeline orchestrator
-│   ├── cli.py                 # CLI interface
-│   └── errors.py              # Error classes
-├── examples/
-│   └── file-generation/       # Example
-├── tests/                     # Test suite
-└── pyproject.toml            # Dependencies
-```
-
 ## Why Clockwork?
 
 - **Pure Python**: No custom DSL, just Pydantic models
 - **AI-powered**: Dynamic content generation via OpenRouter
 - **Simple pipeline**: Load → Generate → Compile → Deploy
-- **Minimal code**: ~700 lines of core logic
-- **7 dependencies**: Focused and lightweight
 - **Pythonic**: Type-safe with full IDE support
-
-## How It Works
-
-### 1. Define Resources (Python)
-```python
-from clockwork.resources import FileResource, ArtifactSize
-
-config = FileResource(
-    name="config.json",
-    description="Generate a JSON config for a web server",
-    size=ArtifactSize.SMALL
-)
-```
-
-### 2. AI Generates Content
-Clockwork calls OpenRouter to generate the content:
-```json
-{
-  "server": {
-    "port": 8080,
-    "host": "0.0.0.0"
-  }
-}
-```
-
-### 3. Compile to PyInfra
-Resource generates PyInfra operation:
-```python
-files.put(
-    name="Create config.json",
-    src=StringIO("""{"server": {...}}"""),
-    dest="/tmp/config.json",
-    mode="644"
-)
-```
-
-### 4. PyInfra Deploys
-PyInfra executes the operation and creates the file.
 
 ## Examples
 
-See `examples/` directory:
-
-- **file-generation/**: AI-generated and user-provided files
-- **docker-service/**: Docker containers with AI-suggested images
-
-**Try the examples:**
 ```bash
 # File generation
 uv run clockwork apply examples/file-generation/main.py
 uv run clockwork destroy examples/file-generation/main.py
 
 # Docker services
-uv run clockwork demo --text-only --example docker-service
+uv run clockwork apply examples/docker-service/main.py
 uv run clockwork destroy examples/docker-service/main.py
 ```
 
-More examples coming soon!
+See `examples/` directory for more.
 
-## Requirements
+## Development
 
-- Python 3.12+
-- OpenRouter API key (for AI generation)
+```bash
+# Run tests
+uv run pytest tests/ -v
 
-## Dependencies
-
-```toml
-dependencies = [
-    "pydantic>=2.0.0",
-    "pydantic-settings>=2.0.0",
-    "typer>=0.16.0",
-    "rich>=13.0.0",
-    "agno>=2.0.4",
-    "openai>=1.99.9",
-    "pyinfra>=3.0",
-]
+# Clean up
+rm -rf .clockwork/ examples/scratch/
 ```
 
-## License
-
-See [LICENSE](./LICENSE) file.
-
-## Contributing
-
-1. Fork the repo
-2. Create a feature branch
-3. Add tests for your changes
-4. Submit a pull request
-
-See [CLAUDE.md](./CLAUDE.md) for development setup.
+See [CLAUDE.md](./CLAUDE.md) for development guide.
 
 ## Roadmap
 
-See [ROADMAP.md](./ROADMAP.md) for upcoming features and planned enhancements.
-
-## Support
-
-- Issues: [GitHub Issues](https://github.com/yourusername/clockwork/issues)
-- Docs: [ARCHITECTURE.md](./ARCHITECTURE.md)
-- Dev Guide: [CLAUDE.md](./CLAUDE.md)
+See [ROADMAP.md](./ROADMAP.md) for upcoming features.

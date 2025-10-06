@@ -29,8 +29,7 @@ from clockwork.resources import DockerServiceResource
 nginx = DockerServiceResource(
     name="nginx-ai",
     description="A production-ready web server for serving static content and reverse proxying",
-    ports=["80:80", "443:443"],
-    networks=["web"]
+    ports=["8080:80"]
 )
 
 # Example 2: Explicit image with AI config potential
@@ -55,6 +54,5 @@ postgres = DockerServiceResource(
         "POSTGRES_USER": "clockwork",
         "POSTGRES_DB": "app"
     },
-    volumes=["pg_data:/var/lib/postgresql/data"],
-    networks=["backend"]
+    volumes=["pg_data:/var/lib/postgresql/data"]
 )

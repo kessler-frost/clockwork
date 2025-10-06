@@ -59,7 +59,7 @@ dmypy.json
 demo-test/
 examples/scratch/
 
-# AI models and LM Studio
+# AI models
 models/
 *.gguf
 *.bin
