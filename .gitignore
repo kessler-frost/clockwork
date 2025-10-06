@@ -16,6 +16,11 @@ dist/
 venv/
 env/
 
+# Environment files
+.env
+.env.local
+.env.*.local
+
 # UV package manager
 # Keep uv.lock in version control for reproducibility
 

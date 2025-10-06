@@ -12,6 +12,7 @@ from typing import List, Dict, Any, Optional
 
 from .artifact_generator import ArtifactGenerator
 from .pyinfra_compiler import PyInfraCompiler
+from .settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -22,20 +23,29 @@ class ClockworkCore:
     def __init__(
         self,
         openrouter_api_key: Optional[str] = None,
-        openrouter_model: str = "openai/gpt-oss-20b:free"
+        openrouter_model: Optional[str] = None
     ):
         """
         Initialize ClockworkCore.
 
         Args:
-            openrouter_api_key: OpenRouter API key (defaults to env var)
-            openrouter_model: Model to use for artifact generation
+            openrouter_api_key: OpenRouter API key (overrides settings/.env)
+            openrouter_model: Model to use for artifact generation (overrides settings/.env)
         """
+        # Load settings
+        settings = get_settings()
+
+        # Use provided values or fall back to settings
+        api_key = openrouter_api_key or settings.openrouter_api_key
+        model = openrouter_model or settings.openrouter_model
+
         self.artifact_generator = ArtifactGenerator(
-            api_key=openrouter_api_key,
-            model=openrouter_model
+            api_key=api_key,
+            model=model
         )
-        self.pyinfra_compiler = PyInfraCompiler()
+        self.pyinfra_compiler = PyInfraCompiler(
+            output_dir=settings.pyinfra_output_dir
+        )
 
         logger.info("ClockworkCore initialized")
 

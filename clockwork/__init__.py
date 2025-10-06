@@ -14,6 +14,7 @@ Start with simple Python resources, let AI handle the complexity.
 from .core import ClockworkCore
 from .models import ClockworkConfig
 from .errors import ClockworkError, DeploymentError, ConfigurationError
+from .settings import ClockworkSettings, get_settings, reload_settings
 
 __version__ = "0.2.0-alpha"
 __all__ = [
@@ -22,4 +23,7 @@ __all__ = [
     "ClockworkError",
     "DeploymentError",
     "ConfigurationError",
+    "ClockworkSettings",
+    "get_settings",
+    "reload_settings",
 ]

@@ -9,6 +9,7 @@ from rich.panel import Panel
 import logging
 
 from .core import ClockworkCore
+from .settings import get_settings
 
 # Setup
 app = typer.Typer(
@@ -18,11 +19,18 @@ app = typer.Typer(
 )
 console = Console()
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+
+def configure_logging():
+    """Configure logging based on settings."""
+    settings = get_settings()
+    logging.basicConfig(
+        level=getattr(logging, settings.log_level.upper(), logging.INFO),
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+
+
+# Configure logging on module import
+configure_logging()
 
 
 @app.command()
@@ -37,26 +45,29 @@ def apply(
     api_key: str = typer.Option(
         None,
         "--api-key",
-        envvar="OPENROUTER_API_KEY",
-        help="OpenRouter API key (or set OPENROUTER_API_KEY env var)"
+        help="OpenRouter API key (overrides .env)"
     ),
     model: str = typer.Option(
-        "openai/gpt-oss-20b:free",
+        None,
         "--model",
-        help="OpenRouter model to use"
+        help="OpenRouter model (overrides .env)"
     ),
 ):
     """Apply infrastructure: generate artifacts + compile + deploy."""
 
+    # Get settings for display
+    settings = get_settings()
+    display_model = model or settings.openrouter_model
+
     console.print(Panel.fit(
         f"[bold blue]Clockwork Apply[/bold blue]\n"
         f"File: {main_file}\n"
-        f"Model: {model}",
+        f"Model: {display_model}",
         border_style="blue"
     ))
 
     try:
-        # Initialize core
+        # Initialize core (uses settings if params not provided)
         core = ClockworkCore(
             openrouter_api_key=api_key,
             openrouter_model=model
