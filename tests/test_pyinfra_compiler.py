@@ -20,7 +20,7 @@ def test_inventory_generation():
     compiler = PyInfraCompiler()
     inventory = compiler._generate_inventory()
 
-    assert "localhost" in inventory
+    assert 'hosts = ["@local"]' in inventory
     assert "@local" in inventory
 
 

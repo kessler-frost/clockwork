@@ -2,11 +2,12 @@
 Clockwork CLI - Command-line interface for PyInfra-based infrastructure automation.
 """
 
-import typer
+import logging
 from pathlib import Path
+
+import typer
 from rich.console import Console
 from rich.panel import Panel
-import logging
 
 from .core import ClockworkCore
 from .settings import get_settings
@@ -99,26 +100,29 @@ def plan(
     api_key: str = typer.Option(
         None,
         "--api-key",
-        envvar="OPENROUTER_API_KEY",
-        help="OpenRouter API key (or set OPENROUTER_API_KEY env var)"
+        help="OpenRouter API key (overrides .env)"
     ),
     model: str = typer.Option(
-        "openai/gpt-oss-20b:free",
+        None,
         "--model",
-        help="OpenRouter model to use"
+        help="OpenRouter model (overrides .env)"
     ),
 ):
     """Plan mode: show what would be deployed without executing."""
 
+    # Get settings for display
+    settings = get_settings()
+    display_model = model or settings.openrouter_model
+
     console.print(Panel.fit(
         f"[bold cyan]Clockwork Plan (Dry Run)[/bold cyan]\n"
         f"File: {main_file}\n"
-        f"Model: {model}",
+        f"Model: {display_model}",
         border_style="cyan"
     ))
 
     try:
-        # Initialize core
+        # Initialize core (uses settings if params not provided)
         core = ClockworkCore(
             openrouter_api_key=api_key,
             openrouter_model=model

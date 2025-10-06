@@ -4,7 +4,9 @@ PyInfra Compiler - Template-based conversion of resources to PyInfra code.
 
 import logging
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import Any, Dict, List, Optional
+
+from .settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -12,14 +14,15 @@ logger = logging.getLogger(__name__)
 class PyInfraCompiler:
     """Compiles resources into PyInfra inventory and deploy files."""
 
-    def __init__(self, output_dir: str = ".clockwork/pyinfra"):
+    def __init__(self, output_dir: Optional[str] = None):
         """
         Initialize the PyInfra compiler.
 
         Args:
-            output_dir: Directory to write PyInfra files (default: .clockwork/pyinfra)
+            output_dir: Directory to write PyInfra files (overrides settings/.env)
         """
-        self.output_dir = Path(output_dir)
+        settings = get_settings()
+        self.output_dir = Path(output_dir or settings.pyinfra_output_dir)
 
     def compile(self, resources: List[Any], artifacts: Dict[str, str]) -> Path:
         """

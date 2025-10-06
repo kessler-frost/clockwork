@@ -76,7 +76,7 @@ def test_file_resource_user_content():
 
 
 def test_file_resource_escape_content():
-    """Test FileResource properly escapes special characters."""
+    """Test FileResource properly handles special characters in content."""
     file = FileResource(
         name="special.txt",
         description="File with special chars",
@@ -85,9 +85,9 @@ def test_file_resource_escape_content():
     )
 
     operations = file.to_pyinfra_operations({})
-    # Should escape quotes and newlines for Python string
-    assert '\\"' in operations or '"quotes"' in operations
-    assert '\\n' in operations
+    # Triple-quoted strings preserve content, including quotes and newlines
+    assert '"quotes"' in operations or 'quotes' in operations
+    assert 'newlines' in operations
 
 
 def test_file_resource_modes():

@@ -126,6 +126,18 @@ export OPENROUTER_API_KEY="your-key"
 uv run clockwork apply examples/file-generation/main.py
 ```
 
+## Code Guidelines
+
+**Follow Google Python Style Guide**: https://google.github.io/styleguide/pyguide.html
+
+Key conventions:
+- **Imports**: Group by standard library → third-party → local, alphabetically sorted
+- **Naming**: `lowercase_with_underscores` for functions/variables, `CapWords` for classes
+- **Type hints**: Use for all public APIs and function signatures
+- **Docstrings**: Use triple-double quotes with Args/Returns/Raises sections
+- **Settings**: Always use `get_settings()`, never `os.getenv()` or hardcoded defaults
+- **Error handling**: Use specific exceptions with meaningful messages
+
 ## Important Notes
 
 - **No backwards compatibility**: This is v0.2.0, completely rewritten

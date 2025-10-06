@@ -2,11 +2,13 @@
 Artifact Generator - AI-powered content generation using Agno 2.0 + OpenRouter.
 """
 
-import os
 import logging
-from typing import List, Dict, Any
+from typing import Any, Dict, List, Optional
+
 from agno.agent import Agent
 from openai import OpenAI
+
+from .settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -16,27 +18,29 @@ class ArtifactGenerator:
 
     def __init__(
         self,
-        api_key: str = None,
-        model: str = "openai/gpt-oss-20b:free",
-        base_url: str = "https://openrouter.ai/api/v1"
+        api_key: Optional[str] = None,
+        model: Optional[str] = None,
+        base_url: Optional[str] = None
     ):
         """
         Initialize the artifact generator.
 
         Args:
-            api_key: OpenRouter API key (defaults to OPENROUTER_API_KEY env var)
-            model: Model ID to use (default: openai/gpt-oss-20b:free)
-            base_url: OpenRouter API base URL
+            api_key: OpenRouter API key (overrides settings/.env)
+            model: Model ID to use (overrides settings/.env)
+            base_url: OpenRouter API base URL (overrides settings/.env)
         """
-        self.api_key = api_key or os.getenv("OPENROUTER_API_KEY")
+        settings = get_settings()
+
+        self.api_key = api_key or settings.openrouter_api_key
         if not self.api_key:
             raise ValueError(
-                "OpenRouter API key required. Set OPENROUTER_API_KEY environment variable "
+                "OpenRouter API key required. Set OPENROUTER_API_KEY in .env file "
                 "or pass api_key parameter."
             )
 
-        self.model = model
-        self.base_url = base_url
+        self.model = model or settings.openrouter_model
+        self.base_url = base_url or settings.openrouter_base_url
 
         # Initialize OpenAI client pointing to OpenRouter
         self.client = OpenAI(
