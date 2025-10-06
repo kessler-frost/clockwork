@@ -120,11 +120,47 @@ server.shell(
     commands=["echo 'hello'"]
 )
 '''
+
+    def to_pyinfra_destroy_operations(self, artifacts: Dict[str, Any]) -> str:
+        # Return PyInfra operation code to tear down the resource
+        return f'''
+# Remove MyResource
+server.shell(
+    name="Remove my resource",
+    commands=["echo 'cleanup'"]
+)
+'''
 ```
 
 2. Export it in `clockwork/resources/__init__.py`
 3. Add tests in `tests/test_resources.py`
 4. Create an example in `examples/`
+
+**Example: DockerServiceResource**
+
+The `DockerServiceResource` demonstrates a complete resource implementation with AI-powered image suggestions:
+
+```python
+from clockwork.resources import DockerServiceResource
+
+# AI suggests the Docker image based on description
+nginx = DockerServiceResource(
+    name="nginx-web",
+    description="Web server for serving static content",
+    ports=["80:80"],
+    volumes=["./html:/usr/share/nginx/html"],
+    env_vars={"ENV": "production"}
+)
+
+# Explicit image specification
+redis = DockerServiceResource(
+    name="redis-cache",
+    description="Redis cache server",
+    image="redis:7-alpine",
+    ports=["6379:6379"],
+    volumes=["redis_data:/data"]
+)
+```
 
 ### Testing
 
@@ -147,6 +183,15 @@ echo "OPENROUTER_API_KEY=your-key-here" > .env
 
 # Run example
 uv run clockwork apply examples/file-generation/main.py
+
+# Destroy deployed resources
+uv run clockwork destroy examples/file-generation/main.py
+
+# Test Docker service example
+uv run clockwork demo --text-only --example docker-service
+
+# Destroy Docker containers
+uv run clockwork destroy examples/docker-service/main.py
 ```
 
 ## Code Guidelines
@@ -172,6 +217,14 @@ Key conventions:
 
 After testing, clean up generated files:
 ```bash
+# Use destroy command to tear down resources
+uv run clockwork destroy examples/file-generation/main.py
+uv run clockwork destroy examples/docker-service/main.py
+
+# Or manually clean up
 rm -rf .clockwork/
-rm -f /tmp/*.md /tmp/*.txt
+rm -rf examples/scratch/
+
+# Stop Docker containers if needed
+docker ps -a | grep -E "nginx-ai|redis-cache|postgres-db" | awk '{print $1}' | xargs docker rm -f
 ```

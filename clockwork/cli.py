@@ -144,6 +144,60 @@ def plan(
 
 
 @app.command()
+def destroy(
+    main_file: Path = typer.Argument(
+        ...,
+        help="Path to main.py file with resource definitions",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+    ),
+    api_key: str = typer.Option(
+        None,
+        "--api-key",
+        help="OpenRouter API key (overrides .env)"
+    ),
+    model: str = typer.Option(
+        None,
+        "--model",
+        help="OpenRouter model (overrides .env)"
+    ),
+):
+    """Destroy infrastructure: remove all deployed resources."""
+
+    # Get settings for display
+    settings = get_settings()
+    display_model = model or settings.openrouter_model
+
+    console.print(Panel.fit(
+        f"[bold red]Clockwork Destroy[/bold red]\n"
+        f"File: {main_file}\n"
+        f"Model: {display_model}",
+        border_style="red"
+    ))
+
+    try:
+        # Initialize core (uses settings if params not provided)
+        core = ClockworkCore(
+            openrouter_api_key=api_key,
+            openrouter_model=model
+        )
+
+        # Execute destroy pipeline
+        result = core.destroy(main_file)
+
+        # Show results
+        console.print("\n[bold green]✓ Resources destroyed successfully![/bold green]")
+        if result.get("stdout"):
+            console.print("\n[dim]PyInfra output:[/dim]")
+            console.print(result["stdout"])
+
+    except Exception as e:
+        console.print(f"\n[bold red]✗ Destroy failed:[/bold red] {e}")
+        raise typer.Exit(code=1)
+
+
+@app.command()
 def version():
     """Show Clockwork version."""
     from . import __version__

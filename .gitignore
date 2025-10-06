@@ -57,6 +57,7 @@ dmypy.json
 # Clockwork demo directories
 .clockwork-demo/
 demo-test/
+examples/scratch/
 
 # AI models and LM Studio
 models/

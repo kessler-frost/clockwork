@@ -45,14 +45,14 @@ article = FileResource(
     name="game_of_life.md",
     description="Write a comprehensive article about Conway's Game of Life",
     size=ArtifactSize.MEDIUM,
-    path="/tmp/game_of_life.md"
+    directory="examples/scratch"
 )
 
 # User provides content
 readme = FileResource(
     name="README.md",
     content="# My Project\n\nGenerated with Clockwork!",
-    path="/tmp/README.md"
+    directory="examples/scratch"
 )
 ```
 
@@ -90,6 +90,12 @@ clockwork apply main.py
 # Dry run (plan mode)
 clockwork plan main.py
 
+# Destroy deployed resources
+clockwork destroy main.py
+
+# Run interactive demo
+clockwork demo --text-only
+
 # Custom model
 clockwork apply main.py --model "openai/gpt-4o-mini"
 
@@ -115,7 +121,23 @@ FileResource(
 )
 ```
 
-More resource types coming soon (services, databases, etc.).
+### DockerServiceResource
+Runs Docker containers with optional AI-suggested images.
+
+```python
+DockerServiceResource(
+    name="nginx",
+    description="Web server for serving static content",  # AI suggests image
+    ports=["80:80"],
+    volumes=["data:/usr/share/nginx/html"],
+    env_vars={"ENV": "production"},
+    networks=["web"]
+)
+```
+
+**AI-Powered Image Suggestions**: When `image` is not specified, Clockwork's AI analyzes the description and suggests an appropriate Docker image (e.g., `nginx:latest`, `redis:7-alpine`).
+
+More resource types coming soon (databases, Kubernetes, etc.).
 
 ## Configuration
 
@@ -229,6 +251,18 @@ PyInfra executes the operation and creates the file.
 See `examples/` directory:
 
 - **file-generation/**: AI-generated and user-provided files
+- **docker-service/**: Docker containers with AI-suggested images
+
+**Try the examples:**
+```bash
+# File generation
+uv run clockwork apply examples/file-generation/main.py
+uv run clockwork destroy examples/file-generation/main.py
+
+# Docker services
+uv run clockwork demo --text-only --example docker-service
+uv run clockwork destroy examples/docker-service/main.py
+```
 
 More examples coming soon!
 
@@ -266,12 +300,7 @@ See [CLAUDE.md](./CLAUDE.md) for development setup.
 
 ## Roadmap
 
-- [ ] ServiceResource (systemd services)
-- [ ] DatabaseResource (PostgreSQL, MySQL)
-- [ ] Remote deployments (SSH, Kubernetes)
-- [ ] Resource dependencies
-- [ ] Artifact caching
-- [ ] Streaming AI output
+See [ROADMAP.md](./ROADMAP.md) for upcoming features and planned enhancements.
 
 ## Support
 

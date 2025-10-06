@@ -1,7 +1,8 @@
 """
 Clockwork Core - Main pipeline orchestrator for PyInfra-based infrastructure.
 
-Pipeline: Load resources → Generate artifacts (AI) → Compile to PyInfra → Execute deploy
+Apply Pipeline: Load resources → Generate artifacts (AI) → Compile to PyInfra → Execute deploy
+Destroy Pipeline: Load resources → Generate artifacts (AI) → Compile destroy ops → Execute destroy
 """
 
 import importlib.util
@@ -136,20 +137,62 @@ class ClockworkCore:
 
         return resources
 
-    def _execute_pyinfra(self, pyinfra_dir: Path) -> Dict[str, Any]:
+    def destroy(self, main_file: Path, dry_run: bool = False) -> Dict[str, Any]:
         """
-        Execute the PyInfra deployment.
+        Full destroy pipeline: load → generate → compile destroy → execute.
 
         Args:
-            pyinfra_dir: Path to directory with inventory.py and deploy.py
+            main_file: Path to main.py file with resource definitions
+            dry_run: If True, only compile without executing
 
         Returns:
             Dict with execution results
         """
-        logger.info(f"Executing PyInfra deployment from: {pyinfra_dir}")
+        logger.info(f"Starting Clockwork destroy pipeline for: {main_file}")
 
-        # Run: pyinfra -y inventory.py deploy.py (auto-approve changes)
-        cmd = ["pyinfra", "-y", "inventory.py", "deploy.py"]
+        # 1. Load resources from main.py
+        resources = self._load_resources(main_file)
+        logger.info(f"Loaded {len(resources)} resources")
+
+        # 2. Generate artifacts (AI stage) - some resources might need AI for destroy
+        artifacts = self.artifact_generator.generate(resources)
+        logger.info(f"Generated {len(artifacts)} artifacts")
+
+        # 3. Compile to PyInfra destroy operations (template stage)
+        pyinfra_dir = self.pyinfra_compiler.compile_destroy(resources, artifacts)
+        logger.info(f"Compiled destroy operations to PyInfra: {pyinfra_dir}")
+
+        # 4. Execute PyInfra destroy (unless dry run)
+        if dry_run:
+            logger.info("Dry run - skipping execution")
+            return {
+                "dry_run": True,
+                "resources": len(resources),
+                "artifacts": len(artifacts),
+                "pyinfra_dir": str(pyinfra_dir)
+            }
+
+        result = self._execute_pyinfra(pyinfra_dir, deploy_file="destroy.py")
+        logger.info("Clockwork destroy pipeline complete")
+
+        return result
+
+    def _execute_pyinfra(self, pyinfra_dir: Path, deploy_file: str = "deploy.py") -> Dict[str, Any]:
+        """
+        Execute the PyInfra deployment or destroy operation.
+
+        Args:
+            pyinfra_dir: Path to directory with inventory.py and deploy/destroy file
+            deploy_file: Name of the deployment file (default: "deploy.py", can be "destroy.py")
+
+        Returns:
+            Dict with execution results
+        """
+        operation_type = "destroy" if deploy_file == "destroy.py" else "deployment"
+        logger.info(f"Executing PyInfra {operation_type} from: {pyinfra_dir}")
+
+        # Run: pyinfra -y inventory.py <deploy_file> (auto-approve changes)
+        cmd = ["pyinfra", "-y", "inventory.py", deploy_file]
 
         try:
             result = subprocess.run(
@@ -160,7 +203,7 @@ class ClockworkCore:
                 check=True
             )
 
-            logger.info("PyInfra deployment successful")
+            logger.info(f"PyInfra {operation_type} successful")
             return {
                 "success": True,
                 "stdout": result.stdout,
@@ -169,5 +212,5 @@ class ClockworkCore:
             }
 
         except subprocess.CalledProcessError as e:
-            logger.error(f"PyInfra deployment failed: {e.stderr}")
-            raise RuntimeError(f"PyInfra deployment failed: {e.stderr}") from e
+            logger.error(f"PyInfra {operation_type} failed: {e.stderr}")
+            raise RuntimeError(f"PyInfra {operation_type} failed: {e.stderr}") from e

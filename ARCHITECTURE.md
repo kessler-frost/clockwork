@@ -75,6 +75,20 @@ class FileResource(Resource):
     mode: str = "644"       # file permissions
 ```
 
+**Example: DockerServiceResource**
+```python
+class DockerServiceResource(Resource):
+    name: str                         # container name
+    description: str                  # what it does (for AI image suggestion)
+    image: Optional[str] = None      # Docker image (AI suggests if not provided)
+    ports: Optional[List[str]] = None  # Port mappings ["80:80"]
+    volumes: Optional[List[str]] = None  # Volume mounts ["/host:/container"]
+    env_vars: Optional[Dict[str, str]] = None  # Environment variables
+    networks: Optional[List[str]] = None  # Docker networks
+    present: bool = True              # Should container exist
+    start: bool = True                # Should container be running
+```
+
 ### 2. Artifact Generator (AI Stage)
 
 **Location**: `clockwork/artifact_generator.py`
@@ -135,7 +149,17 @@ class ClockworkCore:
         if not dry_run:
             result = self._execute_pyinfra(pyinfra_dir)  # 4. Deploy
         return result
+
+    def destroy(self, main_file: Path, dry_run: bool = False):
+        resources = self._load_resources(main_file)      # 1. Load
+        artifacts = self.artifact_generator.generate(resources)  # 2. Generate (if needed)
+        pyinfra_dir = self.pyinfra_compiler.compile_destroy(resources, artifacts)  # 3. Compile destroy
+        if not dry_run:
+            result = self._execute_pyinfra(pyinfra_dir)  # 4. Execute teardown
+        return result
 ```
+
+**Destroy Operations**: Each resource implements `to_pyinfra_destroy_operations()` to generate teardown code. The destroy pipeline follows the same stages but generates removal operations instead of creation operations.
 
 ### 5. CLI
 
@@ -144,9 +168,11 @@ class ClockworkCore:
 Simple Typer-based CLI:
 
 ```bash
-clockwork apply main.py    # Full pipeline
-clockwork plan main.py     # Dry run (no execution)
-clockwork version          # Show version
+clockwork apply main.py      # Full pipeline (deploy resources)
+clockwork plan main.py       # Dry run (no execution)
+clockwork destroy main.py    # Tear down resources
+clockwork demo               # Run interactive demo
+clockwork version            # Show version
 ```
 
 ## Data Flow
@@ -189,6 +215,27 @@ files.put(
 - PyInfra executes operations
 - File created at `/tmp/article.md`
 
+### Destroy Pipeline
+
+The destroy pipeline follows the same stages but generates teardown operations:
+
+**Stage 1-2**: Load resources and generate artifacts (same as apply)
+
+**Stage 3 (Destroy Compile)**:
+- Call `article.to_pyinfra_destroy_operations(artifacts)`
+- Generate PyInfra code:
+```python
+files.file(
+    name="Remove article.md",
+    path="/tmp/article.md",
+    present=False,
+)
+```
+
+**Stage 4 (Destroy Execute)**:
+- Run: `pyinfra inventory.py deploy.py`
+- PyInfra removes the file
+
 ## Design Principles
 
 ### 1. Python-First
@@ -223,7 +270,7 @@ class ServiceResource(Resource):
         # Logic to determine if AI needed
 
     def to_pyinfra_operations(self, artifacts: Dict[str, Any]) -> str:
-        # Return PyInfra operation code
+        # Return PyInfra operation code for deployment
         return '''
         server.systemd.service(
             name="Start my service",
@@ -231,7 +278,26 @@ class ServiceResource(Resource):
             running=True,
         )
         '''
+
+    def to_pyinfra_destroy_operations(self, artifacts: Dict[str, Any]) -> str:
+        # Return PyInfra operation code for teardown
+        return '''
+        server.systemd.service(
+            name="Stop my service",
+            service="myapp",
+            running=False,
+            enabled=False,
+        )
+        '''
 ```
+
+**Real Example: DockerServiceResource**
+
+See `clockwork/resources/docker.py` for a complete implementation that:
+- Uses AI to suggest Docker images when not specified
+- Supports ports, volumes, environment variables, and networks
+- Implements both deploy and destroy operations
+- Provides comprehensive documentation and examples
 
 2. Export in `__init__.py`
 3. Add tests
@@ -286,8 +352,10 @@ dependencies = [
 
 ## Future Enhancements
 
-- More resource types (ServiceResource, DatabaseResource)
+- More resource types (ServiceResource, DatabaseResource, K8sResource)
 - Support for remote PyInfra targets (SSH, Kubernetes)
 - Resource dependencies and ordering hints
 - Caching of AI-generated artifacts
 - Streaming output for long AI generations
+- Enhanced Docker support (compose files, multi-container apps)
+- State tracking for resource lifecycle management

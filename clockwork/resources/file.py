@@ -54,3 +54,29 @@ files.put(
     mode="{self.mode}",
 )
 '''
+
+    def to_pyinfra_destroy_operations(self, artifacts: Dict[str, Any]) -> str:
+        """Generate PyInfra operations code to destroy/remove the file.
+
+        Args:
+            artifacts: Dict with generated content (if any)
+
+        Returns:
+            PyInfra operation code to remove the file
+        """
+        # Determine file path: use path if provided, else directory + name, else /tmp + name
+        if self.path:
+            file_path = self.path
+        elif self.directory:
+            file_path = f"{self.directory.rstrip('/')}/{self.name}"
+        else:
+            file_path = f"/tmp/{self.name}"
+
+        return f'''
+# Remove file: {self.name}
+files.file(
+    name="Remove {self.name}",
+    path="{file_path}",
+    present=False,
+)
+'''

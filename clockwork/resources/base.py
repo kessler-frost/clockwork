@@ -32,3 +32,14 @@ class Resource(BaseModel):
             String of PyInfra operation code
         """
         raise NotImplementedError(f"{self.__class__.__name__} must implement to_pyinfra_operations()")
+
+    def to_pyinfra_destroy_operations(self, artifacts: Dict[str, Any]) -> str:
+        """Generate PyInfra operations code to destroy/remove this resource.
+
+        Args:
+            artifacts: Dict mapping resource names to generated content
+
+        Returns:
+            String of PyInfra operation code to destroy the resource
+        """
+        raise NotImplementedError(f"{self.__class__.__name__} must implement to_pyinfra_destroy_operations()")

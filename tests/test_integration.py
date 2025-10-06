@@ -311,3 +311,163 @@ dynamic_file = FileResource(
 
     assert result["resources"] == 2
     assert result["artifacts"] == 1  # Only one AI-generated
+
+
+def test_destroy_file_resources(tmp_path):
+    """Test destroying FileResources."""
+    main_file = tmp_path / "main.py"
+    main_file.write_text('''
+from clockwork.resources import FileResource, ArtifactSize
+
+test_file = FileResource(
+    name="test.txt",
+    description="Test file",
+    size=ArtifactSize.SMALL,
+    content="Test content"
+)
+''')
+
+    # Mock the artifact generator and PyInfra execution
+    with patch('clockwork.core.ArtifactGenerator') as mock_generator, \
+         patch('clockwork.core.subprocess.run') as mock_subprocess:
+
+        # Setup artifact generator mock
+        mock_gen_instance = Mock()
+        mock_gen_instance.generate.return_value = {}
+        mock_generator.return_value = mock_gen_instance
+
+        # Setup subprocess mock for destroy
+        mock_result = Mock()
+        mock_result.stdout = "PyInfra destroy output"
+        mock_result.stderr = ""
+        mock_result.returncode = 0
+        mock_subprocess.return_value = mock_result
+
+        # Run destroy
+        core = ClockworkCore(openrouter_api_key="test-key")
+        result = core.destroy(main_file, dry_run=False)
+
+    # Verify execution
+    assert result["success"] is True
+    assert mock_subprocess.called
+
+    # Verify destroy.py was used
+    call_args = mock_subprocess.call_args
+    assert "destroy.py" in call_args[0][0]
+
+
+def test_destroy_with_dry_run(tmp_path):
+    """Test destroy in dry run mode."""
+    main_file = tmp_path / "main.py"
+    main_file.write_text('''
+from clockwork.resources import FileResource, ArtifactSize
+
+readme = FileResource(
+    name="README.md",
+    description="Test readme",
+    size=ArtifactSize.SMALL,
+    content="# Test"
+)
+''')
+
+    with patch('clockwork.core.ArtifactGenerator') as mock_generator:
+        mock_instance = Mock()
+        mock_instance.generate.return_value = {}
+        mock_generator.return_value = mock_instance
+
+        core = ClockworkCore(openrouter_api_key="test-key")
+        result = core.destroy(main_file, dry_run=True)
+
+    # Verify dry run behavior
+    assert result["dry_run"] is True
+    assert result["resources"] == 1
+    assert "pyinfra_dir" in result
+
+    # Verify destroy.py was generated
+    pyinfra_dir = Path(result["pyinfra_dir"])
+    assert pyinfra_dir.exists()
+    assert (pyinfra_dir / "destroy.py").exists()
+
+
+def test_destroy_mixed_resources(tmp_path):
+    """Test destroying both files and Docker resources."""
+    main_file = tmp_path / "main.py"
+    main_file.write_text('''
+from clockwork.resources import FileResource, ArtifactSize
+
+# User-provided content
+static_file = FileResource(
+    name="static.txt",
+    description="Static file",
+    size=ArtifactSize.SMALL,
+    content="Static content"
+)
+
+# AI-generated content
+dynamic_file = FileResource(
+    name="dynamic.md",
+    description="Generate documentation",
+    size=ArtifactSize.MEDIUM
+)
+''')
+
+    # Mock the artifact generator and PyInfra execution
+    with patch('clockwork.core.ArtifactGenerator') as mock_generator, \
+         patch('clockwork.core.subprocess.run') as mock_subprocess:
+
+        # Setup artifact generator mock
+        mock_gen_instance = Mock()
+        mock_gen_instance.generate.return_value = {"dynamic.md": "# Generated Doc"}
+        mock_generator.return_value = mock_gen_instance
+
+        # Setup subprocess mock
+        mock_result = Mock()
+        mock_result.stdout = "Destroy complete"
+        mock_result.stderr = ""
+        mock_result.returncode = 0
+        mock_subprocess.return_value = mock_result
+
+        # Run destroy
+        core = ClockworkCore(openrouter_api_key="test-key")
+        result = core.destroy(main_file, dry_run=False)
+
+    # Verify execution
+    assert result["success"] is True
+
+    # Verify PyInfra was called with correct arguments
+    call_args = mock_subprocess.call_args
+    assert call_args[0][0] == ["pyinfra", "-y", "inventory.py", "destroy.py"]
+
+
+def test_destroy_compiler_integration(tmp_path):
+    """Test that the PyInfra compiler properly generates destroy operations."""
+    main_file = tmp_path / "main.py"
+    main_file.write_text('''
+from clockwork.resources import FileResource, ArtifactSize
+
+test_file = FileResource(
+    name="test.txt",
+    description="Test",
+    size=ArtifactSize.SMALL,
+    content="Test content"
+)
+''')
+
+    with patch('clockwork.core.ArtifactGenerator') as mock_generator:
+        mock_instance = Mock()
+        mock_instance.generate.return_value = {}
+        mock_generator.return_value = mock_instance
+
+        core = ClockworkCore(openrouter_api_key="test-key")
+        result = core.destroy(main_file, dry_run=True)
+
+    # Verify PyInfra destroy files were generated
+    pyinfra_dir = Path(result["pyinfra_dir"])
+    assert pyinfra_dir.exists()
+    assert (pyinfra_dir / "inventory.py").exists()
+    assert (pyinfra_dir / "destroy.py").exists()
+
+    # Verify destroy.py has correct structure
+    destroy_content = (pyinfra_dir / "destroy.py").read_text()
+    assert "PyInfra destroy - generated by Clockwork" in destroy_content
+    assert "from pyinfra.operations import files" in destroy_content
