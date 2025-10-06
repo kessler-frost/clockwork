@@ -1,30 +1,25 @@
 """
-Clockwork - Factory for intelligent declarative tasks.
+Clockwork - Factory for intelligent declarative infrastructure tasks.
 
-Clockwork provides a simple three-phase pipeline for building intelligent task automation:
-1. Intake: Parse .cw (HCL-ish) task definitions into IR (Intermediate Representation)
-2. Assembly: Convert IR into ActionList with dependencies and ordering
-3. Forge: Compile ActionList to executable artifacts using AI agents and execute them
+Define infrastructure in Python using Pydantic models. Clockwork uses AI
+to generate dynamic content, then compiles to PyInfra for deployment.
 
-Key components:
-- ClockworkCore: Main pipeline orchestrator for task execution
-- Models: Pydantic data models for all pipeline stages
-- CLI: Command-line interface (plan, build, apply, verify)
+Two-stage compilation:
+1. AI generates artifacts (via OpenRouter)
+2. Templates compile to PyInfra operations
 
-Start with infrastructure tasks, expand to any domain.
+Start with simple Python resources, let AI handle the complexity.
 """
 
 from .core import ClockworkCore
-from .models import (
-    IR, ActionList, ArtifactBundle, ClockworkState, ClockworkConfig,
-    ActionType, ResourceType, ExecutionStatus
-)
-from . import intake, assembly, forge, daemon
+from .models import ClockworkConfig
+from .errors import ClockworkError, DeploymentError, ConfigurationError
 
-__version__ = "0.1.0"
+__version__ = "0.2.0-alpha"
 __all__ = [
     "ClockworkCore",
-    "IR", "ActionList", "ArtifactBundle", "ClockworkState", "ClockworkConfig",
-    "ActionType", "ResourceType", "ExecutionStatus",
-    "intake", "assembly", "forge", "daemon"
+    "ClockworkConfig",
+    "ClockworkError",
+    "DeploymentError",
+    "ConfigurationError",
 ]

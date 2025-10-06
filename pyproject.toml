@@ -4,24 +4,18 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "clockwork"
-version = "0.1.0"
-description = "Factory for intelligent declarative tasks"
+version = "0.2.0"
+description = "Factory for intelligent declarative infrastructure tasks"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "python-hcl2>=7.3.1",
-    "typer>=0.16.0",
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
+    "typer>=0.16.0",
     "rich>=13.0.0",
-    "psutil>=7.0.0",
-    "watchdog>=6.0.0",
-    "paramiko>=4.0.0",
-    "networkx>=3.5",
     "agno>=2.0.4",
     "openai>=1.99.9",
-    "requests>=2.32.4",
-    "joblib>=1.3.0",
+    "pyinfra>=3.0",
 ]
 
 [project.scripts]

@@ -1,51 +1,142 @@
-- "I'm using uv in this repo so run the scripts and cli by keeping that in mind"
-- "Use uv to run python scripts and python based cli (e.g., 'uv run python script.py', 'uv run clockwork --help')"
-- "when generating a plan, keep in mind to allocate spawning separate agents for tasks in the plan that can be parallelized"
-- "don't worry about backward's compatibility and fallback mechanisms"
-- "Always test whether the demo command is broken or not"
+# Clockwork Development Guide
 
-- "Always do cleanup after final testing and demoing is finished"
+**Factory for intelligent declarative infrastructure tasks.**
 
-## Agno 2.0 AI Integration
+## Setup
 
-Clockwork now uses **Agno 2.0** for AI-powered compilation with the following features:
+This project uses `uv` for Python package management:
 
-### Key Features
-- **Memory Management**: Agents remember successful patterns and optimizations
-- **Reasoning Engine**: Step-by-step reasoning for better template selection
-- **Structured Outputs**: Native support for typed outputs
-- **Exponential Backoff**: Intelligent retry logic with exponential backoff
-- **Performance**: 10,000x faster agent instantiation, 50x less memory usage
-
-### Configuration
-
-Use environment variables for all configuration:
-
-- `CLOCKWORK_LM_STUDIO_MODEL`: Model ID (default: `openai/gpt-oss-20b`)
-- `CLOCKWORK_LM_STUDIO_URL`: LM Studio URL (default: `http://localhost:1234`)
-- `CLOCKWORK_USE_AGNO`: Enable/disable AI compilation (default: `true`)
-
-To change the model:
 ```bash
-CLOCKWORK_LM_STUDIO_MODEL="your-model" uv run clockwork demo --text-only
+# Run CLI
+uv run clockwork --help
+
+# Run tests
+uv run pytest tests/
+
+# Run example
+uv run clockwork apply examples/file-generation/main.py
 ```
 
-Or use a .env file:
+## Architecture
+
+Clockwork is a **factory for intelligent declarative infrastructure tasks** using a simple **Python + PyInfra** architecture:
+
+1. **Declare** (Pydantic models): Users define infrastructure tasks in Python
+2. **Generate** (AI via OpenRouter): AI creates dynamic artifacts when needed
+3. **Compile** (Templates): Resources generate PyInfra operations
+4. **Deploy** (PyInfra): Native PyInfra executes the infrastructure tasks
+
+The "factory" metaphor: You provide the blueprint (Pydantic resources), the factory (Clockwork) intelligently manufactures the artifacts (via AI) and assembles them (via PyInfra).
+
+## Key Configuration
+
+### OpenRouter API (for AI generation)
+
+Set your OpenRouter API key:
+
 ```bash
-echo "CLOCKWORK_LM_STUDIO_MODEL=your-model" >> .env
-uv run clockwork demo --text-only
+export OPENROUTER_API_KEY="your-key-here"
 ```
 
-### Integration Details
-- **LM Studio Compatibility**: Uses Agno's `OpenAIChat` class with LM Studio endpoint for better compatibility
-- **Structured Output**: Supports `output_schema` for reliable Pydantic model generation
-- **Model Support**: Optimized for `openai/gpt-oss-20b` model
-- **Endpoint**: Points to `http://localhost:1234/v1` (LM Studio's OpenAI-compatible API)
+Default model: `openai/gpt-oss-20b:free`
 
-### Breaking Changes from Agno 1.x
-- **No backwards compatibility**: All fallback mechanisms removed
-- **Simplified architecture**: Uses direct Agno 2.0 Agents (not Workflows)
-- **Integration method**: Uses OpenAI-compatible API instead of direct LMStudio class
-- **Memory database**: In-memory database automatically created for agent memory
+Change model:
+```bash
+uv run clockwork apply main.py --model "openai/gpt-4o-mini"
+```
 
-When I ask you to change the model, update the `CLOCKWORK_LM_STUDIO_MODEL` environment variable.
+### PyInfra (for deployment)
+
+PyInfra is installed as a dependency. Clockwork generates PyInfra files in `.clockwork/pyinfra/`:
+- `inventory.py` - Target hosts (default: localhost)
+- `deploy.py` - Operations to execute
+
+## Project Structure
+
+```
+clockwork/
+├── clockwork/
+│   ├── resources/          # Pydantic resource models
+│   │   ├── base.py        # Base Resource class
+│   │   └── file.py        # FileResource
+│   ├── artifact_generator.py  # AI-powered content generation
+│   ├── pyinfra_compiler.py    # Template-based PyInfra code gen
+│   ├── core.py               # Main pipeline orchestrator
+│   ├── cli.py                # CLI interface
+│   └── errors.py             # Error classes
+├── examples/
+│   └── file-generation/    # Example Python infrastructure
+├── tests/                  # Test suite
+└── pyproject.toml         # Dependencies
+```
+
+## Development Workflow
+
+### Adding a New Resource Type
+
+1. Create a new resource class in `clockwork/resources/`:
+
+```python
+from .base import Resource, ArtifactSize
+from typing import Optional, Dict, Any
+
+class MyResource(Resource):
+    name: str
+    # ... your fields
+
+    def needs_artifact_generation(self) -> bool:
+        # Return True if AI should generate content
+        return self.content is None
+
+    def to_pyinfra_operations(self, artifacts: Dict[str, Any]) -> str:
+        # Return PyInfra operation code as string
+        return f'''
+# Your PyInfra operation
+server.shell(
+    name="My operation",
+    commands=["echo 'hello'"]
+)
+'''
+```
+
+2. Export it in `clockwork/resources/__init__.py`
+3. Add tests in `tests/test_resources.py`
+4. Create an example in `examples/`
+
+### Testing
+
+Run all tests:
+```bash
+uv run pytest tests/ -v
+```
+
+Run specific test file:
+```bash
+uv run pytest tests/test_resources.py -v
+```
+
+### Demo Command
+
+Test the full pipeline:
+```bash
+# Set API key
+export OPENROUTER_API_KEY="your-key"
+
+# Run example
+uv run clockwork apply examples/file-generation/main.py
+```
+
+## Important Notes
+
+- **No backwards compatibility**: This is v0.2.0, completely rewritten
+- **No fallback mechanisms**: AI generation requires OpenRouter API key
+- **Keep it simple**: PyInfra handles all the complex execution logic
+- **Test the demo**: Always verify `clockwork apply examples/file-generation/main.py` works
+
+## Cleanup
+
+After testing, clean up generated files:
+```bash
+rm -rf .clockwork/
+rm -f /tmp/*.md /tmp/*.txt
+```

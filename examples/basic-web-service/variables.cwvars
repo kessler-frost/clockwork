@@ -1,8 +1,0 @@
-# Override variables for different environments
-
-# Development
-app_name = "dev-web-app"
-port     = 3000
-
-# Use a specific image version
-image = "nginx:1.25-alpine"

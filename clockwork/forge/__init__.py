@@ -1,34 +1,8 @@
 """
-Forge module for the clockwork project.
+Clockwork Forge - Placeholder for new PyInfra-based architecture.
 
-This module provides the core functionality for compiling action lists into
-executable artifacts and managing their execution in sandboxed environments.
+This module will be rewritten to integrate with PyInfra and OpenRouter.
 """
 
-from .compiler import ArtifactBundle, Compiler
-from .executor import ArtifactExecutor, ExecutionResult, ExecutionError
-from .state import StateManager
-from .runner import (
-    Runner, RunnerFactory, RunnerType, ExecutionResult as RunnerExecutionResult,
-    LocalRunner, DockerRunner, PodmanRunner, SSHRunner, KubernetesRunner,
-    select_runner
-)
-
-__all__ = [
-    "ArtifactBundle", 
-    "Compiler",
-    "ArtifactExecutor",
-    "ExecutionResult",
-    "ExecutionError",
-    "StateManager",
-    "Runner",
-    "RunnerFactory",
-    "RunnerType", 
-    "RunnerExecutionResult",
-    "LocalRunner",
-    "DockerRunner", 
-    "PodmanRunner",
-    "SSHRunner",
-    "KubernetesRunner",
-    "select_runner",
-]
+# Placeholder - will be completely rewritten
+__all__ = []
