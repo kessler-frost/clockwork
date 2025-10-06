@@ -36,13 +36,6 @@ configure_logging()
 
 @app.command()
 def apply(
-    main_file: Path = typer.Argument(
-        ...,
-        help="Path to main.py file with resource definitions",
-        exists=True,
-        file_okay=True,
-        dir_okay=False,
-    ),
     api_key: str = typer.Option(
         None,
         "--api-key",
@@ -56,13 +49,20 @@ def apply(
 ):
     """Apply infrastructure: generate artifacts + compile + deploy."""
 
+    # Check for main.py in current directory
+    main_file = Path.cwd() / "main.py"
+    if not main_file.exists():
+        console.print("[bold red]✗ Error:[/bold red] No main.py found in current directory")
+        console.print("[dim]Hint: cd into your project directory that contains main.py[/dim]")
+        raise typer.Exit(code=1)
+
     # Get settings for display
     settings = get_settings()
     display_model = model or settings.openrouter_model
 
     console.print(Panel.fit(
         f"[bold blue]Clockwork Apply[/bold blue]\n"
-        f"File: {main_file}\n"
+        f"Directory: {Path.cwd().name}\n"
         f"Model: {display_model}",
         border_style="blue"
     ))
@@ -90,13 +90,6 @@ def apply(
 
 @app.command()
 def plan(
-    main_file: Path = typer.Argument(
-        ...,
-        help="Path to main.py file with resource definitions",
-        exists=True,
-        file_okay=True,
-        dir_okay=False,
-    ),
     api_key: str = typer.Option(
         None,
         "--api-key",
@@ -110,13 +103,20 @@ def plan(
 ):
     """Plan mode: show what would be deployed without executing."""
 
+    # Check for main.py in current directory
+    main_file = Path.cwd() / "main.py"
+    if not main_file.exists():
+        console.print("[bold red]✗ Error:[/bold red] No main.py found in current directory")
+        console.print("[dim]Hint: cd into your project directory that contains main.py[/dim]")
+        raise typer.Exit(code=1)
+
     # Get settings for display
     settings = get_settings()
     display_model = model or settings.openrouter_model
 
     console.print(Panel.fit(
         f"[bold cyan]Clockwork Plan (Dry Run)[/bold cyan]\n"
-        f"File: {main_file}\n"
+        f"Directory: {Path.cwd().name}\n"
         f"Model: {display_model}",
         border_style="cyan"
     ))
@@ -145,13 +145,6 @@ def plan(
 
 @app.command()
 def destroy(
-    main_file: Path = typer.Argument(
-        ...,
-        help="Path to main.py file with resource definitions",
-        exists=True,
-        file_okay=True,
-        dir_okay=False,
-    ),
     api_key: str = typer.Option(
         None,
         "--api-key",
@@ -165,13 +158,20 @@ def destroy(
 ):
     """Destroy infrastructure: remove all deployed resources."""
 
+    # Check for main.py in current directory
+    main_file = Path.cwd() / "main.py"
+    if not main_file.exists():
+        console.print("[bold red]✗ Error:[/bold red] No main.py found in current directory")
+        console.print("[dim]Hint: cd into your project directory that contains main.py[/dim]")
+        raise typer.Exit(code=1)
+
     # Get settings for display
     settings = get_settings()
     display_model = model or settings.openrouter_model
 
     console.print(Panel.fit(
         f"[bold red]Clockwork Destroy[/bold red]\n"
-        f"File: {main_file}\n"
+        f"Directory: {Path.cwd().name}\n"
         f"Model: {display_model}",
         border_style="red"
     ))

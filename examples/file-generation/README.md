@@ -4,7 +4,7 @@ This example demonstrates Clockwork's AI-powered file generation capabilities.
 
 ## What it does
 
-Creates three files in `examples/scratch/`:
+Creates three files in `scratch/`:
 1. **game_of_life.md** - AI-generated article about Conway's Game of Life (MEDIUM size)
 2. **clockwork_poem.txt** - AI-generated poem about infrastructure automation (SMALL size)
 3. **README.md** - User-provided content (no AI generation)
@@ -12,23 +12,27 @@ Creates three files in `examples/scratch/`:
 ## Run the example
 
 ```bash
-# Apply (full deployment)
-uv run clockwork apply examples/file-generation/main.py
+# Navigate to example directory
+cd examples/file-generation
+
+# Deploy
+uv run clockwork apply
 
 # Check the results
-ls -la examples/scratch/
-cat examples/scratch/game_of_life.md
+ls -la scratch/
+cat scratch/game_of_life.md
 
 # Clean up
-uv run clockwork destroy examples/file-generation/main.py
+uv run clockwork destroy
 ```
 
 ## How it works
 
-1. **Load**: Clockwork loads resources from `main.py`
+1. **Load**: Clockwork loads resources from `main.py` in current directory
 2. **Generate**: AI generates content for resources with `content=None`
 3. **Compile**: Resources compile to PyInfra operations (`files.put`)
 4. **Deploy**: PyInfra executes the deployment locally
+5. **`.clockwork/`** directory created in current directory
 
 ## Customization
 

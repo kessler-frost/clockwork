@@ -24,14 +24,26 @@ No custom DSL. No complex configuration. Just Python.
 ## Quick Start
 
 ```bash
-# Install
-uv add clockwork
+# Clone or create your project
+mkdir my-project && cd my-project
+
+# Create main.py with your resources
+cat > main.py << 'EOF'
+from clockwork.resources import FileResource, ArtifactSize
+
+article = FileResource(
+    name="article.md",
+    description="Write about Conway's Game of Life",
+    size=ArtifactSize.MEDIUM,
+    directory="output"
+)
+EOF
 
 # Create .env file with API key
 echo "OPENROUTER_API_KEY=your-key-here" > .env
 
-# Run example
-uv run clockwork apply examples/file-generation/main.py
+# Run clockwork
+uv run clockwork apply
 ```
 
 ## Example
@@ -44,37 +56,39 @@ article = FileResource(
     name="game_of_life.md",
     description="Write a comprehensive article about Conway's Game of Life",
     size=ArtifactSize.MEDIUM,
-    directory="examples/scratch"
+    directory="scratch"
 )
 
 # User provides content
 readme = FileResource(
     name="README.md",
     content="# My Project\n\nGenerated with Clockwork!",
-    directory="examples/scratch"
+    directory="scratch"
 )
 ```
 
 ```bash
-uv run clockwork apply main.py
+uv run clockwork apply
 ```
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for how it works.
 
 ## CLI
 
+All commands must be run from a directory containing `main.py`:
+
 ```bash
 # Full deployment
-uv run clockwork apply main.py
+uv run clockwork apply
 
 # Dry run (plan mode)
-uv run clockwork plan main.py
+uv run clockwork plan
 
 # Destroy deployed resources
-uv run clockwork destroy main.py
+uv run clockwork destroy
 
 # Custom model
-uv run clockwork apply main.py --model "openai/gpt-4o-mini"
+uv run clockwork apply --model "openai/gpt-4o-mini"
 
 # Show version
 uv run clockwork version
@@ -134,7 +148,7 @@ LOG_LEVEL=INFO
 
 Override via CLI:
 ```bash
-clockwork apply main.py --model "openai/gpt-4o-mini"
+uv run clockwork apply --model "openai/gpt-4o-mini"
 ```
 
 ## Why Clockwork?
@@ -148,12 +162,14 @@ clockwork apply main.py --model "openai/gpt-4o-mini"
 
 ```bash
 # File generation
-uv run clockwork apply examples/file-generation/main.py
-uv run clockwork destroy examples/file-generation/main.py
+cd examples/file-generation
+uv run clockwork apply
+uv run clockwork destroy
 
 # Docker services
-uv run clockwork apply examples/docker-service/main.py
-uv run clockwork destroy examples/docker-service/main.py
+cd examples/docker-service
+uv run clockwork apply
+uv run clockwork destroy
 ```
 
 See `examples/` directory for more.
@@ -165,7 +181,7 @@ See `examples/` directory for more.
 uv run pytest tests/ -v
 
 # Clean up
-rm -rf .clockwork/ examples/scratch/
+rm -rf .clockwork/ scratch/
 ```
 
 See [CLAUDE.md](./CLAUDE.md) for development guide.
