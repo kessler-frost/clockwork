@@ -27,8 +27,8 @@ No custom DSL. No complex configuration. Just Python.
 # Install
 uv add clockwork
 
-# Set OpenRouter API key
-export OPENROUTER_API_KEY="your-key-here"
+# Create .env file with API key
+echo "OPENROUTER_API_KEY=your-key-here" > .env
 
 # Run example
 uv run clockwork apply examples/file-generation/main.py
@@ -119,21 +119,29 @@ More resource types coming soon (services, databases, etc.).
 
 ## Configuration
 
-### OpenRouter API
+Clockwork uses `.env` files for configuration via Pydantic Settings.
 
-Required for AI generation:
+### Create .env File
 
 ```bash
-export OPENROUTER_API_KEY="your-key"
+OPENROUTER_API_KEY=your-api-key-here
+OPENROUTER_MODEL=openai/gpt-oss-20b:free
+LOG_LEVEL=INFO
 ```
 
-Default model: `openai/gpt-oss-20b:free`
+### Available Settings
 
-### PyInfra
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `OPENROUTER_API_KEY` | None | OpenRouter API key (required) |
+| `OPENROUTER_MODEL` | `openai/gpt-oss-20b:free` | Model for AI generation |
+| `PYINFRA_OUTPUT_DIR` | `.clockwork/pyinfra` | PyInfra output directory |
+| `LOG_LEVEL` | `INFO` | Logging level |
 
-Clockwork generates PyInfra files in `.clockwork/pyinfra/`:
-- `inventory.py` - Target hosts (default: localhost)
-- `deploy.py` - Operations to execute
+Override via CLI:
+```bash
+clockwork apply main.py --model "openai/gpt-4o-mini"
+```
 
 ## Development
 
@@ -171,21 +179,12 @@ clockwork/
 
 ## Why Clockwork?
 
-**Before (v0.1.0):**
-- Custom HCL-like DSL
-- Complex 3-phase pipeline
-- Custom executors and state management
-- ~17,000 lines of code
-- 13 dependencies
-
-**After (v0.2.0):**
-- Pure Python (Pydantic)
-- Simple linear pipeline
-- PyInfra handles deployment
-- ~2,000 lines of code
-- 7 dependencies
-
-**85% code reduction. 100% more Pythonic.**
+- **Pure Python**: No custom DSL, just Pydantic models
+- **AI-powered**: Dynamic content generation via OpenRouter
+- **Simple pipeline**: Load → Generate → Compile → Deploy
+- **Minimal code**: ~700 lines of core logic
+- **7 dependencies**: Focused and lightweight
+- **Pythonic**: Type-safe with full IDE support
 
 ## How It Works
 
@@ -257,8 +256,6 @@ dependencies = [
 See [LICENSE](./LICENSE) file.
 
 ## Contributing
-
-This is v0.2.0 - a complete rewrite. We're starting fresh!
 
 1. Fork the repo
 2. Create a feature branch

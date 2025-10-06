@@ -28,28 +28,51 @@ Clockwork is a **factory for intelligent declarative infrastructure tasks** usin
 
 The "factory" metaphor: You provide the blueprint (Pydantic resources), the factory (Clockwork) intelligently manufactures the artifacts (via AI) and assembles them (via PyInfra).
 
-## Key Configuration
+## Configuration
 
-### OpenRouter API (for AI generation)
+Clockwork uses **Pydantic Settings** for configuration management via `.env` files.
 
-Set your OpenRouter API key:
+### Setup .env File
+
+Create a `.env` file in the project root:
 
 ```bash
-export OPENROUTER_API_KEY="your-key-here"
+OPENROUTER_API_KEY=your-api-key-here
+OPENROUTER_MODEL=openai/gpt-oss-20b:free
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+PYINFRA_OUTPUT_DIR=.clockwork/pyinfra
+LOG_LEVEL=INFO
 ```
 
-Default model: `openai/gpt-oss-20b:free`
+### Available Settings
 
-Change model:
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `OPENROUTER_API_KEY` | None | OpenRouter API key (required) |
+| `OPENROUTER_MODEL` | `openai/gpt-oss-20b:free` | Model for AI generation |
+| `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | OpenRouter API endpoint |
+| `PYINFRA_OUTPUT_DIR` | `.clockwork/pyinfra` | PyInfra output directory |
+| `LOG_LEVEL` | `INFO` | Logging level |
+| `PROJECT_NAME` | None | Project identifier (optional) |
+
+### Override Hierarchy
+
+Settings can be overridden:
+1. **CLI flags** (highest priority) - `--api-key`, `--model`
+2. **Environment variables** - `export OPENROUTER_API_KEY="..."`
+3. **.env file** - loaded from project root
+4. **Defaults** (lowest priority) - defined in settings
+
+Example using CLI override:
 ```bash
 uv run clockwork apply main.py --model "openai/gpt-4o-mini"
 ```
 
-### PyInfra (for deployment)
+### PyInfra Output
 
-PyInfra is installed as a dependency. Clockwork generates PyInfra files in `.clockwork/pyinfra/`:
-- `inventory.py` - Target hosts (default: localhost)
-- `deploy.py` - Operations to execute
+Clockwork generates PyInfra files in the configured output directory (default: `.clockwork/pyinfra/`):
+- `inventory.py` - Target hosts (default: `@local`)
+- `deploy.py` - Infrastructure operations
 
 ## Project Structure
 
@@ -119,8 +142,8 @@ uv run pytest tests/test_resources.py -v
 
 Test the full pipeline:
 ```bash
-# Set API key
-export OPENROUTER_API_KEY="your-key"
+# Create .env file with API key
+echo "OPENROUTER_API_KEY=your-key-here" > .env
 
 # Run example
 uv run clockwork apply examples/file-generation/main.py
@@ -140,8 +163,8 @@ Key conventions:
 
 ## Important Notes
 
-- **No backwards compatibility**: This is v0.2.0, completely rewritten
-- **No fallback mechanisms**: AI generation requires OpenRouter API key
+- **Settings-based configuration**: Always use `.env` file or `get_settings()`, never hardcode
+- **AI requires API key**: OpenRouter API key must be configured in `.env` file
 - **Keep it simple**: PyInfra handles all the complex execution logic
 - **Test the demo**: Always verify `clockwork apply examples/file-generation/main.py` works
 

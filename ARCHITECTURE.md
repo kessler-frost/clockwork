@@ -1,4 +1,4 @@
-# Clockwork Architecture (v0.2.0)
+# Clockwork Architecture
 
 ## Overview
 
@@ -192,9 +192,9 @@ files.put(
 ## Design Principles
 
 ### 1. Python-First
-- No custom DSL (HCL removed)
-- Pure Python for resource definition
-- Pydantic for validation
+- No custom DSL, pure Python for resource definition
+- Pydantic for type safety and validation
+- Full IDE support and autocompletion
 
 ### 2. Two-Stage Compilation
 - **Stage 1 (AI)**: Dynamic, intelligent, for content generation
@@ -272,17 +272,17 @@ dependencies = [
 ]
 ```
 
-## Comparison to v0.1.0
+## Key Features
 
-| Aspect | v0.1.0 (Old) | v0.2.0 (New) |
-|--------|--------------|--------------|
-| **Config Format** | HCL (.cw files) | Python (Pydantic) |
-| **AI Integration** | LM Studio (local) | OpenRouter (cloud) |
-| **Execution** | Custom runners | PyInfra |
-| **State Management** | Custom | PyInfra |
-| **Code Size** | ~17,000 lines | ~2,000 lines |
-| **Dependencies** | 13 packages | 7 packages |
-| **Complexity** | High (intake → assembly → forge) | Low (linear pipeline) |
+| Feature | Implementation |
+|---------|----------------|
+| **Config Format** | Python (Pydantic models) |
+| **AI Integration** | OpenRouter API (cloud-based) |
+| **Execution** | PyInfra (battle-tested) |
+| **State Management** | PyInfra handles it |
+| **Code Size** | ~700 lines of core logic |
+| **Dependencies** | 7 focused packages |
+| **Complexity** | Simple linear pipeline |
 
 ## Future Enhancements
 
