@@ -105,8 +105,8 @@ y = "hello"
             core._load_resources(main_file)
 
 
-def test_plan_mode(tmp_path):
-    """Test plan (dry run) mode."""
+def test_generate_mode(tmp_path):
+    """Test generate (dry run) mode."""
     main_file = tmp_path / "main.py"
     main_file.write_text('''
 from clockwork.resources import FileResource, ArtifactSize
@@ -133,8 +133,8 @@ readme = FileResource(
     assert "pyinfra_dir" in result
 
 
-def test_plan_mode_with_ai_generation(tmp_path):
-    """Test plan mode with resources needing AI generation."""
+def test_generate_mode_with_ai_generation(tmp_path):
+    """Test generate mode with resources needing AI generation."""
     main_file = tmp_path / "main.py"
     main_file.write_text('''
 from clockwork.resources import FileResource, ArtifactSize

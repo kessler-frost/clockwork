@@ -83,8 +83,8 @@ All commands must be run from a directory containing `main.py`:
 # Full deployment
 uv run clockwork apply
 
-# Dry run (plan mode)
-uv run clockwork plan
+# Generate artifacts without deploying
+uv run clockwork generate
 
 # Destroy deployed resources
 uv run clockwork destroy

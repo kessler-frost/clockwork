@@ -175,11 +175,10 @@ Each resource implements `to_pyinfra_destroy_operations()` to generate teardown 
 Simple Typer-based CLI:
 
 ```bash
-clockwork apply main.py      # Full pipeline (deploy resources)
-clockwork plan main.py       # Dry run (no execution)
-clockwork destroy main.py    # Tear down resources
-clockwork demo               # Run interactive demo
-clockwork version            # Show version
+uv run clockwork apply       # Full pipeline (deploy resources)
+uv run clockwork generate    # Generate artifacts without deploying
+uv run clockwork destroy     # Tear down resources
+uv run clockwork version     # Show version
 ```
 
 ## Data Flow

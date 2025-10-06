@@ -92,13 +92,13 @@ class ClockworkCore:
 
     def plan(self, main_file: Path) -> Dict[str, Any]:
         """
-        Plan mode: show what would be deployed without executing.
+        Generate mode: generate artifacts and compile without deploying.
 
         Args:
             main_file: Path to main.py file
 
         Returns:
-            Dict with plan information
+            Dict with generation information
         """
         return self.apply(main_file, dry_run=True)
 

@@ -89,7 +89,7 @@ def apply(
 
 
 @app.command()
-def plan(
+def generate(
     api_key: str = typer.Option(
         None,
         "--api-key",
@@ -101,7 +101,7 @@ def plan(
         help="OpenRouter model (overrides .env)"
     ),
 ):
-    """Plan mode: show what would be deployed without executing."""
+    """Generate artifacts and compile without deploying."""
 
     # Check for main.py in current directory
     main_file = Path.cwd() / "main.py"
@@ -115,7 +115,7 @@ def plan(
     display_model = model or settings.openrouter_model
 
     console.print(Panel.fit(
-        f"[bold cyan]Clockwork Plan (Dry Run)[/bold cyan]\n"
+        f"[bold cyan]Clockwork Generate[/bold cyan]\n"
         f"Directory: {Path.cwd().name}\n"
         f"Model: {display_model}",
         border_style="cyan"
@@ -128,18 +128,18 @@ def plan(
             openrouter_model=model
         )
 
-        # Run plan (dry run)
+        # Run generation (dry run)
         result = core.plan(main_file)
 
-        # Show plan
-        console.print(f"\n[bold]Plan Summary:[/bold]")
+        # Show summary
+        console.print(f"\n[bold]Generation Summary:[/bold]")
         console.print(f"  Resources: {result['resources']}")
-        console.print(f"  Artifacts to generate: {result['artifacts']}")
+        console.print(f"  Artifacts generated: {result['artifacts']}")
         console.print(f"  PyInfra directory: {result['pyinfra_dir']}")
-        console.print("\n[dim]Run 'clockwork apply' to execute this plan.[/dim]")
+        console.print("\n[dim]Run 'clockwork apply' to deploy these resources.[/dim]")
 
     except Exception as e:
-        console.print(f"\n[bold red]✗ Planning failed:[/bold red] {e}")
+        console.print(f"\n[bold red]✗ Generation failed:[/bold red] {e}")
         raise typer.Exit(code=1)
 
 
