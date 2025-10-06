@@ -30,5 +30,5 @@ clockwork destroy
 
 1. **AI suggests image**: Clockwork's AI analyzes the description and suggests an appropriate Docker image (e.g., nginx:alpine, httpd:alpine)
 2. **PyInfra deploys**: The suggested image is deployed as a Docker container on port 8080
-3. **Service runs**: Access the web server at http://localhost:8080
+3. **Service runs**: Access the web server at <http://localhost:8080>
 4. **`.clockwork/`** directory created in current directory

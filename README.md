@@ -22,7 +22,8 @@ No custom DSL. No complex configuration. Just Python.
 
 ## Quick Start
 
-**main.py**
+In your `main.py`:
+
 ```python
 from clockwork.resources import FileResource, ArtifactSize
 
@@ -34,12 +35,14 @@ article = FileResource(
 )
 ```
 
-**.env**
+Create a `.env` file:
+
 ```bash
 OPENROUTER_API_KEY=your-key-here
 ```
 
-**Deploy**
+Deploy:
+
 ```bash
 cd your-project
 uv run clockwork apply
@@ -98,6 +101,7 @@ uv run clockwork version
 Currently available:
 
 ### FileResource
+
 Creates files with optional AI-generated content.
 
 ```python
@@ -112,6 +116,7 @@ FileResource(
 ```
 
 ### DockerServiceResource
+
 Runs Docker containers with optional AI-suggested images.
 
 ```python
@@ -149,6 +154,7 @@ LOG_LEVEL=INFO
 | `LOG_LEVEL` | `INFO` | Logging level |
 
 Override via CLI:
+
 ```bash
 uv run clockwork apply --model "openai/gpt-4o-mini"
 ```

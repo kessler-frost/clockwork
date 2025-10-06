@@ -59,12 +59,14 @@ LOG_LEVEL=INFO
 ### Override Hierarchy
 
 Settings can be overridden:
+
 1. **CLI flags** (highest priority) - `--api-key`, `--model`
 2. **Environment variables** - `export OPENROUTER_API_KEY="..."`
 3. **.env file** - loaded from project root
 4. **Defaults** (lowest priority) - defined in settings
 
 Example using CLI override:
+
 ```bash
 uv run clockwork apply --model "openai/gpt-4o-mini"
 ```
@@ -72,12 +74,13 @@ uv run clockwork apply --model "openai/gpt-4o-mini"
 ### PyInfra Output
 
 Clockwork generates PyInfra files in the configured output directory (default: `.clockwork/pyinfra/`):
+
 - `inventory.py` - Target hosts (default: `@local`)
 - `deploy.py` - Infrastructure operations
 
 ## Project Structure
 
-```
+```text
 clockwork/
 ├── clockwork/
 │   ├── resources/          # Pydantic resource models
@@ -135,11 +138,11 @@ server.shell(
 '''
 ```
 
-2. Export it in `clockwork/resources/__init__.py`
-3. Add tests in `tests/test_resources.py`
-4. Create an example in `examples/`
+1. Export it in `clockwork/resources/__init__.py`
+2. Add tests in `tests/test_resources.py`
+3. Create an example in `examples/`
 
-**Example: DockerServiceResource**
+#### Example: DockerServiceResource
 
 The `DockerServiceResource` demonstrates a complete resource implementation with AI-powered image suggestions:
 
@@ -168,11 +171,13 @@ redis = DockerServiceResource(
 ### Testing
 
 Run all tests:
+
 ```bash
 uv run pytest tests/ -v
 ```
 
 Run specific test file:
+
 ```bash
 uv run pytest tests/test_resources.py -v
 ```
@@ -180,6 +185,7 @@ uv run pytest tests/test_resources.py -v
 ### Demo Command
 
 Test the full pipeline:
+
 ```bash
 # Create .env file with API key
 echo "OPENROUTER_API_KEY=your-key-here" > .env
@@ -201,9 +207,10 @@ uv run clockwork destroy
 
 ## Code Guidelines
 
-**Follow Google Python Style Guide**: https://google.github.io/styleguide/pyguide.html
+**Follow Google Python Style Guide**: <https://google.github.io/styleguide/pyguide.html>
 
 Key conventions:
+
 - **Imports**: Group by standard library → third-party → local, alphabetically sorted
 - **Naming**: `lowercase_with_underscores` for functions/variables, `CapWords` for classes
 - **Type hints**: Use for all public APIs and function signatures
@@ -221,6 +228,7 @@ Key conventions:
 ## Cleanup
 
 After testing, clean up generated files:
+
 ```bash
 # Use destroy command to tear down resources
 cd examples/file-generation

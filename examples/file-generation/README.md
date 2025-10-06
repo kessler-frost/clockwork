@@ -5,6 +5,7 @@ This example demonstrates Clockwork's AI-powered file generation capabilities.
 ## What it does
 
 Creates three files in `scratch/`:
+
 1. **game_of_life.md** - AI-generated article about Conway's Game of Life (MEDIUM size)
 2. **clockwork_poem.txt** - AI-generated poem about infrastructure automation (SMALL size)
 3. **README.md** - User-provided content (no AI generation)

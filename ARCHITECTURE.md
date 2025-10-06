@@ -3,6 +3,7 @@
 ## Overview
 
 Clockwork is a **factory for intelligent declarative infrastructure tasks** that combines:
+
 - **Pydantic models** for declarative resource definition
 - **AI-powered artifact generation** via Agno 2.0 + OpenRouter
 - **PyInfra** for infrastructure deployment
@@ -11,7 +12,7 @@ Think of it as: Define what you want (Python) → AI figures out how (artifacts)
 
 ## Architecture Diagram
 
-```
+```text
 ┌─────────────┐
 │   main.py   │  User defines resources in Python
 │  (Pydantic) │
@@ -64,7 +65,8 @@ class Resource(BaseModel):
         raise NotImplementedError
 ```
 
-**Example: FileResource**
+#### Example: FileResource
+
 ```python
 class FileResource(Resource):
     name: str               # filename
@@ -75,7 +77,8 @@ class FileResource(Resource):
     mode: str = "644"       # file permissions
 ```
 
-**Example: DockerServiceResource**
+#### Example: DockerServiceResource
+
 ```python
 class DockerServiceResource(Resource):
     name: str                         # container name
@@ -108,6 +111,7 @@ class ArtifactGenerator:
 ```
 
 **Integration**:
+
 - Uses **OpenRouter API** via OpenAI client
 - Model: `openai/gpt-oss-20b:free` (configurable)
 - Smart prompts based on resource type, size, file format
@@ -128,7 +132,8 @@ class PyInfraCompiler:
 ```
 
 **Output Structure**:
-```
+
+```text
 .clockwork/pyinfra/
 ├── inventory.py    # "@local" (localhost)
 └── deploy.py       # All PyInfra operations
@@ -159,7 +164,9 @@ class ClockworkCore:
         return result
 ```
 
-**Destroy Operations**: Each resource implements `to_pyinfra_destroy_operations()` to generate teardown code. The destroy pipeline follows the same stages but generates removal operations instead of creation operations.
+#### Destroy Operations
+
+Each resource implements `to_pyinfra_destroy_operations()` to generate teardown code. The destroy pipeline follows the same stages but generates removal operations instead of creation operations.
 
 ### 5. CLI
 
@@ -178,6 +185,7 @@ clockwork version            # Show version
 ## Data Flow
 
 ### Input: main.py
+
 ```python
 from clockwork.resources import FileResource, ArtifactSize
 
@@ -189,18 +197,22 @@ article = FileResource(
 ```
 
 ### Stage 1: Load
+
 - Execute `main.py` as Python module
 - Extract all `Resource` instances
 - Result: `[FileResource(name="article.md", ...)]`
 
 ### Stage 2: Generate (AI)
+
 - Check `article.needs_artifact_generation()` → True
 - Call OpenRouter API with smart prompt
 - Result: `{"article.md": "# Conway's Game of Life\n\n..."}`
 
 ### Stage 3: Compile (Template)
+
 - Call `article.to_pyinfra_operations(artifacts)`
 - Generate PyInfra code:
+
 ```python
 files.put(
     name="Create article.md",
@@ -211,6 +223,7 @@ files.put(
 ```
 
 ### Stage 4: Deploy (PyInfra)
+
 - Run: `pyinfra inventory.py deploy.py`
 - PyInfra executes operations
 - File created at `/tmp/article.md`
@@ -222,8 +235,10 @@ The destroy pipeline follows the same stages but generates teardown operations:
 **Stage 1-2**: Load resources and generate artifacts (same as apply)
 
 **Stage 3 (Destroy Compile)**:
+
 - Call `article.to_pyinfra_destroy_operations(artifacts)`
 - Generate PyInfra code:
+
 ```python
 files.file(
     name="Remove article.md",
@@ -233,26 +248,31 @@ files.file(
 ```
 
 **Stage 4 (Destroy Execute)**:
+
 - Run: `pyinfra inventory.py deploy.py`
 - PyInfra removes the file
 
 ## Design Principles
 
 ### 1. Python-First
+
 - No custom DSL, pure Python for resource definition
 - Pydantic for type safety and validation
 - Full IDE support and autocompletion
 
 ### 2. Two-Stage Compilation
+
 - **Stage 1 (AI)**: Dynamic, intelligent, for content generation
 - **Stage 2 (Template)**: Deterministic, for infrastructure code
 
 ### 3. Delegation to PyInfra
+
 - No custom executors, runners, or state management
 - PyInfra handles all deployment complexity
 - We just generate the PyInfra code
 
 ### 4. Simplicity
+
 - Single linear pipeline: Load → Generate → Compile → Deploy
 - No complex state graphs or dependency resolution
 - Resources are independent (PyInfra handles execution order)
@@ -262,6 +282,7 @@ files.file(
 ### Adding New Resources
 
 1. Create new class in `clockwork/resources/`:
+
 ```python
 class ServiceResource(Resource):
     # Define fields
@@ -291,21 +312,23 @@ class ServiceResource(Resource):
         '''
 ```
 
-**Real Example: DockerServiceResource**
+#### Real Example: DockerServiceResource
 
 See `clockwork/resources/docker.py` for a complete implementation that:
+
 - Uses AI to suggest Docker images when not specified
 - Supports ports, volumes, environment variables, and networks
 - Implements both deploy and destroy operations
 - Provides comprehensive documentation and examples
 
-2. Export in `__init__.py`
-3. Add tests
-4. Create example
+1. Export in `__init__.py`
+2. Add tests
+3. Create example
 
 ### Custom AI Models
 
 Change model via CLI or environment:
+
 ```bash
 clockwork apply main.py --model "anthropic/claude-3.5-sonnet"
 ```
