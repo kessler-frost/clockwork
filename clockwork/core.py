@@ -138,8 +138,8 @@ class ClockworkCore:
         """
         logger.info(f"Executing PyInfra deployment from: {pyinfra_dir}")
 
-        # Run: pyinfra inventory.py deploy.py
-        cmd = ["pyinfra", "inventory.py", "deploy.py"]
+        # Run: pyinfra -y inventory.py deploy.py (auto-approve changes)
+        cmd = ["pyinfra", "-y", "inventory.py", "deploy.py"]
 
         try:
             result = subprocess.run(

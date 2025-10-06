@@ -56,8 +56,8 @@ class PyInfraCompiler:
         """Generate PyInfra inventory file (localhost by default)."""
         return '''"""PyInfra inventory - defines target hosts."""
 
-# Local execution
-localhost = "@local"
+# Local execution - use @local connector
+hosts = ["@local"]
 '''
 
     def _generate_deploy(self, resources: List[Any], artifacts: Dict[str, str]) -> str:
