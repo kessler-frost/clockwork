@@ -66,6 +66,66 @@ nginx = DockerServiceResource(
 
 ---
 
+### 3. Stateful Service Evolution
+Transform Clockwork from one-time deployments to long-lived project management.
+
+**Purpose:**
+- Track deployed services as evolving projects, not just one-time tasks
+- Intelligently update existing infrastructure based on vague/partial specifications
+- Maintain context of previous deployments to infer correct updates
+- Automatically validate changes don't break existing functionality
+
+**Features:**
+- State tracking of deployed resources (schemas, configs, endpoints)
+- Vague update support: "add new schema" interprets intent vs. exact specification
+- Smart diff and merge: update only what changed, preserve what works
+- Automatic evaluation parameter generation for new features
+- Version history and rollback capabilities
+
+**Use Cases:**
+- Evolving database schemas without rewriting full definitions
+- Adding/modifying API endpoints with natural language descriptions
+- Updating service configurations while preserving working state
+- Incremental feature additions to deployed applications
+
+**Example Workflow:**
+```python
+# Initial deployment
+# main.py
+docker_app = DockerServiceResource(
+    name="api-service",
+    description="REST API with user schema",
+    # ... initial config
+)
+
+# Later: update.py (vague specification)
+docker_app = DockerServiceResource(
+    name="api-service",
+    description="Add organization schema and update user endpoints",
+    # Clockwork infers: keep existing user schema, add org schema,
+    # modify related endpoints, add new evaluation checks
+)
+```
+
+```bash
+# Clockwork intelligently applies only the changes
+clockwork apply update.py
+# Output: ✓ Added organization schema
+#         ✓ Updated /api/users endpoint to include org_id
+#         ✓ Created /api/organizations endpoints
+#         ✓ Evaluation checks updated
+#         ✓ All tests passing
+```
+
+**Implementation Considerations:**
+- Persistent state storage (`.clockwork/state.json`)
+- Diff engine to compare desired vs. current state
+- AI-powered intent inference from vague specifications
+- Validation that updates don't break existing functionality
+- Integration with `clockwork evaluate` for continuous verification
+
+---
+
 ## Contributing
 
 Have ideas for the roadmap? Open an issue or submit a pull request!
