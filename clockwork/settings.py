@@ -4,9 +4,13 @@ Clockwork Settings - Configuration management using Pydantic Settings.
 Loads configuration from environment variables and .env files.
 """
 
+from pathlib import Path
 from typing import Optional
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Find project root (where .env file is located)
+PROJECT_ROOT = Path(__file__).parent.parent
 
 
 class ClockworkSettings(BaseSettings):
@@ -20,7 +24,7 @@ class ClockworkSettings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(PROJECT_ROOT / ".env"),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore"
