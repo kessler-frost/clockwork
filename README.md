@@ -6,14 +6,13 @@ Python-first infrastructure automation with AI-powered artifact generation and P
 
 [![Version](https://img.shields.io/badge/version-0.2.0-blue)](./pyproject.toml)
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue)](./pyproject.toml)
-[![AI](https://img.shields.io/badge/AI-OpenRouter-green)](https://openrouter.ai)
 [![Deploy](https://img.shields.io/badge/deploy-PyInfra-orange)](https://pyinfra.com)
 
 ## Overview
 
 Clockwork is a **factory for intelligent declarative infrastructure tasks**. You define what you want in **pure Python** using Pydantic models, then Clockwork:
 
-1. **AI generates** dynamic content/artifacts (via OpenRouter)
+1. **AI generates** dynamic content/artifacts
 2. **Templates compile** to PyInfra operations
 3. **PyInfra deploys** your infrastructure
 
@@ -23,12 +22,8 @@ No custom DSL. No complex configuration. Just Python.
 
 ## Quick Start
 
-```bash
-# Clone or create your project
-mkdir my-project && cd my-project
-
-# Create main.py with your resources
-cat > main.py << 'EOF'
+**main.py**
+```python
 from clockwork.resources import FileResource, ArtifactSize
 
 article = FileResource(
@@ -37,12 +32,16 @@ article = FileResource(
     size=ArtifactSize.MEDIUM,
     directory="output"
 )
-EOF
+```
 
-# Create .env file with API key
-echo "OPENROUTER_API_KEY=your-key-here" > .env
+**.env**
+```bash
+OPENROUTER_API_KEY=your-key-here
+```
 
-# Run clockwork
+**Deploy**
+```bash
+cd your-project
 uv run clockwork apply
 ```
 
@@ -132,8 +131,11 @@ Clockwork uses `.env` files for configuration via Pydantic Settings.
 ### Create .env File
 
 ```bash
+# AI Provider (currently OpenRouter - LM Studio and others coming soon)
 OPENROUTER_API_KEY=your-api-key-here
 OPENROUTER_MODEL=openai/gpt-oss-20b:free
+
+# Logging
 LOG_LEVEL=INFO
 ```
 
@@ -141,7 +143,7 @@ LOG_LEVEL=INFO
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `OPENROUTER_API_KEY` | None | OpenRouter API key (required) |
+| `OPENROUTER_API_KEY` | None | API key (required for now) |
 | `OPENROUTER_MODEL` | `openai/gpt-oss-20b:free` | Model for AI generation |
 | `PYINFRA_OUTPUT_DIR` | `.clockwork/pyinfra` | PyInfra output directory |
 | `LOG_LEVEL` | `INFO` | Logging level |
@@ -154,7 +156,7 @@ uv run clockwork apply --model "openai/gpt-4o-mini"
 ## Why Clockwork?
 
 - **Pure Python**: No custom DSL, just Pydantic models
-- **AI-powered**: Dynamic content generation via OpenRouter
+- **AI-powered**: Dynamic content generation
 - **Simple pipeline**: Load → Generate → Compile → Deploy
 - **Pythonic**: Type-safe with full IDE support
 
