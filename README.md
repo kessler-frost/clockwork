@@ -65,22 +65,19 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for how it works.
 
 ```bash
 # Full deployment
-clockwork apply main.py
+uv run clockwork apply main.py
 
 # Dry run (plan mode)
-clockwork plan main.py
+uv run clockwork plan main.py
 
 # Destroy deployed resources
-clockwork destroy main.py
-
-# Run interactive demo
-clockwork demo --text-only
+uv run clockwork destroy main.py
 
 # Custom model
-clockwork apply main.py --model "openai/gpt-4o-mini"
+uv run clockwork apply main.py --model "openai/gpt-4o-mini"
 
 # Show version
-clockwork version
+uv run clockwork version
 ```
 
 ## Resources
@@ -106,16 +103,13 @@ Runs Docker containers with optional AI-suggested images.
 
 ```python
 DockerServiceResource(
-    name="nginx",
-    description="Web server for serving static content",  # AI suggests image
-    ports=["80:80"],
-    volumes=["data:/usr/share/nginx/html"],
-    env_vars={"ENV": "production"},
-    networks=["web"]
+    name="web-server",
+    description="A lightweight web server for testing and demos",
+    ports=["8080:80"]  # Host port 8080 -> Container port 80
 )
 ```
 
-**AI-Powered**: When `image` is not specified, AI suggests appropriate Docker images.
+**AI-Powered**: When `image` is not specified, AI suggests appropriate Docker images (e.g., nginx:alpine).
 
 ## Configuration
 

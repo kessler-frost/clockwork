@@ -32,18 +32,43 @@ class FileResource(Resource):
         content = artifacts.get(self.name) or self.content or ""
 
         # Determine file path: use path if provided, else directory + name, else /tmp + name
+        # Convert relative paths to absolute paths from current working directory
+        from pathlib import Path
+        cwd = Path.cwd()
+
         if self.path:
-            file_path = self.path
+            file_path = Path(self.path)
+            file_path = file_path if file_path.is_absolute() else cwd / file_path
+            directory = None
         elif self.directory:
-            file_path = f"{self.directory.rstrip('/')}/{self.name}"
+            abs_directory = Path(self.directory)
+            abs_directory = abs_directory if abs_directory.is_absolute() else cwd / abs_directory
+            file_path = abs_directory / self.name
+            directory = str(abs_directory)
         else:
-            file_path = f"/tmp/{self.name}"
+            file_path = Path("/tmp") / self.name
+            directory = None
+
+        file_path = str(file_path)
 
         # Escape content for Python triple-quoted string
         escaped_content = content.replace('\\', '\\\\').replace('"""', r'\"""')
 
+        # Generate directory creation if needed
+        dir_operation = ""
+        if directory:
+            dir_operation = f'''
+# Create directory: {directory}
+files.directory(
+    name="Create directory {directory}",
+    path="{directory}",
+    present=True,
+)
+
+'''
+
         return f'''
-# Create file: {self.name}
+{dir_operation}# Create file: {self.name}
 with open("_temp_{self.name}", "w") as f:
     f.write("""{escaped_content}""")
 
@@ -65,12 +90,21 @@ files.put(
             PyInfra operation code to remove the file
         """
         # Determine file path: use path if provided, else directory + name, else /tmp + name
+        # Convert relative paths to absolute paths from current working directory
+        from pathlib import Path
+        cwd = Path.cwd()
+
         if self.path:
-            file_path = self.path
+            file_path = Path(self.path)
+            file_path = file_path if file_path.is_absolute() else cwd / file_path
         elif self.directory:
-            file_path = f"{self.directory.rstrip('/')}/{self.name}"
+            abs_directory = Path(self.directory)
+            abs_directory = abs_directory if abs_directory.is_absolute() else cwd / abs_directory
+            file_path = abs_directory / self.name
         else:
-            file_path = f"/tmp/{self.name}"
+            file_path = Path("/tmp") / self.name
+
+        file_path = str(file_path)
 
         return f'''
 # Remove file: {self.name}
