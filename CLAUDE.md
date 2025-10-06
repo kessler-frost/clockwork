@@ -81,14 +81,16 @@ clockwork/
 ├── clockwork/
 │   ├── resources/          # Pydantic resource models
 │   │   ├── base.py        # Base Resource class
-│   │   └── file.py        # FileResource
+│   │   ├── file.py        # FileResource
+│   │   └── docker.py      # DockerServiceResource
 │   ├── artifact_generator.py  # AI-powered content generation
 │   ├── pyinfra_compiler.py    # Template-based PyInfra code gen
 │   ├── core.py               # Main pipeline orchestrator
 │   ├── cli.py                # CLI interface
-│   └── errors.py             # Error classes
+│   └── settings.py           # Configuration via Pydantic Settings
 ├── examples/
-│   └── file-generation/    # Example Python infrastructure
+│   ├── file-generation/    # File generation example
+│   └── docker-service/     # Docker service example
 ├── tests/                  # Test suite
 └── pyproject.toml         # Dependencies
 ```
