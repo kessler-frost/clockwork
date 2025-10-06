@@ -3,21 +3,25 @@
 ## Upcoming Features
 
 ### 1. `clockwork evaluate` Command
+
 Verification command to ensure resources are running as specified.
 
 **Purpose:**
+
 - Validates that deployed resources match their desired state
 - Returns success/failure status
 - Can be run manually or integrated into CI/CD pipelines
 - Foundation for the reconciliation service
 
 **Use Cases:**
+
 - Post-deployment validation
 - Health checks in CI/CD
 - Manual verification of infrastructure state
 - Debugging and troubleshooting
 
 **Example:**
+
 ```bash
 # Run from project directory containing main.py
 cd my-project
@@ -30,15 +34,18 @@ clockwork evaluate
 ---
 
 ### 2. Reconciliation Service
+
 Background daemon that continuously monitors and maintains desired state.
 
 **Purpose:**
+
 - Periodically runs `evaluate` to detect drift
 - Automatically corrects configuration drift
 - Enforces time-based policies (e.g., "run for 2 hours only")
 - Sends alerts on failures or drift detection
 
 **Features:**
+
 - Configurable evaluation intervals
 - Automatic remediation
 - Duration limits for resources
@@ -46,12 +53,14 @@ Background daemon that continuously monitors and maintains desired state.
 - Graceful degradation on failures
 
 **Use Cases:**
+
 - Production infrastructure monitoring
 - Auto-healing services
 - Temporary resource management (dev environments)
 - Cost control via time-limited resources
 
 **Example Configuration:**
+
 ```python
 from clockwork.resources import DockerServiceResource
 
@@ -69,15 +78,18 @@ nginx = DockerServiceResource(
 ---
 
 ### 3. Stateful Service Evolution
+
 Transform Clockwork from one-time deployments to long-lived project management.
 
 **Purpose:**
+
 - Track deployed services as evolving projects, not just one-time tasks
 - Intelligently update existing infrastructure based on vague/partial specifications
 - Maintain context of previous deployments to infer correct updates
 - Automatically validate changes don't break existing functionality
 
 **Features:**
+
 - State tracking of deployed resources (schemas, configs, endpoints)
 - Vague update support: "add new schema" interprets intent vs. exact specification
 - Smart diff and merge: update only what changed, preserve what works
@@ -85,6 +97,7 @@ Transform Clockwork from one-time deployments to long-lived project management.
 - Version history and rollback capabilities
 
 **Use Cases:**
+
 - Evolving database schemas without rewriting full definitions
 - Adding/modifying API endpoints with natural language descriptions
 - Updating service configurations while preserving working state
@@ -93,6 +106,7 @@ Transform Clockwork from one-time deployments to long-lived project management.
 **Key Difference from `clockwork apply`:**
 
 The `clockwork update` command allows vague, intent-based specifications without needing the original `main.py`:
+
 - **`clockwork apply`**: Requires complete, exact resource definitions in `main.py`
 - **`clockwork update`**: Accepts partial, vague specifications in `update.py` and infers changes
 
@@ -136,6 +150,7 @@ clockwork update
 ```
 
 **Implementation Considerations:**
+
 - New `clockwork update` command that looks for `update.py`
 - Diff engine to compare current deployment with update specifications
 - AI-powered intent inference from vague specifications
