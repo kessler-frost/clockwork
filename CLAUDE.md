@@ -14,7 +14,8 @@ uv run clockwork --help
 uv run pytest tests/
 
 # Run example
-uv run clockwork apply examples/file-generation/main.py
+cd examples/file-generation
+uv run clockwork apply
 ```
 
 ## Architecture
@@ -65,7 +66,7 @@ Settings can be overridden:
 
 Example using CLI override:
 ```bash
-uv run clockwork apply main.py --model "openai/gpt-4o-mini"
+uv run clockwork apply --model "openai/gpt-4o-mini"
 ```
 
 ### PyInfra Output
@@ -183,17 +184,19 @@ Test the full pipeline:
 # Create .env file with API key
 echo "OPENROUTER_API_KEY=your-key-here" > .env
 
-# Run example
-uv run clockwork apply examples/file-generation/main.py
+# Run file generation example
+cd examples/file-generation
+uv run clockwork apply
 
 # Destroy deployed resources
-uv run clockwork destroy examples/file-generation/main.py
+uv run clockwork destroy
 
 # Test Docker service example
-uv run clockwork demo --text-only --example docker-service
+cd ../docker-service
+uv run clockwork apply
 
 # Destroy Docker containers
-uv run clockwork destroy examples/docker-service/main.py
+uv run clockwork destroy
 ```
 
 ## Code Guidelines
@@ -213,15 +216,18 @@ Key conventions:
 - **Settings-based configuration**: Always use `.env` file or `get_settings()`, never hardcode
 - **AI requires API key**: OpenRouter API key must be configured in `.env` file
 - **Keep it simple**: PyInfra handles all the complex execution logic
-- **Test the demo**: Always verify `clockwork apply examples/file-generation/main.py` works
+- **Test the demo**: Always verify the examples work by running `clockwork apply` from their directories
 
 ## Cleanup
 
 After testing, clean up generated files:
 ```bash
 # Use destroy command to tear down resources
-uv run clockwork destroy examples/file-generation/main.py
-uv run clockwork destroy examples/docker-service/main.py
+cd examples/file-generation
+uv run clockwork destroy
+
+cd ../docker-service
+uv run clockwork destroy
 
 # Or manually clean up
 rm -rf .clockwork/

@@ -17,13 +17,13 @@ Deploys a lightweight web server using Clockwork's AI-powered image suggestions.
 cd examples/docker-service
 
 # Deploy the service
-uv run clockwork apply
+clockwork apply
 
 # Test it
 curl localhost:8080
 
 # Clean up
-uv run clockwork destroy
+clockwork destroy
 ```
 
 ## How it works

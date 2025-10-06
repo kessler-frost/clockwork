@@ -16,14 +16,14 @@ Creates three files in `scratch/`:
 cd examples/file-generation
 
 # Deploy
-uv run clockwork apply
+clockwork apply
 
 # Check the results
 ls -la scratch/
 cat scratch/game_of_life.md
 
 # Clean up
-uv run clockwork destroy
+clockwork destroy
 ```
 
 ## How it works
