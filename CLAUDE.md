@@ -300,6 +300,7 @@ Key conventions:
 - **Docstrings**: Use triple-double quotes with Args/Returns/Raises sections
 - **Settings**: Always use `get_settings()`, never `os.getenv()` or hardcoded defaults
 - **Error handling**: Use specific exceptions with meaningful messages
+- **API Documentation**: Always use Context7 MCP server first for library documentation via `mcp__context7__resolve-library-id` and `mcp__context7__get-library-docs` tools. Fall back to WebFetch/WebSearch only if Context7 doesn't have the needed docs.
 
 ## Important Notes
 
