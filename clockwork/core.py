@@ -1,8 +1,8 @@
 """
 Clockwork Core - Main pipeline orchestrator for PyInfra-based infrastructure.
 
-Apply Pipeline: Load resources → Generate artifacts (AI) → Compile to PyInfra → Execute deploy
-Destroy Pipeline: Load resources → Compile destroy ops → Execute destroy
+Apply Pipeline: Load resources → Generate artifacts (AI) → Compile (deploy.py + destroy.py) → Execute deploy
+Destroy Pipeline: Execute pre-generated destroy.py (from apply)
 Assert Pipeline: Load resources → Generate artifacts (AI) → Compile assertions → Execute assert
 """
 
@@ -140,31 +140,39 @@ class ClockworkCore:
 
     def destroy(self, main_file: Path, dry_run: bool = False) -> Dict[str, Any]:
         """
-        Full destroy pipeline: load → compile destroy → execute.
+        Destroy pipeline: execute pre-generated destroy.py.
+
+        The destroy.py file is generated during 'apply' to ensure consistency.
+        This method simply executes the pre-generated destroy operations.
 
         Args:
-            main_file: Path to main.py file with resource definitions
-            dry_run: If True, only compile without executing
+            main_file: Path to main.py file (used to locate .clockwork directory)
+            dry_run: If True, skip execution
 
         Returns:
             Dict with execution results
         """
         logger.info(f"Starting Clockwork destroy pipeline for: {main_file}")
 
-        # 1. Load resources from main.py
-        resources = self._load_resources(main_file)
-        logger.info(f"Loaded {len(resources)} resources")
+        # Get the PyInfra directory (should exist from apply)
+        settings = get_settings()
+        pyinfra_dir = Path(main_file).parent / settings.pyinfra_output_dir
 
-        # 2. Compile to PyInfra destroy operations (no artifact generation needed)
-        pyinfra_dir = self.pyinfra_compiler.compile_destroy(resources, artifacts={})
-        logger.info(f"Compiled destroy operations to PyInfra: {pyinfra_dir}")
+        # Check if destroy.py exists (generated during apply)
+        destroy_file = pyinfra_dir / "destroy.py"
+        if not destroy_file.exists():
+            raise FileNotFoundError(
+                f"destroy.py not found at {destroy_file}. "
+                "Please run 'clockwork apply' first to generate destroy operations."
+            )
 
-        # 3. Execute PyInfra destroy (unless dry run)
+        logger.info(f"Using pre-generated destroy operations from: {pyinfra_dir}")
+
+        # Execute PyInfra destroy (unless dry run)
         if dry_run:
             logger.info("Dry run - skipping execution")
             return {
                 "dry_run": True,
-                "resources": len(resources),
                 "pyinfra_dir": str(pyinfra_dir)
             }
 

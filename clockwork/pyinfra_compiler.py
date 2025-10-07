@@ -28,6 +28,9 @@ class PyInfraCompiler:
         """
         Compile resources to PyInfra deployment files.
 
+        Generates both deploy.py and destroy.py so that destroy can be run
+        later without re-loading resources or regenerating artifacts.
+
         Args:
             resources: List of Resource objects
             artifacts: Dict of generated artifacts (from AI stage)
@@ -51,6 +54,12 @@ class PyInfraCompiler:
         deploy_code = self._generate_deploy(resources, artifacts)
         deploy_path.write_text(deploy_code)
         logger.info(f"Generated deploy: {deploy_path}")
+
+        # Generate destroy file (for later use)
+        destroy_path = self.output_dir / "destroy.py"
+        destroy_code = self._generate_destroy(resources, artifacts)
+        destroy_path.write_text(destroy_code)
+        logger.info(f"Generated destroy: {destroy_path}")
 
         logger.info(f"PyInfra compilation complete: {self.output_dir}")
         return self.output_dir
