@@ -154,3 +154,62 @@ docker.container(
     present=False,
 )
 '''
+
+    def to_pyinfra_assert_operations(self, artifacts: Dict[str, Any]) -> str:
+        """Generate PyInfra operations code for Docker service assertions.
+
+        Provides default assertions for DockerServiceResource:
+        - Container is running (if start=True)
+        - Container exists (if present=True)
+
+        These can be overridden by specifying custom assertions.
+
+        Args:
+            artifacts: Dict mapping resource names to generated content
+
+        Returns:
+            str: PyInfra assertion operation code
+
+        Example generated code:
+            ```python
+            # Default assertions for Docker container: nginx
+            server.shell(
+                name="Assert: Container nginx is running",
+                commands=[
+                    "docker ps --filter name=^nginx$ --filter status=running ..."
+                ]
+            )
+            ```
+        """
+        # If custom assertions are defined, use the base implementation
+        if self.assertions:
+            return super().to_pyinfra_assert_operations(artifacts)
+
+        operations = []
+        operations.append(f"\n# Default assertions for Docker container: {self.name}")
+
+        # Check if container should be present
+        if self.present:
+            operations.append(f'''
+# Assert: Container exists
+server.shell(
+    name="Assert: Container {self.name} exists",
+    commands=[
+        "docker ps -a --filter name=^{self.name}$ --format '{{{{.Names}}}}' | grep -q '^{self.name}$' || exit 1"
+    ],
+)
+''')
+
+            # Check if container should be running
+            if self.start:
+                operations.append(f'''
+# Assert: Container is running
+server.shell(
+    name="Assert: Container {self.name} is running",
+    commands=[
+        "docker ps --filter name=^{self.name}$ --filter status=running --format '{{{{.Names}}}}' | grep -q '^{self.name}$' || exit 1"
+    ],
+)
+''')
+
+        return "\n".join(operations)

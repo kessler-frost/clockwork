@@ -29,6 +29,83 @@ Clockwork is a **factory for intelligent declarative infrastructure tasks** usin
 
 The "factory" metaphor: You provide the blueprint (Pydantic resources), the factory (Clockwork) intelligently manufactures the artifacts (via AI) and assembles them (via PyInfra).
 
+## Assertions
+
+Clockwork provides a **type-safe assertion system** for validating deployed resources:
+
+### Type-Safe Assertions
+
+**Type-safe assertion classes**:
+- Pydantic-based classes with IDE autocomplete
+- Instant compilation to PyInfra operations
+- No API costs or latency
+- Example: `HealthcheckAssert(url="http://localhost:80")`
+
+### Available Assertion Classes
+
+**HTTP/Network:**
+- `HealthcheckAssert(url, expected_status=200)` - HTTP endpoint validation
+- `PortAccessibleAssert(port, host="localhost")` - Port connectivity checks
+- `ResponseTimeAssert(url, max_ms)` - Performance validation
+
+**Container:**
+- `ContainerRunningAssert()` - Docker container status
+- `ContainerHealthyAssert()` - Health check validation
+- `LogContainsAssert(pattern, lines=100)` - Log pattern matching
+
+**File:**
+- `FileExistsAssert(path)` - File/directory existence
+- `FilePermissionsAssert(path, mode, owner, group)` - Permission validation
+- `FileSizeAssert(path, min_bytes, max_bytes)` - Size bounds
+- `FileContentMatchesAssert(path, pattern, sha256)` - Content validation
+
+**Resources:**
+- `MemoryUsageAssert(max_mb)` - Memory limit validation
+- `CpuUsageAssert(max_percent)` - CPU usage limits
+- `DiskUsageAssert(path, max_percent, max_mb)` - Disk usage
+
+**Process:**
+- `ProcessRunningAssert(name, min_count=1)` - Process validation
+- `ProcessNotRunningAssert(name)` - Absence validation
+
+### Usage Example
+
+```python
+from clockwork.resources import DockerServiceResource
+from clockwork.assertions import (
+    HealthcheckAssert,
+    PortAccessibleAssert,
+    ContainerRunningAssert,
+)
+
+nginx = DockerServiceResource(
+    name="nginx-web",
+    description="Web server",
+    ports=["80:80"],
+    assertions=[
+        # Type-safe assertions
+        ContainerRunningAssert(),
+        PortAccessibleAssert(port=80),
+        HealthcheckAssert(url="http://localhost:80/health"),
+        ResponseTimeAssert(url="http://localhost:80", max_ms=200),
+    ]
+)
+```
+
+### Running Assertions
+
+```bash
+cd examples/docker-service
+clockwork assert
+
+# Output:
+# ✓ All assertions passed
+#   ✓ nginx-web: ContainerRunningAssert
+#   ✓ nginx-web: PortAccessibleAssert (port 80)
+#   ✓ nginx-web: HealthcheckAssert (http://localhost:80/health)
+#   ✓ nginx-web: ResponseTimeAssert (< 200ms)
+```
+
 ## Configuration
 
 Clockwork uses **Pydantic Settings** for configuration management via `.env` files.
@@ -194,12 +271,18 @@ echo "OPENROUTER_API_KEY=your-key-here" > .env
 cd examples/file-generation
 uv run clockwork apply
 
+# Validate deployed resources
+uv run clockwork assert
+
 # Destroy deployed resources
 uv run clockwork destroy
 
 # Test Docker service example
 cd ../docker-service
 uv run clockwork apply
+
+# Run assertions
+uv run clockwork assert
 
 # Destroy Docker containers
 uv run clockwork destroy

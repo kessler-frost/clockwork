@@ -86,6 +86,9 @@ uv run clockwork apply
 # Generate artifacts without deploying
 uv run clockwork generate
 
+# Validate deployed resources
+uv run clockwork assert
+
 # Destroy deployed resources
 uv run clockwork destroy
 
@@ -129,6 +132,55 @@ DockerServiceResource(
 
 **AI-Powered**: When `image` is not specified, AI suggests appropriate Docker images (e.g., nginx:alpine).
 
+## Assertions
+
+Validate deployed resources with a **hybrid assertion system**:
+
+### Type-Safe Assertions
+
+No AI required, instant compilation:
+
+```python
+from clockwork.assertions import (
+    HealthcheckAssert,
+    PortAccessibleAssert,
+    ContainerRunningAssert,
+)
+
+nginx = DockerServiceResource(
+    name="nginx-web",
+    ports=["80:80"],
+    assertions=[
+        ContainerRunningAssert(),
+        PortAccessibleAssert(port=80),
+        HealthcheckAssert(url="http://localhost:80"),
+    ]
+)
+```
+
+### Natural Language Assertions
+
+AI-generated and cached:
+
+```python
+nginx = DockerServiceResource(
+    name="nginx-web",
+    ports=["80:80"],
+    assertions=[
+        "Container uses less than 100MB of memory",
+        "Response time is under 200ms",
+    ]
+)
+```
+
+Run assertions:
+
+```bash
+uv run clockwork assert
+```
+
+See [CLAUDE.md](./CLAUDE.md) for available assertion classes.
+
 ## Configuration
 
 Clockwork uses `.env` files for configuration via Pydantic Settings.
@@ -162,9 +214,10 @@ uv run clockwork apply --model "openai/gpt-4o-mini"
 ## Why Clockwork?
 
 - **Pure Python**: No custom DSL, just Pydantic models
-- **AI-powered**: Dynamic content generation
-- **Simple pipeline**: Load → Generate → Compile → Deploy
+- **AI-powered**: Dynamic content generation and intelligent resource suggestions
+- **Simple pipeline**: Load → Generate → Compile → Deploy → Validate
 - **Pythonic**: Type-safe with full IDE support
+- **Type-safe assertions**: Validate deployments with assertion classes
 
 ## Examples
 
@@ -172,11 +225,13 @@ uv run clockwork apply --model "openai/gpt-4o-mini"
 # File generation
 cd examples/file-generation
 uv run clockwork apply
+uv run clockwork assert
 uv run clockwork destroy
 
 # Docker services
 cd examples/docker-service
 uv run clockwork apply
+uv run clockwork assert
 uv run clockwork destroy
 ```
 

@@ -197,6 +197,66 @@ def destroy(
         raise typer.Exit(code=1)
 
 
+@app.command(name="assert")
+def assert_cmd(
+    api_key: str = typer.Option(
+        None,
+        "--api-key",
+        help="OpenRouter API key (overrides .env)"
+    ),
+    model: str = typer.Option(
+        None,
+        "--model",
+        help="OpenRouter model (overrides .env)"
+    ),
+):
+    """Run assertions to validate deployed resources."""
+
+    # Check for main.py in current directory
+    main_file = Path.cwd() / "main.py"
+    if not main_file.exists():
+        console.print("[bold red]✗ Error:[/bold red] No main.py found in current directory")
+        console.print("[dim]Hint: cd into your project directory that contains main.py[/dim]")
+        raise typer.Exit(code=1)
+
+    # Get settings for display
+    settings = get_settings()
+    display_model = model or settings.openrouter_model
+
+    console.print(Panel.fit(
+        f"[bold blue]Clockwork Assert[/bold blue]\n"
+        f"Directory: {Path.cwd().name}\n"
+        f"Model: {display_model}",
+        border_style="blue"
+    ))
+
+    try:
+        # Initialize core (uses settings if params not provided)
+        core = ClockworkCore(
+            openrouter_api_key=api_key,
+            openrouter_model=model
+        )
+
+        # Execute assertion pipeline
+        result = core.assert_resources(main_file)
+
+        # Show results
+        console.print("\n[bold green]✓ All assertions passed![/bold green]")
+        if result.get("stdout"):
+            console.print("\n[dim]PyInfra output:[/dim]")
+            console.print(result["stdout"])
+
+    except RuntimeError as e:
+        # Parse failure message from PyInfra output
+        error_msg = str(e)
+        console.print(f"\n[bold red]✗ Assertion(s) failed[/bold red]")
+        console.print(f"[dim]{error_msg}[/dim]")
+        raise typer.Exit(code=1)
+    except Exception as e:
+        console.print(f"\n[bold red]✗ Assertion execution failed:[/bold red] {e}")
+        raise typer.Exit(code=1)
+
+
 @app.command()
 def version():
     """Show Clockwork version."""

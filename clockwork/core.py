@@ -3,6 +3,7 @@ Clockwork Core - Main pipeline orchestrator for PyInfra-based infrastructure.
 
 Apply Pipeline: Load resources → Generate artifacts (AI) → Compile to PyInfra → Execute deploy
 Destroy Pipeline: Load resources → Generate artifacts (AI) → Compile destroy ops → Execute destroy
+Assert Pipeline: Load resources → Generate artifacts (AI) → Compile assertions → Execute assert
 """
 
 import importlib.util
@@ -177,6 +178,45 @@ class ClockworkCore:
 
         return result
 
+    def assert_resources(self, main_file: Path, dry_run: bool = False) -> Dict[str, Any]:
+        """
+        Full assertion pipeline: load → compile assertions → execute.
+
+        Args:
+            main_file: Path to main.py file with resource definitions
+            dry_run: If True, only compile without executing
+
+        Returns:
+            Dict with execution results including passed/failed counts
+        """
+        logger.info(f"Starting Clockwork assertion pipeline for: {main_file}")
+
+        # 1. Load resources from main.py
+        resources = self._load_resources(main_file)
+        logger.info(f"Loaded {len(resources)} resources")
+
+        # 2. Generate artifacts if needed (AI stage)
+        artifacts = self.artifact_generator.generate(resources)
+        logger.info(f"Generated {len(artifacts)} artifacts")
+
+        # 3. Compile to PyInfra using compile_assert()
+        pyinfra_dir = self.pyinfra_compiler.compile_assert(resources, artifacts)
+        logger.info(f"Compiled assertions to PyInfra: {pyinfra_dir}")
+
+        # 4. Execute PyInfra assert.py (unless dry run)
+        if dry_run:
+            logger.info("Dry run - skipping execution")
+            return {
+                "dry_run": True,
+                "resources": len(resources),
+                "pyinfra_dir": str(pyinfra_dir)
+            }
+
+        result = self._execute_pyinfra(pyinfra_dir, deploy_file="assert.py")
+        logger.info("Clockwork assertion pipeline complete")
+
+        return result
+
     def _execute_pyinfra(self, pyinfra_dir: Path, deploy_file: str = "deploy.py") -> Dict[str, Any]:
         """
         Execute the PyInfra deployment or destroy operation.
@@ -189,6 +229,8 @@ class ClockworkCore:
             Dict with execution results
         """
         operation_type = "destroy" if deploy_file == "destroy.py" else "deployment"
+        if deploy_file == "assert.py":
+            operation_type = "assertions"
         logger.info(f"Executing PyInfra {operation_type} from: {pyinfra_dir}")
 
         # Run: pyinfra -y inventory.py <deploy_file> (auto-approve changes)

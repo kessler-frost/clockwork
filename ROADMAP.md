@@ -1,10 +1,12 @@
 # Clockwork Roadmap
 
-## Upcoming Features
+## Completed Features
 
-### 1. `clockwork evaluate` Command
+### `clockwork assert` Command ✅
 
-Verification command to ensure resources are running as specified.
+**Completed:** October 6, 2025
+
+Verification command to ensure resources are running as specified through hybrid assertions.
 
 **Purpose:**
 
@@ -12,6 +14,7 @@ Verification command to ensure resources are running as specified.
 - Returns success/failure status
 - Can be run manually or integrated into CI/CD pipelines
 - Foundation for the reconciliation service
+- Supports both type-safe built-in assertions and AI-generated custom checks
 
 **Use Cases:**
 
@@ -19,27 +22,77 @@ Verification command to ensure resources are running as specified.
 - Health checks in CI/CD
 - Manual verification of infrastructure state
 - Debugging and troubleshooting
+- Custom verification scenarios with natural language
 
-**Example:**
+**Implementation Details:**
+
+Clockwork uses a hybrid assertion system that combines:
+
+1. **Built-in Assertion Classes** (type-safe, no AI required):
+   - `HealthcheckAssert(url)` - HTTP health endpoint validation
+   - `PortAccessibleAssert(port)` - Network port accessibility checks
+   - `ContainerRunningAssert()` - Docker container status verification
+   - `FileExistsAssert(path)` - File presence validation
+   - `CommandSuccessAssert(command)` - Shell command exit code checks
+
+2. **AI-Generated Assertions** (natural language strings):
+   - Custom scenarios described in plain English
+   - Compiled to PyInfra operations via AI
+   - Cached for performance and consistency
+   - Useful for complex or one-off checks
+
+3. **PyInfra-Based Execution**:
+   - All assertions compile to PyInfra operations
+   - Consistent execution model with apply/destroy
+   - Idempotent and reliable verification
+
+**Example (Hybrid Usage):**
+
+```python
+from clockwork.resources import DockerServiceResource
+from clockwork.assertions import HealthcheckAssert, ContainerRunningAssert, PortAccessibleAssert
+
+nginx = DockerServiceResource(
+    name="nginx-web",
+    description="Web server",
+    ports=["80:80", "443:443"],
+    assertions=[
+        # Type-safe built-in assertions (no AI)
+        HealthcheckAssert(url="http://localhost:80/health"),
+        ContainerRunningAssert(),
+        PortAccessibleAssert(port=80),
+        PortAccessibleAssert(port=443),
+        # Natural language assertions (AI-generated)
+        "SSL certificate is valid and not expiring within 30 days",
+        "Response time is under 200ms for the homepage",
+    ]
+)
+```
 
 ```bash
-# Run from project directory containing main.py
+# Run assertions from project directory
 cd my-project
-clockwork evaluate
-# Output: ✓ All resources running as specified
-#         - nginx_container: running (port 80:80)
-#         - config.json: present at /etc/app/config.json
+clockwork assert
+# Output: ✓ All assertions passed
+#         ✓ nginx-web: HealthcheckAssert (http://localhost:80/health)
+#         ✓ nginx-web: ContainerRunningAssert
+#         ✓ nginx-web: PortAccessibleAssert (port 80)
+#         ✓ nginx-web: PortAccessibleAssert (port 443)
+#         ✓ nginx-web: SSL certificate is valid and not expiring within 30 days
+#         ✓ nginx-web: Response time is under 200ms for the homepage
 ```
 
 ---
 
-### 2. Reconciliation Service
+## Upcoming Features
+
+### 1. Reconciliation Service
 
 Background daemon that continuously monitors and maintains desired state.
 
 **Purpose:**
 
-- Periodically runs `evaluate` to detect drift
+- Periodically runs `assert` to detect drift
 - Automatically corrects configuration drift
 - Enforces time-based policies (e.g., "run for 2 hours only")
 - Sends alerts on failures or drift detection
@@ -77,7 +130,7 @@ nginx = DockerServiceResource(
 
 ---
 
-### 3. Stateful Service Evolution
+### 2. Stateful Service Evolution
 
 Transform Clockwork from one-time deployments to long-lived project management.
 
@@ -155,7 +208,251 @@ clockwork update
 - Diff engine to compare current deployment with update specifications
 - AI-powered intent inference from vague specifications
 - Validation that updates don't break existing functionality
-- Integration with `clockwork evaluate` for continuous verification
+- Integration with `clockwork assert` for continuous verification
+
+---
+
+## Future Enhancements
+
+These enhancements will be considered after core features are implemented.
+
+### 3. Cross-Resource Assertions
+
+Validate interactions and dependencies between multiple resources.
+
+**Purpose:**
+
+- Verify that resources can communicate with each other
+- Ensure dependencies are properly configured
+- Test end-to-end workflows across services
+- Validate data consistency across distributed systems
+
+**Features:**
+
+- Multi-resource assertion definitions
+- Relationship-based validation (e.g., "service A can connect to database B")
+- Dependency graph verification
+- Integration testing capabilities
+- Transaction-based consistency checks
+
+**Use Cases:**
+
+- Microservice communication validation
+- Database replication verification
+- Load balancer → backend connectivity
+- Message queue → consumer relationships
+- Multi-tier application health checks
+
+**Example:**
+
+```python
+from clockwork.resources import DockerServiceResource
+from clockwork.assertions import CrossResourceAssert, ServiceConnectivityAssert
+
+api = DockerServiceResource(
+    name="api-service",
+    description="REST API",
+    ports=["8080:8080"]
+)
+
+database = DockerServiceResource(
+    name="postgres-db",
+    description="PostgreSQL database",
+    ports=["5432:5432"]
+)
+
+# Cross-resource assertion
+connectivity = CrossResourceAssert(
+    source=api,
+    target=database,
+    assertion="API can successfully query the database and retrieve user records"
+)
+
+# Or use built-in connectivity check
+connectivity = ServiceConnectivityAssert(
+    from_service=api,
+    to_service=database,
+    protocol="postgresql",
+    timeout=5
+)
+```
+
+**Implementation Considerations:**
+
+- Resource dependency graph construction
+- Context passing between resources during assertion execution
+- Network isolation handling for containerized services
+- Assertion ordering based on dependencies
+- Failure isolation to identify which relationship failed
+
+---
+
+### 4. Python-Based Assertions
+
+Support programmatic assertions using Python callable functions.
+
+**Purpose:**
+
+- Enable complex validation logic beyond natural language
+- Allow developers to write custom assertion code
+- Support assertions that require external libraries or APIs
+- Provide debugging and inspection capabilities
+
+**Features:**
+
+- Python function decorators for assertion definition
+- Access to resource metadata and state
+- Support for external dependencies (requests, psycopg2, etc.)
+- Rich return values (pass/fail + detailed diagnostics)
+- IDE autocomplete and type checking
+
+**Use Cases:**
+
+- Complex data validation requiring parsing/transformation
+- Third-party API integration checks
+- Custom business logic validation
+- Performance benchmarking and profiling
+- Advanced security scanning
+
+**Example:**
+
+```python
+from clockwork.resources import DockerServiceResource
+from clockwork.assertions import PythonAssert
+import requests
+import json
+
+nginx = DockerServiceResource(
+    name="nginx-web",
+    description="Web server",
+    ports=["80:80"]
+)
+
+@PythonAssert(resource=nginx)
+def validate_api_response(resource):
+    """Check that API returns valid JSON with expected schema."""
+    response = requests.get(f"http://localhost:80/api/health")
+
+    if response.status_code != 200:
+        return False, f"Expected status 200, got {response.status_code}"
+
+    try:
+        data = response.json()
+    except json.JSONDecodeError:
+        return False, "Response is not valid JSON"
+
+    required_fields = ["status", "version", "uptime"]
+    missing = [f for f in required_fields if f not in data]
+
+    if missing:
+        return False, f"Missing required fields: {missing}"
+
+    return True, f"API health check passed: {data['status']}"
+
+# Alternative: inline lambda for simple checks
+nginx.assertions.append(
+    PythonAssert(
+        lambda r: (True, "Pass") if os.path.exists("/var/log/nginx/access.log") else (False, "Log file missing")
+    )
+)
+```
+
+**Implementation Considerations:**
+
+- Sandboxing and security for user-provided code
+- Dependency management for custom assertions
+- Error handling and exception propagation
+- Performance impact of complex Python assertions
+- Serialization for caching (pickle/dill)
+
+---
+
+### 5. Additional Built-in Assertions
+
+Expand the library of type-safe assertion classes for common scenarios.
+
+**Purpose:**
+
+- Reduce reliance on AI for common validation tasks
+- Provide performant, deterministic assertions
+- Cover standard infrastructure patterns
+- Improve IDE support and discoverability
+
+**Planned Assertion Classes:**
+
+**Database Assertions:**
+- `DatabaseConnectionAssert(host, port, database, credentials)` - Connection validation
+- `TableExistsAssert(table_name)` - Schema verification
+- `RowCountAssert(table, min, max)` - Data presence validation
+- `QuerySuccessAssert(sql_query)` - Custom query execution
+
+**Network Assertions:**
+- `DNSResolveAssert(hostname, expected_ip)` - DNS resolution validation
+- `SSLCertificateAssert(url, min_days_valid)` - Certificate validation
+- `ResponseTimeAssert(url, max_ms)` - Performance validation
+- `HTTPStatusAssert(url, expected_status)` - Endpoint validation
+
+**Security Assertions:**
+- `NoOpenPortsAssert(except_ports)` - Security scanning
+- `FilePermissionsAssert(path, expected_perms)` - Permission validation
+- `SecretsPresentAssert(env_vars)` - Configuration validation
+- `VulnerabilityScanAssert()` - Container/package scanning
+
+**File System Assertions:**
+- `DirectoryExistsAssert(path)` - Directory presence
+- `FileContentMatchesAssert(path, regex)` - Content validation
+- `DiskSpaceAssert(path, min_gb_free)` - Storage validation
+- `FileModifiedWithinAssert(path, max_age)` - Freshness validation
+
+**Example:**
+
+```python
+from clockwork.resources import DockerServiceResource
+from clockwork.assertions import (
+    DatabaseConnectionAssert,
+    TableExistsAssert,
+    ResponseTimeAssert,
+    SSLCertificateAssert,
+    NoOpenPortsAssert
+)
+
+postgres = DockerServiceResource(
+    name="postgres-db",
+    description="PostgreSQL database",
+    ports=["5432:5432"],
+    assertions=[
+        DatabaseConnectionAssert(
+            host="localhost",
+            port=5432,
+            database="myapp",
+            credentials={"user": "admin", "password_env": "DB_PASSWORD"}
+        ),
+        TableExistsAssert(table="users"),
+        TableExistsAssert(table="orders"),
+        RowCountAssert(table="users", min=1),
+    ]
+)
+
+nginx = DockerServiceResource(
+    name="nginx-web",
+    description="Web server",
+    ports=["80:80", "443:443"],
+    assertions=[
+        ResponseTimeAssert(url="http://localhost:80", max_ms=200),
+        SSLCertificateAssert(url="https://localhost:443", min_days_valid=30),
+        HTTPStatusAssert(url="http://localhost:80/health", expected_status=200),
+        NoOpenPortsAssert(except_ports=[80, 443, 22]),
+    ]
+)
+```
+
+**Implementation Considerations:**
+
+- Consistent API design across assertion classes
+- Dependency management (e.g., psycopg2 for database assertions)
+- Error messages and debugging information
+- Cross-platform compatibility
+- Performance optimization for frequently-run assertions
 
 ---
 

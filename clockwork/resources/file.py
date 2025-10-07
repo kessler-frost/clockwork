@@ -114,3 +114,59 @@ files.file(
     present=False,
 )
 '''
+
+    def to_pyinfra_assert_operations(self, artifacts: Dict[str, Any]) -> str:
+        """Generate PyInfra operations code for file assertions.
+
+        Provides default assertions for FileResource:
+        - File exists at the expected path
+        - File has correct permissions (mode)
+
+        These can be overridden by specifying custom assertions.
+
+        Args:
+            artifacts: Dict with generated content (if any)
+
+        Returns:
+            String of PyInfra assertion operation code
+        """
+        # If custom assertions are defined, use the base implementation
+        if self.assertions:
+            return super().to_pyinfra_assert_operations(artifacts)
+
+        # Determine file path
+        from pathlib import Path
+        cwd = Path.cwd()
+
+        if self.path:
+            file_path = Path(self.path)
+            file_path = file_path if file_path.is_absolute() else cwd / file_path
+        elif self.directory:
+            abs_directory = Path(self.directory)
+            abs_directory = abs_directory if abs_directory.is_absolute() else cwd / abs_directory
+            file_path = abs_directory / self.name
+        else:
+            file_path = Path("/tmp") / self.name
+
+        file_path = str(file_path)
+
+        # Default assertions for FileResource
+        return f'''
+# Default assertions for file: {self.name}
+
+# Assert: File exists
+server.shell(
+    name="Assert: File {file_path} exists",
+    commands=[
+        "test -f {file_path} || exit 1"
+    ],
+)
+
+# Assert: File has correct permissions
+server.shell(
+    name="Assert: File {file_path} has mode {self.mode}",
+    commands=[
+        "[ \\"$(stat -c '%a' {file_path})\\" = \\"{self.mode}\\" ] || exit 1"
+    ],
+)
+'''
