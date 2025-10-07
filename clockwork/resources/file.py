@@ -87,7 +87,7 @@ files.put(
             artifacts: Dict with generated content (if any)
 
         Returns:
-            PyInfra operation code to remove the file
+            PyInfra operation code to remove the file and its directory if specified
         """
         # Determine file path: use path if provided, else directory + name, else /tmp + name
         # Convert relative paths to absolute paths from current working directory
@@ -97,16 +97,20 @@ files.put(
         if self.path:
             file_path = Path(self.path)
             file_path = file_path if file_path.is_absolute() else cwd / file_path
+            directory = None
         elif self.directory:
             abs_directory = Path(self.directory)
             abs_directory = abs_directory if abs_directory.is_absolute() else cwd / abs_directory
             file_path = abs_directory / self.name
+            directory = str(abs_directory)
         else:
             file_path = Path("/tmp") / self.name
+            directory = None
 
         file_path = str(file_path)
 
-        return f'''
+        # Remove file first, then directory if specified
+        operations = f'''
 # Remove file: {self.name}
 files.file(
     name="Remove {self.name}",
@@ -114,6 +118,20 @@ files.file(
     present=False,
 )
 '''
+
+        # If directory was specified, also remove it
+        # Note: This will only succeed if directory is empty after all files are removed
+        if directory:
+            operations += f'''
+# Remove directory if empty: {directory}
+files.directory(
+    name="Remove directory {directory}",
+    path="{directory}",
+    present=False,
+)
+'''
+
+        return operations
 
     def to_pyinfra_assert_operations(self, artifacts: Dict[str, Any]) -> str:
         """Generate PyInfra operations code for file assertions.

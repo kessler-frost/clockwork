@@ -2,7 +2,7 @@
 Clockwork Core - Main pipeline orchestrator for PyInfra-based infrastructure.
 
 Apply Pipeline: Load resources → Generate artifacts (AI) → Compile to PyInfra → Execute deploy
-Destroy Pipeline: Load resources → Generate artifacts (AI) → Compile destroy ops → Execute destroy
+Destroy Pipeline: Load resources → Compile destroy ops → Execute destroy
 Assert Pipeline: Load resources → Generate artifacts (AI) → Compile assertions → Execute assert
 """
 
@@ -140,7 +140,7 @@ class ClockworkCore:
 
     def destroy(self, main_file: Path, dry_run: bool = False) -> Dict[str, Any]:
         """
-        Full destroy pipeline: load → generate → compile destroy → execute.
+        Full destroy pipeline: load → compile destroy → execute.
 
         Args:
             main_file: Path to main.py file with resource definitions
@@ -155,21 +155,16 @@ class ClockworkCore:
         resources = self._load_resources(main_file)
         logger.info(f"Loaded {len(resources)} resources")
 
-        # 2. Generate artifacts (AI stage) - some resources might need AI for destroy
-        artifacts = self.artifact_generator.generate(resources)
-        logger.info(f"Generated {len(artifacts)} artifacts")
-
-        # 3. Compile to PyInfra destroy operations (template stage)
-        pyinfra_dir = self.pyinfra_compiler.compile_destroy(resources, artifacts)
+        # 2. Compile to PyInfra destroy operations (no artifact generation needed)
+        pyinfra_dir = self.pyinfra_compiler.compile_destroy(resources, artifacts={})
         logger.info(f"Compiled destroy operations to PyInfra: {pyinfra_dir}")
 
-        # 4. Execute PyInfra destroy (unless dry run)
+        # 3. Execute PyInfra destroy (unless dry run)
         if dry_run:
             logger.info("Dry run - skipping execution")
             return {
                 "dry_run": True,
                 "resources": len(resources),
-                "artifacts": len(artifacts),
                 "pyinfra_dir": str(pyinfra_dir)
             }
 
