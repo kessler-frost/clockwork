@@ -3,6 +3,7 @@
 from typing import Any, Optional
 from pathlib import Path
 from .base import BaseAssertion
+from .utils import escape_shell_pattern
 
 
 def _resolve_path_for_pyinfra(path_str: str) -> str:
@@ -237,7 +238,7 @@ class FileContentMatchesAssert(BaseAssertion):
         if self.pattern:
             desc = self.description or f"File {self.path} matches pattern"
             # Escape single quotes in pattern for shell command
-            escaped_pattern = self.pattern.replace("'", "'\\''")
+            escaped_pattern = escape_shell_pattern(self.pattern)
 
             return f'''
 # Assert: {desc}

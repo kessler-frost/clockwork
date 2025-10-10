@@ -2,6 +2,7 @@
 
 from typing import Any, Optional
 from .base import BaseAssertion
+from .utils import resolve_container_name, escape_shell_pattern
 
 
 class ContainerRunningAssert(BaseAssertion):
@@ -31,7 +32,7 @@ class ContainerRunningAssert(BaseAssertion):
         Returns:
             PyInfra server.shell operation that checks docker ps output
         """
-        container = self.container_name or getattr(resource, "name", "unknown")
+        container = resolve_container_name(self, resource)
         desc = self.description or f"Container {container} is running"
 
         return f'''
@@ -72,7 +73,7 @@ class ContainerHealthyAssert(BaseAssertion):
         Returns:
             PyInfra server.shell operation that inspects container health
         """
-        container = self.container_name or getattr(resource, "name", "unknown")
+        container = resolve_container_name(self, resource)
         desc = self.description or f"Container {container} is healthy"
 
         return f'''
@@ -120,11 +121,11 @@ class LogContainsAssert(BaseAssertion):
         Returns:
             PyInfra server.shell operation that greps container logs
         """
-        container = self.container_name or getattr(resource, "name", "unknown")
+        container = resolve_container_name(self, resource)
         desc = self.description or f"Logs for {container} contain '{self.pattern}'"
 
         # Escape single quotes in pattern for shell command
-        escaped_pattern = self.pattern.replace("'", "'\\''")
+        escaped_pattern = escape_shell_pattern(self.pattern)
 
         return f'''
 # Assert: {desc}

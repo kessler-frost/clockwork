@@ -58,6 +58,8 @@ dmypy.json
 .clockwork-demo/
 demo-test/
 examples/scratch/
+scratch/
+**/scratch/
 
 # AI models
 models/

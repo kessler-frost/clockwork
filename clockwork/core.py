@@ -6,9 +6,11 @@ Destroy Pipeline: Execute pre-generated destroy.py (from apply)
 Assert Pipeline: Load resources → Generate artifacts (AI) → Compile assertions → Execute assert
 """
 
+import asyncio
 import importlib.util
 import logging
 import subprocess
+import traceback
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -69,8 +71,7 @@ class ClockworkCore:
         logger.info(f"Loaded {len(resources)} resources")
 
         # 2. Generate artifacts (AI stage)
-        artifacts = self.artifact_generator.generate(resources)
-        logger.info(f"Generated {len(artifacts)} artifacts")
+        artifacts = self._generate_artifacts_safe(resources)
 
         # 3. Compile to PyInfra (template stage)
         pyinfra_dir = self.pyinfra_compiler.compile(resources, artifacts)
@@ -138,6 +139,27 @@ class ClockworkCore:
 
         return resources
 
+    def _generate_artifacts_safe(self, resources: List[Any]) -> Dict[str, Any]:
+        """Generate artifacts with error handling and logging.
+
+        Args:
+            resources: List of Resource objects
+
+        Returns:
+            Dict mapping resource names to generated artifacts
+
+        Raises:
+            RuntimeError: If artifact generation fails
+        """
+        try:
+            artifacts = asyncio.run(self.artifact_generator.generate(resources))
+            logger.info(f"Generated {len(artifacts)} artifacts")
+            return artifacts
+        except Exception as e:
+            logger.error(f"Failed to generate artifacts: {e}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            raise RuntimeError(f"Artifact generation failed: {e}") from e
+
     def destroy(self, main_file: Path, dry_run: bool = False) -> Dict[str, Any]:
         """
         Destroy pipeline: execute pre-generated destroy.py.
@@ -199,8 +221,7 @@ class ClockworkCore:
         logger.info(f"Loaded {len(resources)} resources")
 
         # 2. Generate artifacts if needed (AI stage)
-        artifacts = self.artifact_generator.generate(resources)
-        logger.info(f"Generated {len(artifacts)} artifacts")
+        artifacts = self._generate_artifacts_safe(resources)
 
         # 3. Compile to PyInfra using compile_assert()
         pyinfra_dir = self.pyinfra_compiler.compile_assert(resources, artifacts)

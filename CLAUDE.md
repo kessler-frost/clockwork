@@ -106,6 +106,236 @@ clockwork assert
 #   ✓ nginx-web: ResponseTimeAssert (< 200ms)
 ```
 
+## Tool Usage
+
+Clockwork supports **PydanticAI tools** and **MCP (Model Context Protocol) servers** to extend AI capabilities during artifact generation. Tools enable the AI to access real-time information, interact with external systems, and perform complex operations beyond its base knowledge.
+
+### Available Tool Types
+
+1. **PydanticAI Common Tools** - Universal tools that work with any model/provider
+   - `duckduckgo_search_tool()` - Web search for real-time information (works with OpenRouter ✅)
+   - `tavily_search_tool()` - Alternative search (requires Tavily API key)
+   - Custom tools - Implement your own PydanticAI-compatible tools
+
+2. **MCP Servers** - External services via Model Context Protocol
+   - Filesystem access, database queries, API integrations
+   - Any MCP-compatible server (stdio, HTTP, or Docker-based)
+
+> **Note on Built-in Tools:** PydanticAI has provider-specific built-in tools like `WebSearchTool` and `CodeExecutionTool` that only work with Anthropic (`claude-sonnet-4-0`) and OpenAI (`gpt-4.1`) native APIs. Since Clockwork uses **OpenRouter with free models**, we use **common tools** instead, which work universally with any provider.
+
+### Using PydanticAI Tools
+
+**DuckDuckGo search tool** enables web search for current information:
+
+```python
+from pydantic_ai.common_tools.duckduckgo import duckduckgo_search_tool
+from clockwork.resources import FileResource, ArtifactSize
+
+# AI can search the web for real-time information
+tech_news = FileResource(
+    name="tech_news_today.md",
+    description="Write about the latest AI developments and breakthroughs from this week",
+    size=ArtifactSize.MEDIUM,
+    directory="scratch",
+    # Enable web search capability
+    tools=[duckduckgo_search_tool()],
+)
+```
+
+**Installation requirement**:
+```bash
+# DuckDuckGo tool requires the pydantic-ai-slim package with duckduckgo extras
+pip install 'pydantic-ai-slim[duckduckgo]'
+```
+
+### Using MCP Servers
+
+**MCP servers** allow AI to interact with external systems through a standardized protocol:
+
+```python
+from clockwork.resources import FileResource, ArtifactSize
+from pydantic_ai.mcp import MCPServerStdio
+
+# Initialize MCP filesystem server
+filesystem_mcp = MCPServerStdio(
+    'npx',
+    args=['-y', '@modelcontextprotocol/server-filesystem', '/path/to/project']
+)
+
+# AI can read and analyze local files
+project_analysis = FileResource(
+    name="project_analysis.md",
+    description="Analyze the project structure and provide insights about the architecture",
+    size=ArtifactSize.LARGE,
+    directory="scratch",
+    toolsets=[filesystem_mcp],  # Note: toolsets not tools for MCP
+)
+```
+
+### Common MCP Servers
+
+**Official MCP servers** (via npm):
+
+```python
+from pydantic_ai.mcp import MCPServerStdio
+
+# Filesystem access
+filesystem_mcp = MCPServerStdio(
+    'npx',
+    args=['-y', '@modelcontextprotocol/server-filesystem', '/path']
+)
+
+# PostgreSQL database
+postgres_mcp = MCPServerStdio(
+    'npx',
+    args=['-y', '@modelcontextprotocol/server-postgres', 'postgresql://user:pass@host/db']
+)
+
+# SQLite database
+sqlite_mcp = MCPServerStdio(
+    'npx',
+    args=['-y', '@modelcontextprotocol/server-sqlite', '/path/to/database.db']
+)
+
+# GitHub integration
+github_mcp = MCPServerStdio(
+    'npx',
+    args=['-y', '@modelcontextprotocol/server-github']
+)
+
+# Google Drive
+gdrive_mcp = MCPServerStdio(
+    'npx',
+    args=['-y', '@modelcontextprotocol/server-gdrive']
+)
+```
+
+**Custom MCP servers**:
+
+```python
+from pydantic_ai.mcp import MCPServerStdio
+
+# Python-based MCP server
+python_mcp = MCPServerStdio('python', args=['/path/to/custom_server.py'])
+
+# Docker-based MCP server
+docker_mcp = MCPServerStdio('docker', args=['run', '-i', 'my-mcp-server'])
+```
+
+### Combining Tools and MCP
+
+You can use both PydanticAI tools and MCP servers together:
+
+```python
+from pydantic_ai.common_tools.duckduckgo import duckduckgo_search_tool
+from pydantic_ai.mcp import MCPServerStdio
+from clockwork.resources import FileResource, ArtifactSize
+
+# Initialize MCP server
+filesystem_mcp = MCPServerStdio(
+    'npx',
+    args=['-y', '@modelcontextprotocol/server-filesystem', '/Users/user/project']
+)
+
+# AI can both search the web AND read local files
+comprehensive_report = FileResource(
+    name="comprehensive_analysis.md",
+    description="Analyze our codebase and compare with industry best practices from the web",
+    size=ArtifactSize.LARGE,
+    directory="scratch",
+    tools=[duckduckgo_search_tool()],  # Web search
+    toolsets=[filesystem_mcp],         # Filesystem access (note: separate parameter)
+)
+```
+
+
+### Practical Examples
+
+**Example 1: Real-time Market Data**
+```python
+from pydantic_ai.common_tools.duckduckgo import duckduckgo_search_tool
+
+market_report = FileResource(
+    name="market_report.md",
+    description="Current tech stock trends and analyst insights for Apple, Google, Microsoft",
+    tools=[duckduckgo_search_tool()],  # Fetches real-time data
+)
+```
+
+**Example 2: Code Analysis with Filesystem**
+```python
+from pydantic_ai.mcp import MCPServerStdio
+
+filesystem_mcp = MCPServerStdio(
+    'npx',
+    args=['-y', '@modelcontextprotocol/server-filesystem', '/path/to/code']
+)
+
+code_review = FileResource(
+    name="code_review.md",
+    description="Review the codebase for security issues and best practices",
+    toolsets=[filesystem_mcp],
+)
+```
+
+**Example 3: Database-Driven Reports**
+```python
+from pydantic_ai.mcp import MCPServerStdio
+
+postgres_mcp = MCPServerStdio(
+    'npx',
+    args=['-y', '@modelcontextprotocol/server-postgres', 'postgresql://user:pass@host/db']
+)
+
+db_report = FileResource(
+    name="analytics.md",
+    description="Generate analytics report from our production database",
+    toolsets=[postgres_mcp],
+)
+```
+
+**Example 4: Multi-Source Analysis**
+```python
+from pydantic_ai.common_tools.duckduckgo import duckduckgo_search_tool
+from pydantic_ai.mcp import MCPServerStdio
+
+postgres_mcp = MCPServerStdio(
+    'npx',
+    args=['-y', '@modelcontextprotocol/server-postgres', 'postgresql://localhost/myapp']
+)
+filesystem_mcp = MCPServerStdio(
+    'npx',
+    args=['-y', '@modelcontextprotocol/server-filesystem', '/path/to/app']
+)
+
+hybrid_analysis = FileResource(
+    name="competitive_analysis.md",
+    description="Compare our app with competitors using our database and web research",
+    tools=[duckduckgo_search_tool()],
+    toolsets=[postgres_mcp, filesystem_mcp],
+)
+```
+
+### Tool Examples Directory
+
+See the complete example:
+- `examples/mcp-integration/` - MCP server usage patterns
+
+```bash
+# Try the MCP example
+cd examples/mcp-integration
+npm install -g @modelcontextprotocol/server-filesystem
+uv run clockwork apply
+```
+
+### Important Notes
+
+- **Tools are optional** - Resources work fine without tools using AI's base knowledge
+- **MCP requires installation** - Ensure MCP servers are installed before use
+- **Authentication** - Some MCP servers require API keys or credentials
+- **Permissions** - Filesystem MCP requires explicit directory permissions
+- **Performance** - Tools add latency but provide real-time/external data access
+
 ## Configuration
 
 Clockwork uses **Pydantic Settings** for configuration management via `.env` files.
@@ -115,30 +345,29 @@ Clockwork uses **Pydantic Settings** for configuration management via `.env` fil
 Create a `.env` file in the project root:
 
 ```bash
-OPENROUTER_API_KEY=your-api-key-here
-OPENROUTER_MODEL=openai/gpt-oss-20b:free
-OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
-PYINFRA_OUTPUT_DIR=.clockwork/pyinfra
-LOG_LEVEL=INFO
+CW_OPENROUTER_API_KEY=your-api-key-here
+CW_OPENROUTER_MODEL=openai/gpt-oss-20b:free
+CW_OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+CW_PYINFRA_OUTPUT_DIR=.clockwork/pyinfra
+CW_LOG_LEVEL=INFO
 ```
 
 ### Available Settings
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `OPENROUTER_API_KEY` | None | OpenRouter API key (required) |
-| `OPENROUTER_MODEL` | `openai/gpt-oss-20b:free` | Model for AI generation |
-| `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | OpenRouter API endpoint |
-| `PYINFRA_OUTPUT_DIR` | `.clockwork/pyinfra` | PyInfra output directory |
-| `LOG_LEVEL` | `INFO` | Logging level |
-| `PROJECT_NAME` | None | Project identifier (optional) |
+| `CW_OPENROUTER_API_KEY` | None | OpenRouter API key (required) |
+| `CW_OPENROUTER_MODEL` | `openai/gpt-oss-20b:free` | Model for AI generation |
+| `CW_OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | OpenRouter API endpoint |
+| `CW_PYINFRA_OUTPUT_DIR` | `.clockwork/pyinfra` | PyInfra output directory |
+| `CW_LOG_LEVEL` | `INFO` | Logging level |
 
 ### Override Hierarchy
 
 Settings can be overridden:
 
 1. **CLI flags** (highest priority) - `--api-key`, `--model`
-2. **Environment variables** - `export OPENROUTER_API_KEY="..."`
+2. **Environment variables** - `export CW_OPENROUTER_API_KEY="..."`
 3. **.env file** - loaded from project root
 4. **Defaults** (lowest priority) - defined in settings
 
@@ -171,7 +400,8 @@ clockwork/
 │   └── settings.py           # Configuration via Pydantic Settings
 ├── examples/
 │   ├── file-generation/    # File generation example
-│   └── docker-service/     # Docker service example
+│   ├── docker-service/     # Docker service example
+│   └── mcp-integration/    # MCP server integration example
 ├── tests/                  # Test suite
 └── pyproject.toml         # Dependencies
 ```
@@ -245,6 +475,8 @@ redis = DockerServiceResource(
 )
 ```
 
+**Note on structured outputs**: DockerServiceResource uses PydanticAI's structured output capabilities to ensure the AI returns a properly formatted Docker image specification. This leverages Pydantic models for type-safe validation of AI-generated content.
+
 ### Testing
 
 Run all tests:
@@ -265,7 +497,7 @@ Test the full pipeline:
 
 ```bash
 # Create .env file with API key
-echo "OPENROUTER_API_KEY=your-key-here" > .env
+echo "CW_OPENROUTER_API_KEY=your-key-here" > .env
 
 # Run file generation example
 cd examples/file-generation
@@ -286,6 +518,11 @@ uv run clockwork assert
 
 # Destroy Docker containers
 uv run clockwork destroy
+
+# Test MCP integration (filesystem access)
+cd ../mcp-integration
+npm install -g @modelcontextprotocol/server-filesystem
+uv run clockwork apply
 ```
 
 ## Code Guidelines

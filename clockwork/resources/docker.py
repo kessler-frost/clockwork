@@ -7,35 +7,28 @@ from .base import Resource
 class DockerServiceResource(Resource):
     """Docker service resource - runs containers with AI-suggested images.
 
-    This resource allows you to define Docker containers declaratively. If no image
-    is specified, the AI will suggest an appropriate image based on the description.
+    Declaratively define Docker containers. When no image is specified, AI suggests
+    an appropriate image based on the description using PydanticAI's structured output.
 
     Attributes:
         name: Container name (required)
-        description: What the service does - used by AI for image suggestions (required)
-        image: Docker image to use (optional - AI will suggest if not provided)
-        ports: Port mappings as list of strings (e.g., ["80:80", "443:443"])
-        volumes: Volume mounts as list of strings (e.g., ["/host:/container"])
+        description: Service description - used by AI for image suggestions (required)
+        image: Docker image (optional - AI suggests if not provided)
+        ports: Port mappings, e.g., ["80:80", "443:443"]
+        volumes: Volume mounts, e.g., ["/host:/container"]
         env_vars: Environment variables as key-value pairs
         networks: Docker networks to attach the container to
-        present: Whether the container should exist (True) or be removed (False)
-        start: Whether the container should be running (True) or stopped (False)
+        present: Whether container should exist (default: True)
+        start: Whether container should be running (default: True)
 
     Examples:
-        # Basic usage with AI-suggested image:
-        >>> nginx = DockerServiceResource(
-        ...     name="nginx",
-        ...     description="Web server for serving static content",
-        ...     ports=["80:80"]
-        ... )
+        AI-suggested image:
+        >>> DockerServiceResource(name="nginx", description="Web server", ports=["80:80"])
 
-        # Explicit image specification:
-        >>> redis = DockerServiceResource(
-        ...     name="redis",
-        ...     description="Redis cache server",
-        ...     image="redis:7-alpine",
-        ...     ports=["6379:6379"],
-        ...     volumes=["/data:/data"]
+        Explicit image:
+        >>> DockerServiceResource(
+        ...     name="redis", description="Cache", image="redis:7-alpine",
+        ...     ports=["6379:6379"], volumes=["/data:/data"]
         ... )
     """
 

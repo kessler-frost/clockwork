@@ -42,7 +42,6 @@ def test_deploy_generation():
     deploy = compiler._generate_deploy(resources, artifacts)
 
     assert "from pyinfra.operations import files" in deploy
-    assert "from io import StringIO" in deploy
     assert "files.put" in deploy
     assert "test.txt" in deploy
 

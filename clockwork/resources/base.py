@@ -1,6 +1,6 @@
 """Base resource classes for Clockwork."""
 
-from typing import Dict, Any, Optional, List, Union, TYPE_CHECKING
+from typing import Dict, Any, Optional, List, TYPE_CHECKING
 from pydantic import BaseModel
 from enum import Enum
 
@@ -16,11 +16,21 @@ class ArtifactSize(str, Enum):
 
 
 class Resource(BaseModel):
-    """Base resource class - all resources inherit from this."""
+    """Base resource class - all resources inherit from this.
+
+    Attributes:
+        name: Unique identifier for the resource
+        description: Optional human-readable description of the resource
+        assertions: Optional list of type-safe assertion objects for validation
+        tools: Optional list of PydanticAI tools (duckduckgo_search_tool(), MCPServerStdio, etc.) for AI-powered operations
+    """
 
     name: str
     description: Optional[str] = None
     assertions: Optional[List["BaseAssertion"]] = None
+
+    # AI and integration capabilities
+    tools: Optional[List[Any]] = None  # PydanticAI tools (duckduckgo_search_tool(), MCPServerStdio, etc.)
 
     def needs_artifact_generation(self) -> bool:
         """Does this resource need AI to generate content?"""

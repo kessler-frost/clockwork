@@ -34,6 +34,80 @@ def configure_logging():
 configure_logging()
 
 
+# Helper functions to reduce duplication across commands
+def _get_main_file() -> Path:
+    """Check for main.py in current directory and return Path.
+
+    Returns:
+        Path to main.py
+
+    Raises:
+        SystemExit: If main.py is not found
+    """
+    main_file = Path.cwd() / "main.py"
+    if not main_file.exists():
+        console.print("[bold red]✗ Error:[/bold red] No main.py found in current directory")
+        console.print("[dim]Hint: cd into your project directory that contains main.py[/dim]")
+        raise typer.Exit(code=1)
+    return main_file
+
+
+def _create_command_panel(title: str, color: str) -> Panel:
+    """Create a Rich Panel for command display.
+
+    Args:
+        title: Command title (e.g., "Clockwork Apply")
+        color: Border color (e.g., "blue", "cyan", "red")
+
+    Returns:
+        Formatted Rich Panel
+    """
+    settings = get_settings()
+    return Panel.fit(
+        f"[bold {color}]{title}[/bold {color}]\n"
+        f"Directory: {Path.cwd().name}\n"
+        f"Model: {settings.openrouter_model}",
+        border_style=color
+    )
+
+
+def _initialize_core(api_key: str = None, model: str = None) -> ClockworkCore:
+    """Initialize ClockworkCore with optional overrides.
+
+    Args:
+        api_key: Optional OpenRouter API key override
+        model: Optional model override
+
+    Returns:
+        Configured ClockworkCore instance
+    """
+    return ClockworkCore(
+        openrouter_api_key=api_key,
+        openrouter_model=model
+    )
+
+
+def _handle_command_error(e: Exception, command_type: str) -> None:
+    """Handle command errors with appropriate formatting.
+
+    Args:
+        e: Exception that occurred
+        command_type: Type of command (for error message context)
+
+    Raises:
+        SystemExit: Always exits with code 1
+    """
+    # Special handling for assertion RuntimeError
+    if command_type == "assert" and isinstance(e, RuntimeError):
+        error_msg = str(e)
+        console.print(f"\n[bold red]✗ Assertion(s) failed[/bold red]")
+        console.print(f"[dim]{error_msg}[/dim]")
+    else:
+        console.print(f"\n[bold red]✗ {command_type.capitalize()} failed:[/bold red] {e}")
+
+    raise typer.Exit(code=1)
+
+
 @app.command()
 def apply(
     api_key: str = typer.Option(
@@ -48,44 +122,20 @@ def apply(
     ),
 ):
     """Apply infrastructure: generate artifacts + compile + deploy."""
-
-    # Check for main.py in current directory
-    main_file = Path.cwd() / "main.py"
-    if not main_file.exists():
-        console.print("[bold red]✗ Error:[/bold red] No main.py found in current directory")
-        console.print("[dim]Hint: cd into your project directory that contains main.py[/dim]")
-        raise typer.Exit(code=1)
-
-    # Get settings for display
-    settings = get_settings()
-    display_model = model or settings.openrouter_model
-
-    console.print(Panel.fit(
-        f"[bold blue]Clockwork Apply[/bold blue]\n"
-        f"Directory: {Path.cwd().name}\n"
-        f"Model: {display_model}",
-        border_style="blue"
-    ))
+    main_file = _get_main_file()
+    console.print(_create_command_panel("Clockwork Apply", "blue"))
 
     try:
-        # Initialize core (uses settings if params not provided)
-        core = ClockworkCore(
-            openrouter_api_key=api_key,
-            openrouter_model=model
-        )
-
-        # Execute pipeline
+        core = _initialize_core(api_key, model)
         result = core.apply(main_file)
 
-        # Show results
         console.print("\n[bold green]✓ Deployment successful![/bold green]")
         if result.get("stdout"):
             console.print("\n[dim]PyInfra output:[/dim]")
             console.print(result["stdout"])
 
     except Exception as e:
-        console.print(f"\n[bold red]✗ Deployment failed:[/bold red] {e}")
-        raise typer.Exit(code=1)
+        _handle_command_error(e, "deployment")
 
 
 @app.command()
@@ -102,36 +152,13 @@ def generate(
     ),
 ):
     """Generate artifacts and compile without deploying."""
-
-    # Check for main.py in current directory
-    main_file = Path.cwd() / "main.py"
-    if not main_file.exists():
-        console.print("[bold red]✗ Error:[/bold red] No main.py found in current directory")
-        console.print("[dim]Hint: cd into your project directory that contains main.py[/dim]")
-        raise typer.Exit(code=1)
-
-    # Get settings for display
-    settings = get_settings()
-    display_model = model or settings.openrouter_model
-
-    console.print(Panel.fit(
-        f"[bold cyan]Clockwork Generate[/bold cyan]\n"
-        f"Directory: {Path.cwd().name}\n"
-        f"Model: {display_model}",
-        border_style="cyan"
-    ))
+    main_file = _get_main_file()
+    console.print(_create_command_panel("Clockwork Generate", "cyan"))
 
     try:
-        # Initialize core (uses settings if params not provided)
-        core = ClockworkCore(
-            openrouter_api_key=api_key,
-            openrouter_model=model
-        )
-
-        # Run generation (dry run)
+        core = _initialize_core(api_key, model)
         result = core.plan(main_file)
 
-        # Show summary
         console.print(f"\n[bold]Generation Summary:[/bold]")
         console.print(f"  Resources: {result['resources']}")
         console.print(f"  Artifacts generated: {result['artifacts']}")
@@ -139,8 +166,7 @@ def generate(
         console.print("\n[dim]Run 'clockwork apply' to deploy these resources.[/dim]")
 
     except Exception as e:
-        console.print(f"\n[bold red]✗ Generation failed:[/bold red] {e}")
-        raise typer.Exit(code=1)
+        _handle_command_error(e, "generation")
 
 
 @app.command()
@@ -157,44 +183,20 @@ def destroy(
     ),
 ):
     """Destroy infrastructure: remove all deployed resources."""
-
-    # Check for main.py in current directory
-    main_file = Path.cwd() / "main.py"
-    if not main_file.exists():
-        console.print("[bold red]✗ Error:[/bold red] No main.py found in current directory")
-        console.print("[dim]Hint: cd into your project directory that contains main.py[/dim]")
-        raise typer.Exit(code=1)
-
-    # Get settings for display
-    settings = get_settings()
-    display_model = model or settings.openrouter_model
-
-    console.print(Panel.fit(
-        f"[bold red]Clockwork Destroy[/bold red]\n"
-        f"Directory: {Path.cwd().name}\n"
-        f"Model: {display_model}",
-        border_style="red"
-    ))
+    main_file = _get_main_file()
+    console.print(_create_command_panel("Clockwork Destroy", "red"))
 
     try:
-        # Initialize core (uses settings if params not provided)
-        core = ClockworkCore(
-            openrouter_api_key=api_key,
-            openrouter_model=model
-        )
-
-        # Execute destroy pipeline
+        core = _initialize_core(api_key, model)
         result = core.destroy(main_file)
 
-        # Show results
         console.print("\n[bold green]✓ Resources destroyed successfully![/bold green]")
         if result.get("stdout"):
             console.print("\n[dim]PyInfra output:[/dim]")
             console.print(result["stdout"])
 
     except Exception as e:
-        console.print(f"\n[bold red]✗ Destroy failed:[/bold red] {e}")
-        raise typer.Exit(code=1)
+        _handle_command_error(e, "destroy")
 
 
 @app.command(name="assert")
@@ -211,50 +213,20 @@ def assert_cmd(
     ),
 ):
     """Run assertions to validate deployed resources."""
-
-    # Check for main.py in current directory
-    main_file = Path.cwd() / "main.py"
-    if not main_file.exists():
-        console.print("[bold red]✗ Error:[/bold red] No main.py found in current directory")
-        console.print("[dim]Hint: cd into your project directory that contains main.py[/dim]")
-        raise typer.Exit(code=1)
-
-    # Get settings for display
-    settings = get_settings()
-    display_model = model or settings.openrouter_model
-
-    console.print(Panel.fit(
-        f"[bold blue]Clockwork Assert[/bold blue]\n"
-        f"Directory: {Path.cwd().name}\n"
-        f"Model: {display_model}",
-        border_style="blue"
-    ))
+    main_file = _get_main_file()
+    console.print(_create_command_panel("Clockwork Assert", "blue"))
 
     try:
-        # Initialize core (uses settings if params not provided)
-        core = ClockworkCore(
-            openrouter_api_key=api_key,
-            openrouter_model=model
-        )
-
-        # Execute assertion pipeline
+        core = _initialize_core(api_key, model)
         result = core.assert_resources(main_file)
 
-        # Show results
         console.print("\n[bold green]✓ All assertions passed![/bold green]")
         if result.get("stdout"):
             console.print("\n[dim]PyInfra output:[/dim]")
             console.print(result["stdout"])
 
-    except RuntimeError as e:
-        # Parse failure message from PyInfra output
-        error_msg = str(e)
-        console.print(f"\n[bold red]✗ Assertion(s) failed[/bold red]")
-        console.print(f"[dim]{error_msg}[/dim]")
-        raise typer.Exit(code=1)
     except Exception as e:
-        console.print(f"\n[bold red]✗ Assertion execution failed:[/bold red] {e}")
-        raise typer.Exit(code=1)
+        _handle_command_error(e, "assert")
 
 
 @app.command()
