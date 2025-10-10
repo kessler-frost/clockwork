@@ -121,8 +121,11 @@ docker.container(
     def to_pyinfra_destroy_operations(self, artifacts: Dict[str, Any]) -> str:
         """Generate PyInfra operations code to destroy/remove the container.
 
-        Creates a PyInfra operation that removes the Docker container by setting
-        present=False. This stops and removes the container.
+        Creates PyInfra operations that safely remove the Docker container:
+        1. Check if container exists (idempotent check)
+        2. Stop and remove container only if it exists
+
+        This approach prevents errors when containers don't exist or are already removed.
 
         Args:
             artifacts: Dict mapping resource names to generated content (unused for destroy)
@@ -132,19 +135,21 @@ docker.container(
 
         Example generated code:
             ```python
-            docker.container(
-                name="Remove nginx",
-                container="nginx",
-                present=False,
+            server.shell(
+                name="Remove nginx (if exists)",
+                commands=[
+                    "docker ps -a -q -f name=^nginx$ | grep -q . && docker rm -f nginx || true"
+                ],
             )
             ```
         """
         return f'''
-# Remove Docker container: {self.name}
-docker.container(
-    name="Remove {self.name}",
-    container="{self.name}",
-    present=False,
+# Remove Docker container: {self.name} (idempotent)
+server.shell(
+    name="Remove {self.name} (if exists)",
+    commands=[
+        "docker ps -a -q -f name=^{self.name}$ | grep -q . && docker rm -f {self.name} || true"
+    ],
 )
 '''
 

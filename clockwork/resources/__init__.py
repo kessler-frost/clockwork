@@ -5,11 +5,19 @@ Clockwork Resources - Pydantic models for declarative infrastructure.
 from .base import Resource, ArtifactSize
 from .file import FileResource
 from .docker import DockerServiceResource
+from .directory import DirectoryResource
+from .git import GitRepoResource
+from .user import UserResource
+from .brew import BrewPackageResource
 
 # Import BaseAssertion to resolve forward references, then rebuild models
 from clockwork.assertions.base import BaseAssertion  # noqa: F401
 Resource.model_rebuild()
 FileResource.model_rebuild()
 DockerServiceResource.model_rebuild()
+DirectoryResource.model_rebuild()
+GitRepoResource.model_rebuild()
+UserResource.model_rebuild()
+BrewPackageResource.model_rebuild()
 
-__all__ = ["Resource", "ArtifactSize", "FileResource", "DockerServiceResource"]
+__all__ = ["Resource", "ArtifactSize", "FileResource", "DockerServiceResource", "DirectoryResource", "GitRepoResource", "UserResource", "BrewPackageResource"]

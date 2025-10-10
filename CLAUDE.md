@@ -18,6 +18,15 @@ cd examples/file-generation
 uv run clockwork apply
 ```
 
+### Platform Requirements
+
+**macOS Compatible**: All examples in this repository are designed to run on macOS using the `@local` connector. Examples use Mac-compatible tools like:
+- Docker (requires Docker Desktop for Mac)
+- Homebrew for package management
+- Standard Unix utilities (git, cron, etc.)
+
+For Linux/remote deployments, modify the inventory in your `main.py` or use SSH connectors as documented in the PyInfra documentation.
+
 ## Architecture
 
 Clockwork is a **factory for intelligent declarative infrastructure tasks** using a simple **Python + PyInfra** architecture:
