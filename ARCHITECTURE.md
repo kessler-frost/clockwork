@@ -5,7 +5,7 @@
 Clockwork is a **factory for intelligent declarative infrastructure tasks** that combines:
 
 - **Pydantic models** for declarative resource definition
-- **AI-powered artifact generation** via Agno 2.0 + OpenRouter
+- **AI-powered artifact generation** via PydanticAI + OpenRouter
 - **PyInfra** for infrastructure deployment
 
 Think of it as: Define what you want (Python) → AI figures out how (artifacts) → PyInfra makes it happen (deployment)
@@ -28,7 +28,7 @@ Think of it as: Define what you want (Python) → AI figures out how (artifacts)
        │     Resource instances)              │
        │                                      │
        ├─── 2. Generate Artifacts ────────────┤
-       │    (AI via OpenRouter/Agno)         │
+       │    (AI via OpenRouter/PydanticAI)   │
        │    • Only for resources with         │
        │      needs_artifact_generation()     │
        │    • Returns Dict[name, content]     │
@@ -112,8 +112,8 @@ class ArtifactGenerator:
 
 **Integration**:
 
-- Uses **OpenRouter API** via OpenAI client
-- Model: `openai/gpt-oss-20b:free` (configurable)
+- Uses **OpenRouter API** via PydanticAI
+- Model: `meta-llama/llama-4-scout:free` (configurable)
 - Smart prompts based on resource type, size, file format
 
 ### 3. PyInfra Compiler (Template Stage)
@@ -177,6 +177,7 @@ Simple Typer-based CLI:
 ```bash
 uv run clockwork apply       # Full pipeline (deploy resources)
 uv run clockwork generate    # Generate artifacts without deploying
+uv run clockwork assert      # Validate deployed resources
 uv run clockwork destroy     # Tear down resources
 uv run clockwork version     # Show version
 ```
@@ -351,12 +352,14 @@ def _generate_inventory(self) -> str:
 ```toml
 [project]
 dependencies = [
-    "pydantic>=2.0.0",      # Resource models
-    "typer>=0.16.0",        # CLI
-    "rich>=13.0.0",         # Terminal output
-    "agno>=2.0.4",          # AI framework
-    "openai>=1.99.9",       # OpenRouter client
-    "pyinfra>=3.0",         # Deployment engine
+    "pydantic>=2.0.0",                           # Resource models
+    "pydantic-settings>=2.0.0",                  # Configuration management
+    "typer>=0.16.0",                             # CLI
+    "rich>=13.0.0",                              # Terminal output
+    "pydantic-ai-slim[mcp,duckduckgo]>=0.0.49", # AI framework with MCP support
+    "openai>=1.99.9",                            # OpenRouter client
+    "pyinfra>=3.0",                              # Deployment engine
+    "mcp>=1.0.0",                                # Model Context Protocol
 ]
 ```
 
@@ -368,8 +371,8 @@ dependencies = [
 | **AI Integration** | OpenRouter API (cloud-based) |
 | **Execution** | PyInfra (battle-tested) |
 | **State Management** | PyInfra handles it |
-| **Code Size** | ~700 lines of core logic |
-| **Dependencies** | 7 focused packages |
+| **Code Size** | ~1,000 lines of core logic |
+| **Dependencies** | 8 focused packages |
 | **Complexity** | Simple linear pipeline |
 
 ## Future Enhancements

@@ -144,8 +144,8 @@ tech_news = FileResource(
 
 **Installation requirement**:
 ```bash
-# DuckDuckGo tool requires the pydantic-ai-slim package with duckduckgo extras
-pip install 'pydantic-ai-slim[duckduckgo]'
+# DuckDuckGo tool is already included in Clockwork's dependencies
+# pydantic-ai-slim[duckduckgo] is installed automatically via pyproject.toml
 ```
 
 ### Using MCP Servers
@@ -346,7 +346,7 @@ Create a `.env` file in the project root:
 
 ```bash
 CW_OPENROUTER_API_KEY=your-api-key-here
-CW_OPENROUTER_MODEL=openai/gpt-oss-20b:free
+CW_OPENROUTER_MODEL=meta-llama/llama-4-scout:free
 CW_OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 CW_PYINFRA_OUTPUT_DIR=.clockwork/pyinfra
 CW_LOG_LEVEL=INFO
@@ -357,7 +357,7 @@ CW_LOG_LEVEL=INFO
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `CW_OPENROUTER_API_KEY` | None | OpenRouter API key (required) |
-| `CW_OPENROUTER_MODEL` | `openai/gpt-oss-20b:free` | Model for AI generation |
+| `CW_OPENROUTER_MODEL` | `meta-llama/llama-4-scout:free` | Model for AI generation |
 | `CW_OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | OpenRouter API endpoint |
 | `CW_PYINFRA_OUTPUT_DIR` | `.clockwork/pyinfra` | PyInfra output directory |
 | `CW_LOG_LEVEL` | `INFO` | Logging level |
@@ -383,6 +383,8 @@ Clockwork generates PyInfra files in the configured output directory (default: `
 
 - `inventory.py` - Target hosts (default: `@local`)
 - `deploy.py` - Infrastructure operations
+- `destroy.py` - Cleanup operations (generated during apply)
+- `assert.py` - Assertion validations (generated during assert)
 
 ## Project Structure
 

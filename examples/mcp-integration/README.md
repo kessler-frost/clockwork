@@ -6,8 +6,8 @@ This example demonstrates how to use **MCP (Model Context Protocol) servers** wi
 
 1. **Filesystem Access** - AI can read and analyze local files/directories
 2. **Multiple MCP Servers** - Combine multiple data sources
-3. **Hybrid Approach** - Use both Agno tools AND MCP servers
-4. **Various MCP Types** - stdio, HTTP, Docker-based servers
+3. **Hybrid Approach** - Use both PydanticAI common tools AND MCP servers
+4. **Various MCP Types** - stdio-based servers (HTTP not currently supported)
 
 ## Prerequisites
 
@@ -28,11 +28,12 @@ CW_OPENROUTER_API_KEY=your-api-key-here
 Before running, update the file path in `main.py` to point to your actual project directory:
 
 ```python
-mcp_servers=[
-    "npx -y @modelcontextprotocol/server-filesystem /Users/sankalp/dev/clockwork"
-    #                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    #                                                Update this path!
-]
+filesystem_mcp = MCPServerStdio(
+    'npx',
+    args=['-y', '@modelcontextprotocol/server-filesystem', '/Users/sankalp/dev/clockwork']
+    #                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    #                                                       Update this path!
+)
 ```
 
 ## Running the Example
@@ -63,22 +64,25 @@ uv run clockwork destroy
 
 ## How It Works
 
-Resources with MCPTools in `tools=` can connect to external data sources:
+Resources with MCP servers in `toolsets=` can connect to external data sources:
 
 ```python
-from agno.tools.mcp import MCPTools
+from pydantic_ai.mcp import MCPServerStdio
 
 # Initialize the MCP server connection
-filesystem_mcp = MCPTools(
-    command="npx -y @modelcontextprotocol/server-filesystem /path/to/project"
+filesystem_mcp = MCPServerStdio(
+    'npx',
+    args=['-y', '@modelcontextprotocol/server-filesystem', '/path/to/project']
 )
 
 project_analysis = FileResource(
     name="analysis.md",
     description="Analyze the project files",
-    tools=[filesystem_mcp],  # Pass MCPTools object directly
+    toolsets=[filesystem_mcp],  # MCP servers go in toolsets parameter
 )
 ```
+
+**Note:** PydanticAI common tools (like DuckDuckGo) go in `tools=`, while MCP servers go in `toolsets=`.
 
 The AI will automatically use the MCP server to read files, query databases, etc.!
 
@@ -107,49 +111,66 @@ npm install -g @modelcontextprotocol/server-gdrive
 
 **Filesystem:**
 ```python
-from agno.tools.mcp import MCPTools
+from pydantic_ai.mcp import MCPServerStdio
 
-filesystem_mcp = MCPTools(command="npx -y @modelcontextprotocol/server-filesystem /path")
-tools=[filesystem_mcp]
+filesystem_mcp = MCPServerStdio(
+    'npx',
+    args=['-y', '@modelcontextprotocol/server-filesystem', '/path']
+)
+toolsets=[filesystem_mcp]
 ```
 
 **PostgreSQL:**
 ```python
-postgres_mcp = MCPTools(command="npx -y @modelcontextprotocol/server-postgres postgresql://user:pass@host/db")
-tools=[postgres_mcp]
+postgres_mcp = MCPServerStdio(
+    'npx',
+    args=['-y', '@modelcontextprotocol/server-postgres', 'postgresql://user:pass@host/db']
+)
+toolsets=[postgres_mcp]
 ```
 
 **SQLite:**
 ```python
-sqlite_mcp = MCPTools(command="npx -y @modelcontextprotocol/server-sqlite /path/to/db.sqlite")
-tools=[sqlite_mcp]
+sqlite_mcp = MCPServerStdio(
+    'npx',
+    args=['-y', '@modelcontextprotocol/server-sqlite', '/path/to/db.sqlite']
+)
+toolsets=[sqlite_mcp]
 ```
 
-**HTTP Server:**
+**Custom Python/Docker MCP Servers:**
 ```python
-http_mcp = MCPTools(url="https://api.example.com/mcp", transport="streamable-http")
-tools=[http_mcp]
+# Python-based MCP server
+python_mcp = MCPServerStdio('python', args=['/path/to/custom_server.py'])
+
+# Docker-based MCP server
+docker_mcp = MCPServerStdio('docker', args=['run', '-i', 'my-mcp-server'])
 ```
 
-## Combining with Tools
+## Combining with PydanticAI Tools
 
-You can combine MCP servers with Agno tools:
+You can combine MCP servers with PydanticAI common tools:
 
 ```python
-from agno.tools.duckduckgo import DuckDuckGoTools
-from agno.tools.mcp import MCPTools
+from pydantic_ai.common_tools.duckduckgo import duckduckgo_search_tool
+from pydantic_ai.mcp import MCPServerStdio
 
-filesystem_mcp = MCPTools(command="npx -y @modelcontextprotocol/server-filesystem /path")
+filesystem_mcp = MCPServerStdio(
+    'npx',
+    args=['-y', '@modelcontextprotocol/server-filesystem', '/path']
+)
 
 resource = FileResource(
     name="hybrid.md",
     description="Compare our code with online best practices",
-    tools=[
-        DuckDuckGoTools(),  # Web search
-        filesystem_mcp,     # File access
-    ],
+    tools=[duckduckgo_search_tool()],  # PydanticAI common tools go in 'tools'
+    toolsets=[filesystem_mcp],         # MCP servers go in 'toolsets'
 )
 ```
+
+**Important:** Note the parameter separation:
+- `tools=` - For PydanticAI common tools (e.g., `duckduckgo_search_tool()`)
+- `toolsets=` - For MCP servers (e.g., `MCPServerStdio` instances)
 
 ## Troubleshooting
 

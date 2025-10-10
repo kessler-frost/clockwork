@@ -24,7 +24,7 @@ project_analysis = FileResource(
     description="Analyze the Clockwork project structure, read the main files, and provide insights about the architecture and design patterns used",
     size=ArtifactSize.LARGE,
     directory="scratch",
-    tools=[filesystem_mcp],
+    toolsets=[filesystem_mcp],
     assertions=[
         FileExistsAssert(path="scratch/project_analysis.md"),
         FileSizeAssert(
@@ -39,26 +39,22 @@ project_analysis = FileResource(
     ]
 )
 
-# Example 2: HTTP-based MCP server
-# http_mcp = MCPTools(
-#     url="https://api.example.com/mcp",
-#     transport="streamable-http"
-# )
-#
-# api_report = FileResource(
-#     name="api_report.md",
-#     description="Generate report from API data",
-#     tools=[http_mcp],
-# )
+# Example 2: Combining multiple tools (DuckDuckGo + MCP)
+from pydantic_ai.common_tools.duckduckgo import duckduckgo_search_tool
 
-# Example 3: Combining multiple tools (DuckDuckGo + MCP)
-# from pydantic_ai.common_tools.duckduckgo import duckduckgo_search_tool
-#
-# hybrid_analysis = FileResource(
-#     name="hybrid_analysis.md",
-#     description="Compare our codebase with industry best practices",
-#     tools=[
-#         duckduckgo_search_tool(),  # Web search
-#         filesystem_mcp,             # Local file access (MCP)
-#     ],
-# )
+hybrid_analysis = FileResource(
+    name="hybrid_analysis.md",
+    description="Compare our Clockwork codebase architecture with industry best practices for Python infrastructure tools",
+    size=ArtifactSize.LARGE,
+    directory="scratch",
+    tools=[duckduckgo_search_tool()],  # Web search
+    toolsets=[filesystem_mcp],         # Local file access (MCP)
+    assertions=[
+        FileExistsAssert(path="scratch/hybrid_analysis.md"),
+        FileSizeAssert(
+            path="scratch/hybrid_analysis.md",
+            min_bytes=1000,
+            max_bytes=100000
+        ),
+    ]
+)

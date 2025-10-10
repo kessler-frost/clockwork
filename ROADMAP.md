@@ -4,9 +4,9 @@
 
 ### `clockwork assert` Command ✅
 
-**Completed:** October 6, 2025
+**Completed:** October 6, 2024
 
-Verification command to ensure resources are running as specified through hybrid assertions.
+Verification command to ensure resources are running as specified through type-safe assertions.
 
 **Purpose:**
 
@@ -14,7 +14,7 @@ Verification command to ensure resources are running as specified through hybrid
 - Returns success/failure status
 - Can be run manually or integrated into CI/CD pipelines
 - Foundation for the reconciliation service
-- Supports both type-safe built-in assertions and AI-generated custom checks
+- Supports type-safe built-in assertion classes
 
 **Use Cases:**
 
@@ -22,31 +22,25 @@ Verification command to ensure resources are running as specified through hybrid
 - Health checks in CI/CD
 - Manual verification of infrastructure state
 - Debugging and troubleshooting
-- Custom verification scenarios with natural language
 
 **Implementation Details:**
 
-Clockwork uses a hybrid assertion system that combines:
+Clockwork uses a **type-safe assertion system** with built-in assertion classes:
 
 1. **Built-in Assertion Classes** (type-safe, no AI required):
    - `HealthcheckAssert(url)` - HTTP health endpoint validation
    - `PortAccessibleAssert(port)` - Network port accessibility checks
    - `ContainerRunningAssert()` - Docker container status verification
    - `FileExistsAssert(path)` - File presence validation
-   - `CommandSuccessAssert(command)` - Shell command exit code checks
+   - `ResponseTimeAssert(url, max_ms)` - Performance validation
+   - And many more (see CLAUDE.md for full list)
 
-2. **AI-Generated Assertions** (natural language strings):
-   - Custom scenarios described in plain English
-   - Compiled to PyInfra operations via AI
-   - Cached for performance and consistency
-   - Useful for complex or one-off checks
-
-3. **PyInfra-Based Execution**:
+2. **PyInfra-Based Execution**:
    - All assertions compile to PyInfra operations
    - Consistent execution model with apply/destroy
    - Idempotent and reliable verification
 
-**Example (Hybrid Usage):**
+**Example Usage:**
 
 ```python
 from clockwork.resources import DockerServiceResource
@@ -57,14 +51,12 @@ nginx = DockerServiceResource(
     description="Web server",
     ports=["80:80", "443:443"],
     assertions=[
-        # Type-safe built-in assertions (no AI)
+        # Type-safe built-in assertions
         HealthcheckAssert(url="http://localhost:80/health"),
         ContainerRunningAssert(),
         PortAccessibleAssert(port=80),
         PortAccessibleAssert(port=443),
-        # Natural language assertions (AI-generated)
-        "SSL certificate is valid and not expiring within 30 days",
-        "Response time is under 200ms for the homepage",
+        ResponseTimeAssert(url="http://localhost:80", max_ms=200),
     ]
 )
 ```
@@ -78,8 +70,7 @@ clockwork assert
 #         ✓ nginx-web: ContainerRunningAssert
 #         ✓ nginx-web: PortAccessibleAssert (port 80)
 #         ✓ nginx-web: PortAccessibleAssert (port 443)
-#         ✓ nginx-web: SSL certificate is valid and not expiring within 30 days
-#         ✓ nginx-web: Response time is under 200ms for the homepage
+#         ✓ nginx-web: ResponseTimeAssert (< 200ms)
 ```
 
 ---

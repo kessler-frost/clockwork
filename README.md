@@ -38,7 +38,7 @@ article = FileResource(
 Create a `.env` file:
 
 ```bash
-OPENROUTER_API_KEY=your-key-here
+CW_OPENROUTER_API_KEY=your-key-here
 ```
 
 Deploy:
@@ -134,17 +134,14 @@ DockerServiceResource(
 
 ## Assertions
 
-Validate deployed resources with a **hybrid assertion system**:
-
-### Type-Safe Assertions
-
-No AI required, instant compilation:
+Validate deployed resources with **type-safe assertion classes**:
 
 ```python
 from clockwork.assertions import (
     HealthcheckAssert,
     PortAccessibleAssert,
     ContainerRunningAssert,
+    ResponseTimeAssert,
 )
 
 nginx = DockerServiceResource(
@@ -154,21 +151,7 @@ nginx = DockerServiceResource(
         ContainerRunningAssert(),
         PortAccessibleAssert(port=80),
         HealthcheckAssert(url="http://localhost:80"),
-    ]
-)
-```
-
-### Natural Language Assertions
-
-AI-generated and cached:
-
-```python
-nginx = DockerServiceResource(
-    name="nginx-web",
-    ports=["80:80"],
-    assertions=[
-        "Container uses less than 100MB of memory",
-        "Response time is under 200ms",
+        ResponseTimeAssert(url="http://localhost:80", max_ms=200),
     ]
 )
 ```
@@ -189,21 +172,22 @@ Clockwork uses `.env` files for configuration via Pydantic Settings.
 
 ```bash
 # AI Provider (currently OpenRouter - LM Studio and others coming soon)
-OPENROUTER_API_KEY=your-api-key-here
-OPENROUTER_MODEL=openai/gpt-oss-20b:free
+CW_OPENROUTER_API_KEY=your-api-key-here
+CW_OPENROUTER_MODEL=meta-llama/llama-4-scout:free
 
 # Logging
-LOG_LEVEL=INFO
+CW_LOG_LEVEL=INFO
 ```
 
 ### Available Settings
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `OPENROUTER_API_KEY` | None | API key (required for now) |
-| `OPENROUTER_MODEL` | `openai/gpt-oss-20b:free` | Model for AI generation |
-| `PYINFRA_OUTPUT_DIR` | `.clockwork/pyinfra` | PyInfra output directory |
-| `LOG_LEVEL` | `INFO` | Logging level |
+| `CW_OPENROUTER_API_KEY` | None | API key (required for now) |
+| `CW_OPENROUTER_MODEL` | `meta-llama/llama-4-scout:free` | Model for AI generation |
+| `CW_OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | OpenRouter API endpoint |
+| `CW_PYINFRA_OUTPUT_DIR` | `.clockwork/pyinfra` | PyInfra output directory |
+| `CW_LOG_LEVEL` | `INFO` | Logging level |
 
 Override via CLI:
 
