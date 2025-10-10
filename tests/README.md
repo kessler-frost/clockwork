@@ -18,7 +18,8 @@ uv run pytest tests/ --cov=clockwork --cov-report=html
 ## Test Files
 
 - **`test_resources.py`** - FileResource and base Resource tests
-- **`test_docker_resource.py`** - DockerServiceResource tests
+- **`test_docker_resource.py`** - DockerServiceResource tests (legacy)
+- **`test_apple_container_resource.py`** - AppleContainerResource tests (macOS native containers)
 - **`test_pyinfra_compiler.py`** - PyInfra code generation tests
 - **`test_integration.py`** - Full pipeline integration tests
 - **`conftest.py`** - Shared fixtures and configuration

@@ -186,21 +186,33 @@ class ArtifactGenerator:
         return prompt
 
     def _is_docker_resource(self, resource: Any) -> bool:
-        """Check if resource is a DockerServiceResource using duck typing."""
-        return hasattr(resource, 'image') and hasattr(resource, 'ports')
+        """Check if resource is a AppleContainerResource (or legacy DockerServiceResource)."""
+        return resource.__class__.__name__ in ('AppleContainerResource', 'DockerServiceResource')
 
     def _build_docker_prompt(self, resource: Any) -> str:
-        """Build specialized prompt for Docker resources."""
+        """Build specialized prompt for container resources."""
         return f"""Based on this description: "{resource.description}"
 
-Suggest an appropriate Docker image for this service.
+Suggest an appropriate container image for this service.
 Respond in JSON format:
 {{
-  "image": "docker/image:tag",
+  "image": "imagename:tag",
   "suggested_ports": ["80:80"],
   "suggested_env_vars": {{"KEY": "value"}}
 }}
 
-If only the image is known, respond with just: {{"image": "docker/image:tag"}}
+If only the image is known, respond with just: {{"image": "imagename:tag"}}
 
-Be specific and use official, well-maintained images when possible."""
+Be specific and use official, well-maintained images when possible. Examples: nginx:alpine, redis:7-alpine, postgres:16-alpine"""
+
+    def _get_max_tokens(self, resource: Any) -> int:
+        """Get max tokens based on resource size."""
+        if not hasattr(resource, 'size') or resource.size is None:
+            return 1000
+
+        size_tokens = {
+            "small": 1000,
+            "medium": 3000,
+            "large": 6000,
+        }
+        return size_tokens.get(resource.size.value, 1000)

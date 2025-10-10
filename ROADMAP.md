@@ -30,7 +30,7 @@ Clockwork uses a **type-safe assertion system** with built-in assertion classes:
 1. **Built-in Assertion Classes** (type-safe, no AI required):
    - `HealthcheckAssert(url)` - HTTP health endpoint validation
    - `PortAccessibleAssert(port)` - Network port accessibility checks
-   - `ContainerRunningAssert()` - Docker container status verification
+   - `ContainerRunningAssert()` - Apple Container status verification
    - `FileExistsAssert(path)` - File presence validation
    - `ResponseTimeAssert(url, max_ms)` - Performance validation
    - And many more (see CLAUDE.md for full list)
@@ -43,10 +43,10 @@ Clockwork uses a **type-safe assertion system** with built-in assertion classes:
 **Example Usage:**
 
 ```python
-from clockwork.resources import DockerServiceResource
+from clockwork.resources import AppleContainerResource
 from clockwork.assertions import HealthcheckAssert, ContainerRunningAssert, PortAccessibleAssert
 
-nginx = DockerServiceResource(
+nginx = AppleContainerResource(
     name="nginx-web",
     description="Web server",
     ports=["80:80", "443:443"],
@@ -106,9 +106,9 @@ Background daemon that continuously monitors and maintains desired state.
 **Example Configuration:**
 
 ```python
-from clockwork.resources import DockerServiceResource
+from clockwork.resources import AppleContainerResource
 
-nginx = DockerServiceResource(
+nginx = AppleContainerResource(
     name="nginx",
     description="Web server",
     reconcile=True,              # Enable reconciliation
@@ -160,14 +160,14 @@ This is crucial when you vaguely remember what was deployed but don't have acces
 
 ```python
 # Initial deployment in main.py
-docker_app = DockerServiceResource(
+api_app = AppleContainerResource(
     name="api-service",
     description="REST API with user schema",
     # ... complete initial config
 )
 
 # Later: update.py (vague specification - no need to remember exact main.py details)
-docker_app = DockerServiceResource(
+api_app = AppleContainerResource(
     name="api-service",
     description="Add organization schema and update user endpoints",
     # Clockwork infers: keep existing user schema, add org schema,
@@ -237,16 +237,16 @@ Validate interactions and dependencies between multiple resources.
 **Example:**
 
 ```python
-from clockwork.resources import DockerServiceResource
+from clockwork.resources import AppleContainerResource
 from clockwork.assertions import CrossResourceAssert, ServiceConnectivityAssert
 
-api = DockerServiceResource(
+api = AppleContainerResource(
     name="api-service",
     description="REST API",
     ports=["8080:8080"]
 )
 
-database = DockerServiceResource(
+database = AppleContainerResource(
     name="postgres-db",
     description="PostgreSQL database",
     ports=["5432:5432"]
@@ -308,12 +308,12 @@ Support programmatic assertions using Python callable functions.
 **Example:**
 
 ```python
-from clockwork.resources import DockerServiceResource
+from clockwork.resources import AppleContainerResource
 from clockwork.assertions import PythonAssert
 import requests
 import json
 
-nginx = DockerServiceResource(
+nginx = AppleContainerResource(
     name="nginx-web",
     description="Web server",
     ports=["80:80"]
@@ -398,7 +398,7 @@ Expand the library of type-safe assertion classes for common scenarios.
 **Example:**
 
 ```python
-from clockwork.resources import DockerServiceResource
+from clockwork.resources import AppleContainerResource
 from clockwork.assertions import (
     DatabaseConnectionAssert,
     TableExistsAssert,
@@ -407,7 +407,7 @@ from clockwork.assertions import (
     NoOpenPortsAssert
 )
 
-postgres = DockerServiceResource(
+postgres = AppleContainerResource(
     name="postgres-db",
     description="PostgreSQL database",
     ports=["5432:5432"],
@@ -424,7 +424,7 @@ postgres = DockerServiceResource(
     ]
 )
 
-nginx = DockerServiceResource(
+nginx = AppleContainerResource(
     name="nginx-web",
     description="Web server",
     ports=["80:80", "443:443"],

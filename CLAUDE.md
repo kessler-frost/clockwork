@@ -58,7 +58,7 @@ Clockwork provides a **type-safe assertion system** for validating deployed reso
 - `ResponseTimeAssert(url, max_ms)` - Performance validation
 
 **Container:**
-- `ContainerRunningAssert()` - Docker container status
+- `ContainerRunningAssert()` - Apple Container status
 - `ContainerHealthyAssert()` - Health check validation
 - `LogContainsAssert(pattern, lines=100)` - Log pattern matching
 
@@ -80,14 +80,14 @@ Clockwork provides a **type-safe assertion system** for validating deployed reso
 ### Usage Example
 
 ```python
-from clockwork.resources import DockerServiceResource
+from clockwork.resources import AppleContainerResource
 from clockwork.assertions import (
     HealthcheckAssert,
     PortAccessibleAssert,
     ContainerRunningAssert,
 )
 
-nginx = DockerServiceResource(
+nginx = AppleContainerResource(
     name="nginx-web",
     description="Web server",
     ports=["80:80"],
@@ -104,7 +104,7 @@ nginx = DockerServiceResource(
 ### Running Assertions
 
 ```bash
-cd examples/docker-service
+cd examples/apple-container-service
 clockwork assert
 
 # Output:
@@ -400,19 +400,23 @@ Clockwork generates PyInfra files in the configured output directory (default: `
 ```text
 clockwork/
 ├── clockwork/
-│   ├── resources/          # Pydantic resource models
-│   │   ├── base.py        # Base Resource class
-│   │   ├── file.py        # FileResource
-│   │   └── docker.py      # DockerServiceResource
+│   ├── resources/              # Pydantic resource models
+│   │   ├── base.py            # Base Resource class
+│   │   ├── file.py            # FileResource
+│   │   └── apple_container.py # AppleContainerResource
+│   ├── pyinfra_operations/    # Custom PyInfra operations
+│   │   └── apple_containers.py # Apple Containers CLI operations
+│   ├── pyinfra_facts/         # Custom PyInfra facts
+│   │   └── apple_containers.py # Apple Containers CLI facts
 │   ├── artifact_generator.py  # AI-powered content generation
 │   ├── pyinfra_compiler.py    # Template-based PyInfra code gen
-│   ├── core.py               # Main pipeline orchestrator
-│   ├── cli.py                # CLI interface
-│   └── settings.py           # Configuration via Pydantic Settings
+│   ├── core.py                # Main pipeline orchestrator
+│   ├── cli.py                 # CLI interface
+│   └── settings.py            # Configuration via Pydantic Settings
 ├── examples/
-│   ├── file-generation/    # File generation example
-│   ├── docker-service/     # Docker service example
-│   └── mcp-integration/    # MCP server integration example
+│   ├── file-generation/           # File generation example
+│   ├── apple-container-service/   # Apple Container service example
+│   └── mcp-integration/           # MCP server integration example
 ├── tests/                  # Test suite
 └── pyproject.toml         # Dependencies
 ```
@@ -460,15 +464,15 @@ server.shell(
 2. Add tests in `tests/test_resources.py`
 3. Create an example in `examples/`
 
-#### Example: DockerServiceResource
+#### Example: AppleContainerResource
 
-The `DockerServiceResource` demonstrates a complete resource implementation with AI-powered image suggestions:
+The `AppleContainerResource` demonstrates a complete resource implementation with AI-powered image suggestions:
 
 ```python
-from clockwork.resources import DockerServiceResource
+from clockwork.resources import AppleContainerResource
 
-# AI suggests the Docker image based on description
-nginx = DockerServiceResource(
+# AI suggests the container image based on description
+nginx = AppleContainerResource(
     name="nginx-web",
     description="Web server for serving static content",
     ports=["80:80"],
@@ -477,7 +481,7 @@ nginx = DockerServiceResource(
 )
 
 # Explicit image specification
-redis = DockerServiceResource(
+redis = AppleContainerResource(
     name="redis-cache",
     description="Redis cache server",
     image="redis:7-alpine",
@@ -520,14 +524,14 @@ uv run clockwork assert
 # Destroy deployed resources
 uv run clockwork destroy
 
-# Test Docker service example
-cd ../docker-service
+# Test Apple Container service example
+cd ../apple-container-service
 uv run clockwork apply
 
 # Run assertions
 uv run clockwork assert
 
-# Destroy Docker containers
+# Destroy containers
 uv run clockwork destroy
 
 # Test MCP integration (filesystem access)
@@ -566,13 +570,13 @@ After testing, clean up generated files:
 cd examples/file-generation
 uv run clockwork destroy
 
-cd ../docker-service
+cd ../apple-container-service
 uv run clockwork destroy
 
 # Or manually clean up
 rm -rf .clockwork/
 rm -rf examples/scratch/
 
-# Stop Docker containers if needed
-docker ps -a | grep -E "nginx-ai|redis-cache|postgres-db" | awk '{print $1}' | xargs docker rm -f
+# Stop containers if needed
+container ls -a --format json | jq -r '.[] | select(.name | test("nginx-ai|redis-cache|postgres-db")) | .name' | xargs -I {} container rm -f {}
 ```

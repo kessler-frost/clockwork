@@ -77,17 +77,17 @@ class FileResource(Resource):
     mode: str = "644"       # file permissions
 ```
 
-#### Example: DockerServiceResource
+#### Example: AppleContainerResource
 
 ```python
-class DockerServiceResource(Resource):
+class AppleContainerResource(Resource):
     name: str                         # container name
     description: str                  # what it does (for AI image suggestion)
-    image: Optional[str] = None      # Docker image (AI suggests if not provided)
+    image: Optional[str] = None      # Container image (AI suggests if not provided)
     ports: Optional[List[str]] = None  # Port mappings ["80:80"]
     volumes: Optional[List[str]] = None  # Volume mounts ["/host:/container"]
     env_vars: Optional[Dict[str, str]] = None  # Environment variables
-    networks: Optional[List[str]] = None  # Docker networks
+    networks: Optional[List[str]] = None  # Networks
     present: bool = True              # Should container exist
     start: bool = True                # Should container be running
 ```
@@ -312,11 +312,11 @@ class ServiceResource(Resource):
         '''
 ```
 
-#### Real Example: DockerServiceResource
+#### Real Example: AppleContainerResource
 
-See `clockwork/resources/docker.py` for a complete implementation that:
+See `clockwork/resources/apple_container.py` for a complete implementation that:
 
-- Uses AI to suggest Docker images when not specified
+- Uses AI to suggest container images when not specified
 - Supports ports, volumes, environment variables, and networks
 - Implements both deploy and destroy operations
 - Provides comprehensive documentation and examples
@@ -382,5 +382,5 @@ dependencies = [
 - Resource dependencies and ordering hints
 - Caching of AI-generated artifacts
 - Streaming output for long AI generations
-- Enhanced Docker support (compose files, multi-container apps)
+- Enhanced container support (compose-like files, multi-container apps)
 - State tracking for resource lifecycle management

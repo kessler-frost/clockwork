@@ -1,4 +1,4 @@
-"""Container-specific assertions for Docker services."""
+"""Container-specific assertions for Apple Containers."""
 
 from typing import Any, Optional
 from .base import BaseAssertion
@@ -6,10 +6,10 @@ from .utils import resolve_container_name, escape_shell_pattern
 
 
 class ContainerRunningAssert(BaseAssertion):
-    """Assert that a Docker container is in running state.
+    """Assert that an Apple Container is in running state.
 
     Checks if the specified container exists and is currently running.
-    Uses 'docker ps' to verify container status.
+    Uses 'container ls' to verify container status.
 
     Attributes:
         container_name: Optional override for container name (defaults to resource.name)
@@ -27,10 +27,10 @@ class ContainerRunningAssert(BaseAssertion):
         """Generate PyInfra operation to check container is running.
 
         Args:
-            resource: Parent DockerServiceResource
+            resource: Parent AppleContainerResource
 
         Returns:
-            PyInfra server.shell operation that checks docker ps output
+            PyInfra server.shell operation that checks container ls output
         """
         container = resolve_container_name(self, resource)
         desc = self.description or f"Container {container} is running"
@@ -40,17 +40,17 @@ class ContainerRunningAssert(BaseAssertion):
 server.shell(
     name="Assert: {desc}",
     commands=[
-        "docker ps --filter name=^{container}$ --filter status=running --format '{{{{.Names}}}}' | grep -q '^{container}$' || exit 1"
+        "container ls | grep -q {container} || exit 1"
     ],
 )
 '''
 
 
 class ContainerHealthyAssert(BaseAssertion):
-    """Assert that a Docker container reports healthy status.
+    """Assert that an Apple Container reports healthy status.
 
     Checks the container's health check status. The container must have
-    a HEALTHCHECK defined in its Dockerfile or docker-compose configuration.
+    a HEALTHCHECK defined in its container image or configuration.
 
     Attributes:
         container_name: Optional override for container name (defaults to resource.name)
@@ -68,7 +68,7 @@ class ContainerHealthyAssert(BaseAssertion):
         """Generate PyInfra operation to check container health.
 
         Args:
-            resource: Parent DockerServiceResource
+            resource: Parent AppleContainerResource
 
         Returns:
             PyInfra server.shell operation that inspects container health
@@ -81,7 +81,7 @@ class ContainerHealthyAssert(BaseAssertion):
 server.shell(
     name="Assert: {desc}",
     commands=[
-        "HEALTH=$(docker inspect --format='{{{{.State.Health.Status}}}}' {container} 2>/dev/null || echo 'none'); "
+        "HEALTH=$(container inspect --format='{{{{.State.Health.Status}}}}' {container} 2>/dev/null || echo 'none'); "
         "[ \"$HEALTH\" = 'healthy' ] || exit 1"
     ],
 )
@@ -116,7 +116,7 @@ class LogContainsAssert(BaseAssertion):
         """Generate PyInfra operation to check container logs.
 
         Args:
-            resource: Parent DockerServiceResource
+            resource: Parent AppleContainerResource
 
         Returns:
             PyInfra server.shell operation that greps container logs
@@ -132,7 +132,7 @@ class LogContainsAssert(BaseAssertion):
 server.shell(
     name="Assert: {desc}",
     commands=[
-        "docker logs --tail {self.lines} {container} 2>&1 | grep -q '{escaped_pattern}' || exit 1"
+        "container logs -n {self.lines} {container} 2>&1 | grep -q '{escaped_pattern}' || exit 1"
     ],
 )
 '''

@@ -118,19 +118,19 @@ FileResource(
 )
 ```
 
-### DockerServiceResource
+### AppleContainerResource
 
-Runs Docker containers with optional AI-suggested images.
+Runs Apple Containers with optional AI-suggested images.
 
 ```python
-DockerServiceResource(
+AppleContainerResource(
     name="web-server",
     description="A lightweight web server for testing and demos",
     ports=["8080:80"]  # Host port 8080 -> Container port 80
 )
 ```
 
-**AI-Powered**: When `image` is not specified, AI suggests appropriate Docker images (e.g., nginx:alpine).
+**AI-Powered**: When `image` is not specified, AI suggests appropriate container images (e.g., nginx:alpine).
 
 ## Assertions
 
@@ -144,7 +144,7 @@ from clockwork.assertions import (
     ResponseTimeAssert,
 )
 
-nginx = DockerServiceResource(
+nginx = AppleContainerResource(
     name="nginx-web",
     ports=["80:80"],
     assertions=[
@@ -152,6 +152,21 @@ nginx = DockerServiceResource(
         PortAccessibleAssert(port=80),
         HealthcheckAssert(url="http://localhost:80"),
         ResponseTimeAssert(url="http://localhost:80", max_ms=200),
+    ]
+)
+```
+
+### Natural Language Assertions
+
+AI-generated and cached:
+
+```python
+nginx = AppleContainerResource(
+    name="nginx-web",
+    ports=["80:80"],
+    assertions=[
+        "Container uses less than 100MB of memory",
+        "Response time is under 200ms",
     ]
 )
 ```
@@ -212,8 +227,8 @@ uv run clockwork apply
 uv run clockwork assert
 uv run clockwork destroy
 
-# Docker services
-cd examples/docker-service
+# Apple Container services
+cd examples/apple-container-service
 uv run clockwork apply
 uv run clockwork assert
 uv run clockwork destroy
