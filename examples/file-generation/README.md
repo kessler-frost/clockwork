@@ -6,8 +6,8 @@ This example demonstrates Clockwork's intelligent file orchestration with AI-pow
 
 Creates three files in `scratch/`:
 
-1. **game_of_life.md** - AI-generated article about Conway's Game of Life (MEDIUM size)
-2. **clockwork_poem.txt** - AI-generated poem about infrastructure automation (SMALL size)
+1. **game_of_life.md** - AI-generated article about Conway's Game of Life
+2. **clockwork_poem.txt** - AI-generated poem about infrastructure automation
 3. **README.md** - User-provided content (no AI generation)
 
 ## Run the example
@@ -37,7 +37,7 @@ clockwork destroy
 
 ## Customization
 
-- Change `size` to `ArtifactSize.SMALL` or `ArtifactSize.LARGE`
 - Modify descriptions to generate different content
 - Add more FileResource instances
 - Change `directory` to deploy files elsewhere
+- Add custom assertions for file validation

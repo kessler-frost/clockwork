@@ -74,27 +74,27 @@ class Resource(BaseModel):
 
 ```python
 class FileResource(Resource):
+    description: str                  # what it should contain (for AI) - required
     name: Optional[str] = None        # filename (AI suggests if None)
-    description: str                  # what it should contain (for AI)
-    size: ArtifactSize               # size hint for AI
-    directory: Optional[str] = None   # where to create it (AI suggests if None)
     content: Optional[str] = None     # if provided, skips AI
+    directory: Optional[str] = None   # where to create it (AI suggests if None)
     mode: Optional[str] = None        # file permissions (AI suggests if None)
+    path: Optional[str] = None        # full path (overrides directory + name if provided)
 ```
 
 #### Example: AppleContainerResource
 
 ```python
 class AppleContainerResource(Resource):
-    name: str                         # container name
-    description: str                  # what it does (for AI image suggestion)
-    image: Optional[str] = None       # Container image (AI suggests if None)
-    ports: Optional[List[str]] = None  # Port mappings ["8080:80"]
-    volumes: Optional[List[str]] = None  # Volume mounts ["/host:/container"]
+    description: str                         # what it does (for AI) - required
+    name: Optional[str] = None               # container name (AI suggests if None)
+    image: Optional[str] = None              # Container image (AI suggests if None)
+    ports: Optional[List[str]] = None        # Port mappings ["8080:80"]
+    volumes: Optional[List[str]] = None      # Volume mounts ["/host:/container"]
     env_vars: Optional[Dict[str, str]] = None  # Environment variables
-    networks: Optional[List[str]] = None  # Networks
-    present: bool = True              # Should container exist
-    start: bool = True                # Should container be running
+    networks: Optional[List[str]] = None     # Networks
+    present: bool = True                     # Should container exist
+    start: bool = True                       # Should container be running
 ```
 
 ### 2. Resource Completer (AI Stage)
@@ -251,12 +251,11 @@ uv run clockwork version     # Show version
 ### Input: main.py
 
 ```python
-from clockwork.resources import FileResource, ArtifactSize
+from clockwork.resources import FileResource
 
 article = FileResource(
+    description="Write about Conway's Game of Life",  # required
     name=None,  # AI will suggest filename
-    description="Write about Conway's Game of Life",
-    size=ArtifactSize.MEDIUM,
     directory=None,  # AI will suggest directory
     content=None,  # AI will generate content
     mode=None  # AI will suggest permissions

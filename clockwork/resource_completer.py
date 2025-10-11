@@ -10,7 +10,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel
-from pydantic_ai import Agent, PromptedOutput, InlineDefsJsonSchemaTransformer
+from pydantic_ai import Agent, InlineDefsJsonSchemaTransformer
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.profiles.openai import OpenAIModelProfile
@@ -120,16 +120,13 @@ Your completions should be production-ready and follow best practices."""
         )
 
         # Create PydanticAI Agent with structured output
-        # Using PromptedOutput to support free models that don't have native structured output
+        # Using default Tool Output mode for reliable structured data generation
+        # Models that don't support tool calls should be replaced with compatible models
         agent = Agent(
             model,
             tools=tools,
             system_prompt=self.SYSTEM_PROMPT,
-            output_type=PromptedOutput(
-                resource.__class__,
-                name=f"{resource.__class__.__name__}_completion",
-                description=f"Complete the {resource.__class__.__name__} with all missing fields"
-            ),
+            output_type=resource.__class__,
         )
 
         # Get response from agent

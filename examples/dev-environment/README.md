@@ -18,13 +18,10 @@ scratch/devenv/
 │   ├── fastapi/   # FastAPI repository
 │   └── vue/       # Vue.js repository
 ├── data/          # Data storage (700 - restricted)
-├── config/        # Configuration files (755)
-├── logs/          # Application logs (755)
 ├── .env           # Environment variables
 ├── docker-compose.yml  # Docker services config
 ├── requirements.txt    # Python dependencies
 ├── Makefile       # Development tasks
-├── .gitignore     # Git ignore patterns
 └── README.md      # Setup instructions
 ```
 
@@ -33,23 +30,16 @@ scratch/devenv/
 - **Vue.js** - Frontend framework (`scratch/devenv/src/vue`)
 
 ### 4. Configuration Files (AI-Generated)
-- `.env` - Environment variables (user-provided)
+- `.env` - Environment variables (AI-generated)
 - `docker-compose.yml` - Docker services (AI-generated)
 - `requirements.txt` - Python dependencies (AI-generated)
 - `Makefile` - Development tasks (AI-generated)
-- `.gitignore` - Git ignore patterns (AI-generated)
 - `README.md` - Setup guide (AI-generated)
 
-### 5. Docker Services
+### 5. Apple Container Services
 - **PostgreSQL 15** - Database on port 5432
 - **Redis 7** - Cache on port 6379
 - **Nginx** - Reverse proxy on port 8080
-
-### 6. Scheduled Tasks (Cron)
-- Daily data backup at 2 AM
-- Weekly log cleanup on Sunday at 3 AM
-- Daily database backup at 3 AM
-- Weekly old backup cleanup
 
 ## Prerequisites
 
@@ -80,8 +70,7 @@ This will:
 - ✅ Create directory structure
 - ✅ Clone Git repositories (FastAPI, Vue.js)
 - ✅ Generate configuration files
-- ✅ Start Docker services
-- ✅ Schedule cron jobs
+- ✅ Start Apple Container services
 
 **Note**: The initial run may take 5-10 minutes as it:
 - Clones large repositories (~100MB for FastAPI + Vue.js)
@@ -97,7 +86,7 @@ uv run clockwork assert
 This verifies:
 - ✅ All directories exist with correct permissions
 - ✅ All files exist with expected content
-- ✅ Docker containers are running
+- ✅ Apple Containers are running
 - ✅ Ports are accessible (5432, 6379, 8080)
 - ✅ Nginx responds to HTTP requests
 
@@ -107,11 +96,8 @@ This verifies:
 # View directory structure
 tree scratch/devenv -L 2
 
-# Check Docker services
-docker ps
-
-# Check cron jobs
-crontab -l | grep -E "backup-data|cleanup-logs|db-backup|cleanup-backups"
+# Check Apple Container services
+container ls
 
 # Verify services
 curl http://localhost:8080  # Nginx
@@ -150,9 +136,8 @@ uv run clockwork destroy
 ```
 
 This will:
-- ✅ Stop and remove Docker containers
-- ✅ Remove Docker volumes (postgres_data, redis_data)
-- ✅ Delete cron jobs from crontab
+- ✅ Stop and remove Apple Containers
+- ✅ Remove container volumes (postgres_data, redis_data)
 - ✅ Remove cloned Git repositories
 - ✅ Delete all generated files
 - ✅ Remove directory structure
@@ -167,51 +152,28 @@ brew uninstall jq git tree
 If `clockwork destroy` fails or you need to clean up manually:
 
 ```bash
-# Stop and remove Docker containers
-docker stop dev-postgres dev-redis dev-nginx
-docker rm dev-postgres dev-redis dev-nginx
+# Stop and remove Apple Containers
+container stop dev-postgres dev-redis dev-nginx
+container rm dev-postgres dev-redis dev-nginx
 
-# Remove Docker volumes
-docker volume rm postgres_data redis_data
-
-# Remove cron jobs
-crontab -l | grep -v "backup-data" | grep -v "cleanup-logs" | grep -v "db-backup" | grep -v "cleanup-backups" | crontab -
+# Remove container volumes
+container volume rm postgres_data redis_data
 
 # Remove directory
 rm -rf scratch/devenv
-
-# Remove backup files
-rm -f /tmp/devenv-backup-*.tar.gz
-rm -f /tmp/db-backup-*.sql
 ```
 
 ## Troubleshooting
 
-### Docker Services Won't Start
+### Container Services Won't Start
 
-**Issue**: `docker: Error response from daemon: Conflict. The container name "/dev-postgres" is already in use.`
+**Issue**: `container: Error response from daemon: Conflict. The container name "/dev-postgres" is already in use.`
 
 **Solution**:
 ```bash
-docker ps -a | grep -E "dev-postgres|dev-redis|dev-nginx"
-docker rm -f dev-postgres dev-redis dev-nginx
+container ls -a | grep -E "dev-postgres|dev-redis|dev-nginx"
+container rm -f dev-postgres dev-redis dev-nginx
 uv run clockwork apply
-```
-
-### Cron Jobs Not Running
-
-**Issue**: Cron jobs scheduled but not executing.
-
-**Solution**: Check cron logs and permissions:
-```bash
-# View cron jobs
-crontab -l
-
-# Check system logs (macOS)
-log show --predicate 'eventMessage contains "cron"' --last 1h
-
-# Ensure paths are absolute
-crontab -l | grep devenv
 ```
 
 ### Git Clone Fails
@@ -260,12 +222,11 @@ This example showcases Clockwork's intelligent orchestration capabilities:
 | Count | Resource Type | Examples |
 |-------|--------------|----------|
 | 1 | BrewPackageResource | dev-tools |
-| 5 | DirectoryResource | project-root, src-dir, data-dir, config-dir, logs-dir |
-| 2 | GitRepoResource | app-repo, frontend-repo |
-| 6 | FileResource | .env, docker-compose.yml, requirements.txt, Makefile, .gitignore, README.md |
-| 3 | DockerServiceResource | dev-postgres, dev-redis, dev-nginx |
-| 4 | CronJobResource | backup-data, cleanup-logs, db-backup, cleanup-backups |
-| **21** | **Total Resources** | **Complete development environment** |
+| 3 | DirectoryResource | project-root, src-dir, data-dir |
+| 2 | GitRepoResource | fastapi-repo, vue-repo |
+| 5 | FileResource | .env, docker-compose.yml, requirements.txt, Makefile, README.md |
+| 3 | AppleContainerResource | postgres-db, redis-cache, nginx-proxy |
+| **14** | **Total Resources** | **Complete development environment** |
 
 ## Next Steps
 

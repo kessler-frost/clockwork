@@ -431,8 +431,8 @@ CW_BASE_URL=http://localhost:11434/v1
 - `qwen/qwen-2.5-72b-instruct:free` ✅ Alternative free option
 - `google/gemini-2.0-flash-exp:free` ⚠️ Can be rate-limited
 
-**Paid models** (better support for structured outputs):
-- `openai/gpt-4o-mini` - Inexpensive, excellent structured output support
+**Paid models**:
+- `openai/gpt-4o-mini` - Inexpensive and very capable
 - `anthropic/claude-3-haiku` - Fast and reliable
 
 OpenRouter configuration:
@@ -441,6 +441,18 @@ CW_API_KEY=your-api-key-here
 CW_MODEL=meta-llama/llama-4-scout:free
 CW_BASE_URL=https://openrouter.ai/api/v1
 ```
+
+#### Model Requirements
+
+**All models must support tool calls** (function calling). Clockwork uses PydanticAI's **Tool Output mode** for structured data generation, which is the most reliable approach for getting properly formatted resource completions from AI models.
+
+**Why Tool Output mode?**
+- Most reliable method for structured data generation
+- Built-in validation and retry logic
+- Better error handling than prompt-based approaches
+- Works with any OpenAI-compatible API
+
+**If a model doesn't support tool calls**, choose a different model from the recommendations above. All recommended models (both free and paid) support tool calling.
 
 ## Project Structure
 
@@ -537,7 +549,7 @@ redis = AppleContainerResource(
 )
 ```
 
-**Note on structured outputs**: DockerServiceResource uses PydanticAI's structured output capabilities to ensure the AI returns a properly formatted Docker image specification. This leverages Pydantic models for type-safe validation of AI-generated content.
+**Note on structured outputs**: Clockwork uses PydanticAI's **Tool Output mode** for structured data generation. This is the most reliable approach, using function calling to ensure the AI returns properly formatted resource completions. The system automatically validates output against Pydantic models and retries if validation fails, providing type-safe, production-ready infrastructure definitions.
 
 ### Testing
 

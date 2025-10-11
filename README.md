@@ -25,12 +25,11 @@ No custom DSL. No YAML files. Just Python with AI assistance.
 In your `main.py`:
 
 ```python
-from clockwork.resources import FileResource, ArtifactSize
+from clockwork.resources import FileResource
 
 article = FileResource(
     name="article.md",
     description="Write about Conway's Game of Life",
-    size=ArtifactSize.MEDIUM,
     directory="output"
 )
 ```
@@ -51,13 +50,12 @@ uv run clockwork apply
 ## Example
 
 ```python
-from clockwork.resources import FileResource, ArtifactSize
+from clockwork.resources import FileResource
 
 # AI generates content
 article = FileResource(
     name="game_of_life.md",
     description="Write a comprehensive article about Conway's Game of Life",
-    size=ArtifactSize.MEDIUM,
     directory="scratch"
 )
 
@@ -114,7 +112,6 @@ Creates files with optional AI-generated content.
 FileResource(
     name="article.md",
     description="About...",      # what AI should write
-    size=ArtifactSize.SMALL,    # SMALL | MEDIUM | LARGE
     directory="path/to/dir",     # where to create
     content=None,                # if set, skips AI
     mode="644"                   # file permissions
