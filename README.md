@@ -89,8 +89,11 @@ uv run clockwork plan
 # Validate deployed resources
 uv run clockwork assert
 
-# Destroy deployed resources
+# Destroy deployed resources (removes .clockwork directory by default)
 uv run clockwork destroy
+
+# Destroy but keep .clockwork directory
+uv run clockwork destroy --keep-files
 
 # Custom model
 uv run clockwork apply --model "openai/gpt-4o-mini"

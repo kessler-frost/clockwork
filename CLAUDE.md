@@ -614,11 +614,15 @@ After testing, clean up generated files:
 
 ```bash
 # Use destroy command to tear down resources
+# By default, this removes the .clockwork directory
 cd examples/file-generation
 uv run clockwork destroy
 
 cd ../apple-container-service
 uv run clockwork destroy
+
+# Keep .clockwork directory after destroy (optional)
+uv run clockwork destroy --keep-files
 
 # Or manually clean up
 rm -rf .clockwork/
@@ -627,3 +631,5 @@ rm -rf examples/scratch/
 # Stop containers if needed
 container ls -a --format json | jq -r '.[] | select(.name | test("nginx-ai|redis-cache|postgres-db")) | .name' | xargs -I {} container rm -f {}
 ```
+
+**Note**: The `destroy` command automatically removes the `.clockwork` directory after successfully destroying resources. Use `--keep-files` to preserve the directory if needed for debugging or inspection.

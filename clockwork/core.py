@@ -79,7 +79,7 @@ class ClockworkCore:
 
         # 3. Set compiler output directory relative to main.py location
         settings = get_settings()
-        self.pyinfra_compiler.output_dir = Path(main_file).parent / settings.pyinfra_output_dir
+        self.pyinfra_compiler.output_dir = main_file.parent / settings.pyinfra_output_dir
 
         # 4. Compile to PyInfra (template stage)
         pyinfra_dir = self.pyinfra_compiler.compile(completed_resources)
@@ -186,7 +186,7 @@ class ClockworkCore:
 
         # Get the PyInfra directory (should exist from apply)
         settings = get_settings()
-        pyinfra_dir = Path(main_file).parent / settings.pyinfra_output_dir
+        pyinfra_dir = main_file.parent / settings.pyinfra_output_dir
 
         # Check if destroy.py exists (generated during apply)
         destroy_file = pyinfra_dir / "destroy.py"
@@ -233,7 +233,7 @@ class ClockworkCore:
 
         # 3. Set compiler output directory relative to main.py location
         settings = get_settings()
-        self.pyinfra_compiler.output_dir = Path(main_file).parent / settings.pyinfra_output_dir
+        self.pyinfra_compiler.output_dir = main_file.parent / settings.pyinfra_output_dir
 
         # 4. Compile to PyInfra using compile_assert()
         pyinfra_dir = self.pyinfra_compiler.compile_assert(completed_resources)

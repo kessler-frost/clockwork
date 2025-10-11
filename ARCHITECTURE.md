@@ -312,6 +312,7 @@ The destroy pipeline uses pre-generated destroy operations:
 
 - Run: `pyinfra -y inventory.py destroy.py`
 - PyInfra removes the file
+- **Automatic Cleanup**: After successful destroy, the `.clockwork` directory is automatically removed (unless `--keep-files` flag is used)
 
 ```python
 files.file(
@@ -319,6 +320,15 @@ files.file(
     path="/path/to/conways_game_of_life.md",
     present=False,
 )
+```
+
+**CLI Options**:
+```bash
+# Default: destroy resources and remove .clockwork directory
+clockwork destroy
+
+# Keep .clockwork directory for debugging
+clockwork destroy --keep-files
 ```
 
 ### Assert Pipeline

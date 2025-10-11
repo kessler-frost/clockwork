@@ -3,6 +3,7 @@ Clockwork CLI - Intelligent Infrastructure Orchestration in Python.
 """
 
 import logging
+import shutil
 from pathlib import Path
 
 import typer
@@ -181,6 +182,11 @@ def destroy(
         "--model",
         help="Model name (overrides .env)"
     ),
+    keep_files: bool = typer.Option(
+        False,
+        "--keep-files",
+        help="Keep .clockwork directory after destroy"
+    ),
 ):
     """Destroy infrastructure: remove all deployed resources."""
     main_file = _get_main_file()
@@ -194,6 +200,20 @@ def destroy(
         if result.get("stdout"):
             console.print("\n[dim]PyInfra output:[/dim]")
             console.print(result["stdout"])
+
+        # Clean up .clockwork directory unless --keep-files is set
+        if not keep_files:
+            settings = get_settings()
+            # Get the .clockwork directory (parent of pyinfra output dir)
+            pyinfra_dir = main_file.parent / settings.pyinfra_output_dir
+            clockwork_dir = pyinfra_dir.parent
+
+            # Safety check: only remove if it's actually named .clockwork
+            if clockwork_dir.exists() and clockwork_dir.name == ".clockwork":
+                shutil.rmtree(str(clockwork_dir))
+                console.print(f"\n[dim]✓ Removed {clockwork_dir}[/dim]")
+        else:
+            console.print(f"\n[dim]ℹ Kept .clockwork directory (--keep-files flag set)[/dim]")
 
     except Exception as e:
         _handle_command_error(e, "destroy")

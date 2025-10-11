@@ -49,8 +49,8 @@ class ClockworkSettings(BaseSettings):
     )
 
     # PyInfra Configuration
-    pyinfra_output_dir: str = Field(
-        default=".clockwork/pyinfra",
+    pyinfra_output_dir: Path = Field(
+        default=Path(".clockwork/pyinfra"),
         description="Directory for PyInfra generated files (env: CW_PYINFRA_OUTPUT_DIR)"
     )
 

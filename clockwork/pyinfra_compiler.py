@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 class PyInfraCompiler:
     """Compiles resources into PyInfra inventory and deploy files."""
 
-    def __init__(self, output_dir: Optional[str] = None):
+    def __init__(self, output_dir: Optional[Path] = None):
         """
         Initialize the PyInfra compiler.
 
@@ -22,7 +22,9 @@ class PyInfraCompiler:
             output_dir: Directory to write PyInfra files (overrides settings/.env)
         """
         settings = get_settings()
-        self.output_dir = Path(output_dir or settings.pyinfra_output_dir)
+        self.output_dir = output_dir or settings.pyinfra_output_dir
+        if not isinstance(self.output_dir, Path):
+            self.output_dir = Path(self.output_dir)
 
     def compile(self, resources: List[Any]) -> Path:
         """
