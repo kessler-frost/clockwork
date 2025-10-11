@@ -2,13 +2,13 @@
 
 ## Overview
 
-Clockwork is a **factory for intelligent declarative infrastructure tasks** that combines:
+Clockwork provides **intelligent infrastructure orchestration in Python** that combines:
 
 - **Pydantic models** for declarative resource definition
-- **AI-powered artifact generation** via PydanticAI + OpenRouter
-- **PyInfra** for infrastructure deployment
+- **AI-powered intelligence** via PydanticAI + OpenRouter
+- **PyInfra** for automated deployment
 
-Think of it as: Define what you want (Python) → AI figures out how (artifacts) → PyInfra makes it happen (deployment)
+The approach: Define infrastructure (Python) → AI intelligence (artifacts) → Automated deployment (PyInfra)
 
 ## Architecture Diagram
 
@@ -254,28 +254,28 @@ files.file(
 
 ## Design Principles
 
-### 1. Python-First
+### 1. Python-First Orchestration
 
-- No custom DSL, pure Python for resource definition
+- No custom DSL or YAML, pure Python for infrastructure definition
 - Pydantic for type safety and validation
 - Full IDE support and autocompletion
 
-### 2. Two-Stage Compilation
+### 2. Intelligent Processing
 
-- **Stage 1 (AI)**: Dynamic, intelligent, for content generation
-- **Stage 2 (Template)**: Deterministic, for infrastructure code
+- **AI Stage**: Dynamic, intelligent content and configuration generation
+- **Compilation Stage**: Deterministic transformation to PyInfra operations
 
-### 3. Delegation to PyInfra
+### 3. Automated Deployment
 
-- No custom executors, runners, or state management
-- PyInfra handles all deployment complexity
-- We just generate the PyInfra code
+- Delegates execution to battle-tested PyInfra
+- No custom state management or execution engines
+- Focus on intelligent orchestration, not reimplementation
 
 ### 4. Simplicity
 
-- Single linear pipeline: Load → Generate → Compile → Deploy
-- No complex state graphs or dependency resolution
-- Resources are independent (PyInfra handles execution order)
+- Linear orchestration pipeline: Load → Generate → Compile → Deploy
+- No complex dependency graphs or state management
+- Clear separation of concerns between stages
 
 ## Extension Points
 
@@ -377,10 +377,10 @@ dependencies = [
 
 ## Future Enhancements
 
-- More resource types (ServiceResource, DatabaseResource, K8sResource)
-- Support for remote PyInfra targets (SSH, Kubernetes)
-- Resource dependencies and ordering hints
-- Caching of AI-generated artifacts
-- Streaming output for long AI generations
-- Enhanced container support (compose-like files, multi-container apps)
-- State tracking for resource lifecycle management
+- More resource types for broader infrastructure coverage
+- Remote deployment targets (SSH, Kubernetes)
+- Resource dependency orchestration
+- AI artifact caching and optimization
+- Streaming output for real-time feedback
+- Multi-container orchestration patterns
+- Advanced state tracking and lifecycle management

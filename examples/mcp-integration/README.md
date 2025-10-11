@@ -1,6 +1,6 @@
 # MCP Integration Example
 
-This example demonstrates how to use **MCP (Model Context Protocol) servers** with Clockwork for AI-powered artifact generation with access to external systems.
+This example demonstrates intelligent infrastructure orchestration with **MCP (Model Context Protocol) servers**, enabling AI to access external systems during artifact generation.
 
 ## What This Example Shows
 

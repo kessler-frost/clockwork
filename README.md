@@ -1,8 +1,8 @@
 # Clockwork
 
-**Factory for intelligent declarative infrastructure tasks.**
+**Intelligent Infrastructure Orchestration in Python.**
 
-Python-first infrastructure automation with AI-powered artifact generation and PyInfra deployment.
+Define infrastructure as pure Python code with AI-powered intelligence and PyInfra deployment.
 
 [![Version](https://img.shields.io/badge/version-0.2.0-blue)](./pyproject.toml)
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue)](./pyproject.toml)
@@ -10,15 +10,15 @@ Python-first infrastructure automation with AI-powered artifact generation and P
 
 ## Overview
 
-Clockwork is a **factory for intelligent declarative infrastructure tasks**. You define what you want in **pure Python** using Pydantic models, then Clockwork:
+Clockwork orchestrates infrastructure intelligently using **pure Python**. You define what you want using Pydantic models, then Clockwork:
 
-1. **AI generates** dynamic content/artifacts
-2. **Templates compile** to PyInfra operations
-3. **PyInfra deploys** your infrastructure
+1. **AI generates** dynamic content and configurations
+2. **Compiles** to PyInfra operations
+3. **Deploys** your infrastructure
 
-**The factory metaphor**: You provide the blueprint (Pydantic resources) → Factory manufactures artifacts (AI generation) → Assembly line puts it together (PyInfra deployment).
+**The approach**: Declarative Python resources → Intelligent AI processing → Automated PyInfra deployment.
 
-No custom DSL. No complex configuration. Just Python.
+No custom DSL. No YAML files. Just Python with AI assistance.
 
 ## Quick Start
 
@@ -212,11 +212,11 @@ uv run clockwork apply --model "openai/gpt-4o-mini"
 
 ## Why Clockwork?
 
-- **Pure Python**: No custom DSL, just Pydantic models
-- **AI-powered**: Dynamic content generation and intelligent resource suggestions
-- **Simple pipeline**: Load → Generate → Compile → Deploy → Validate
-- **Pythonic**: Type-safe with full IDE support
-- **Type-safe assertions**: Validate deployments with assertion classes
+- **Pure Python**: No custom DSL or YAML, just Pydantic models
+- **Intelligent**: AI-powered content generation and resource configuration
+- **Orchestrated**: Automated pipeline from definition to deployment
+- **Type-safe**: Full IDE support with Pydantic validation
+- **Verifiable**: Built-in assertion system for deployment validation
 
 ## Examples
 

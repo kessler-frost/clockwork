@@ -1,6 +1,6 @@
 # File Generation Example
 
-This example demonstrates Clockwork's AI-powered file generation capabilities.
+This example demonstrates Clockwork's intelligent file orchestration with AI-powered content generation.
 
 ## What it does
 

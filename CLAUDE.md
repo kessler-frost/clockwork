@@ -1,6 +1,6 @@
 # Clockwork Development Guide
 
-**Factory for intelligent declarative infrastructure tasks.**
+**Intelligent Infrastructure Orchestration in Python.**
 
 ## Setup
 
@@ -29,14 +29,14 @@ For Linux/remote deployments, modify the inventory in your `main.py` or use SSH 
 
 ## Architecture
 
-Clockwork is a **factory for intelligent declarative infrastructure tasks** using a simple **Python + PyInfra** architecture:
+Clockwork provides **intelligent infrastructure orchestration** using a simple **Python + PyInfra** architecture:
 
-1. **Declare** (Pydantic models): Users define infrastructure tasks in Python
-2. **Generate** (AI via OpenRouter): AI creates dynamic artifacts when needed
-3. **Compile** (Templates): Resources generate PyInfra operations
-4. **Deploy** (PyInfra): Native PyInfra executes the infrastructure tasks
+1. **Declare** (Pydantic models): Define infrastructure in pure Python
+2. **Generate** (AI via OpenRouter): Intelligent artifact and configuration creation
+3. **Compile** (Templates): Convert resources to PyInfra operations
+4. **Deploy** (PyInfra): Execute infrastructure deployment
 
-The "factory" metaphor: You provide the blueprint (Pydantic resources), the factory (Clockwork) intelligently manufactures the artifacts (via AI) and assembles them (via PyInfra).
+The orchestration flow: Python definitions → AI intelligence → PyInfra automation → Deployed infrastructure.
 
 ## Assertions
 

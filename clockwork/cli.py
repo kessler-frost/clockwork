@@ -1,5 +1,5 @@
 """
-Clockwork CLI - Command-line interface for PyInfra-based infrastructure automation.
+Clockwork CLI - Intelligent Infrastructure Orchestration in Python.
 """
 
 import logging
@@ -15,7 +15,7 @@ from .settings import get_settings
 # Setup
 app = typer.Typer(
     name="clockwork",
-    help="Intelligent infrastructure automation with PyInfra",
+    help="Intelligent Infrastructure Orchestration in Python",
     add_completion=False,
 )
 console = Console()

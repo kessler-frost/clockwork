@@ -1,14 +1,15 @@
 """
-Clockwork - Factory for intelligent declarative infrastructure tasks.
+Clockwork - Intelligent Infrastructure Orchestration in Python.
 
-Define infrastructure in Python using Pydantic models. Clockwork uses AI
-to generate dynamic content, then compiles to PyInfra for deployment.
+Define infrastructure in Python using Pydantic models. Clockwork orchestrates
+deployment using AI-powered intelligence and PyInfra automation.
 
-Two-stage compilation:
-1. AI generates artifacts (via OpenRouter)
-2. Templates compile to PyInfra operations
+Orchestration pipeline:
+1. AI generates artifacts and configurations (via OpenRouter)
+2. Compiles to PyInfra operations
+3. Automates deployment
 
-Start with simple Python resources, let AI handle the complexity.
+Pure Python infrastructure with intelligent AI assistance.
 """
 
 from .core import ClockworkCore

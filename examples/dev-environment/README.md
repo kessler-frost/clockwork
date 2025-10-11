@@ -1,6 +1,6 @@
 # Development Environment Example
 
-A comprehensive example demonstrating all Clockwork resource types working together to create a complete, reproducible Mac development environment.
+A comprehensive example demonstrating intelligent orchestration of all Clockwork resource types to create a complete, reproducible Mac development environment.
 
 ## What This Example Creates
 
@@ -245,11 +245,11 @@ brew services stop postgresql  # If PostgreSQL is running via Homebrew
 
 ## What This Demonstrates
 
-This example showcases Clockwork's ability to:
+This example showcases Clockwork's intelligent orchestration capabilities:
 
-1. **Compose Multiple Resource Types** - Combines 6 different resource types seamlessly
-2. **AI-Powered Content Generation** - Generates configuration files based on descriptions
-3. **Declarative Infrastructure** - Define desired state, Clockwork handles the rest
+1. **Compose Multiple Resource Types** - Seamlessly orchestrates 6 different resource types
+2. **AI Intelligence** - Generates configuration files based on descriptions
+3. **Declarative Infrastructure** - Define desired state, Clockwork orchestrates the rest
 4. **Idempotency** - Running `apply` multiple times is safe
 5. **Complete Lifecycle Management** - Deploy, validate, and destroy with simple commands
 6. **Type-Safe Assertions** - Validate everything is working correctly

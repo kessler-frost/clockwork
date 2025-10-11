@@ -1,10 +1,10 @@
 # Apple Container Service Example
 
-Simple web service deployed with AI-suggested container image using Apple Containers.
+Intelligent container orchestration with AI-suggested images using Apple Containers.
 
 ## What it does
 
-Deploys a lightweight web server using Clockwork's AI-powered image suggestions with Apple's native container runtime.
+Orchestrates a lightweight web server with Clockwork's AI-powered image selection using Apple's native container runtime.
 
 ## Prerequisites
 
@@ -29,7 +29,7 @@ clockwork destroy
 
 ## How it works
 
-1. **AI suggests image**: Clockwork's AI analyzes the description and suggests an appropriate container image (e.g., nginx:alpine, httpd:alpine)
-2. **PyInfra deploys**: The suggested image is deployed as an Apple Container on port 8080 using the `container` CLI
+1. **AI intelligence**: Analyzes the description and intelligently suggests an appropriate container image (e.g., nginx:alpine, httpd:alpine)
+2. **Orchestration**: Clockwork compiles to PyInfra operations and deploys as an Apple Container on port 8080
 3. **Service runs**: Access the web server at <http://localhost:8080>
 4. **`.clockwork/`** directory created in current directory

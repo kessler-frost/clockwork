@@ -1,5 +1,5 @@
 """
-Clockwork Core - Main pipeline orchestrator for PyInfra-based infrastructure.
+Clockwork Core - Intelligent Infrastructure Orchestration in Python.
 
 Apply Pipeline: Load resources → Generate artifacts (AI) → Compile (deploy.py + destroy.py) → Execute deploy
 Destroy Pipeline: Execute pre-generated destroy.py (from apply)
