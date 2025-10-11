@@ -12,7 +12,7 @@ Define infrastructure as pure Python code with AI-powered intelligence and PyInf
 
 Clockwork orchestrates infrastructure intelligently using **pure Python**. You define what you want using Pydantic models, then Clockwork:
 
-1. **AI generates** dynamic content and configurations
+1. **AI completes** missing fields and configurations
 2. **Compiles** to PyInfra operations
 3. **Deploys** your infrastructure
 
@@ -38,7 +38,7 @@ article = FileResource(
 Create a `.env` file:
 
 ```bash
-CW_OPENROUTER_API_KEY=your-key-here
+CW_API_KEY=your-key-here
 ```
 
 Deploy:
@@ -83,8 +83,8 @@ All commands must be run from a directory containing `main.py`:
 # Full deployment
 uv run clockwork apply
 
-# Generate artifacts without deploying
-uv run clockwork generate
+# Plan resources without deploying
+uv run clockwork plan
 
 # Validate deployed resources
 uv run clockwork assert
@@ -186,9 +186,10 @@ Clockwork uses `.env` files for configuration via Pydantic Settings.
 ### Create .env File
 
 ```bash
-# AI Provider (currently OpenRouter - LM Studio and others coming soon)
-CW_OPENROUTER_API_KEY=your-api-key-here
-CW_OPENROUTER_MODEL=meta-llama/llama-4-scout:free
+# AI Provider (OpenAI-compatible: OpenRouter, LM Studio, Ollama, etc.)
+CW_API_KEY=your-api-key-here
+CW_MODEL=meta-llama/llama-4-scout:free
+CW_BASE_URL=https://openrouter.ai/api/v1
 
 # Logging
 CW_LOG_LEVEL=INFO
@@ -198,9 +199,9 @@ CW_LOG_LEVEL=INFO
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `CW_OPENROUTER_API_KEY` | None | API key (required for now) |
-| `CW_OPENROUTER_MODEL` | `meta-llama/llama-4-scout:free` | Model for AI generation |
-| `CW_OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | OpenRouter API endpoint |
+| `CW_API_KEY` | None | API key (required for cloud models) |
+| `CW_MODEL` | `meta-llama/llama-4-scout:free` | Model for AI completion |
+| `CW_BASE_URL` | `https://openrouter.ai/api/v1` | API endpoint (OpenRouter, LM Studio, etc.) |
 | `CW_PYINFRA_OUTPUT_DIR` | `.clockwork/pyinfra` | PyInfra output directory |
 | `CW_LOG_LEVEL` | `INFO` | Logging level |
 

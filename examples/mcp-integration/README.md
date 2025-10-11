@@ -1,6 +1,6 @@
 # MCP Integration Example
 
-This example demonstrates intelligent infrastructure orchestration with **MCP (Model Context Protocol) servers**, enabling AI to access external systems during artifact generation.
+This example demonstrates intelligent infrastructure orchestration with **MCP (Model Context Protocol) servers**, enabling AI to access external systems during resource completion.
 
 ## What This Example Shows
 
@@ -17,10 +17,10 @@ Install the filesystem MCP server (most common):
 npm install -g @modelcontextprotocol/server-filesystem
 ```
 
-Set your OpenRouter API key in `.env`:
+Set your API key in `.env`:
 
 ```bash
-CW_OPENROUTER_API_KEY=your-api-key-here
+CW_API_KEY=your-api-key-here
 ```
 
 ## Important: Update File Paths

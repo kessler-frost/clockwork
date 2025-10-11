@@ -5,42 +5,40 @@ from .base import Resource
 
 
 class AppleContainerResource(Resource):
-    """Apple Container resource - runs containers with AI-suggested images.
+    """Apple Container resource - runs containers with AI completing all fields.
 
-    This resource allows you to define Apple Containers declaratively. If no image
-    is specified, the AI will suggest an appropriate image based on the description.
+    This resource allows you to define Apple Containers with just a description.
+    The AI will intelligently complete all missing fields including name, image,
+    ports, volumes, environment variables, and networks.
 
     Attributes:
-        name: Container name (required)
-        description: What the service does - used by AI for image suggestions (required)
-        image: Container image to use (optional - AI will suggest if not provided)
-        ports: Port mappings as list of strings (e.g., ["8080:80", "8443:443"])
-        volumes: Volume mounts as list of strings (e.g., ["/host:/container"])
-        env_vars: Environment variables as key-value pairs
-        networks: Container networks to attach the container to
+        description: What the service does - AI uses this to complete all fields (required)
+        name: Container name (optional - AI generates if not provided)
+        image: Container image to use (optional - AI suggests if not provided)
+        ports: Port mappings as list of strings (optional - AI determines if not provided)
+        volumes: Volume mounts as list of strings (optional - AI determines if not provided)
+        env_vars: Environment variables as key-value pairs (optional - AI suggests if not provided)
+        networks: Container networks to attach (optional - AI determines if not provided)
         present: Whether the container should exist (True) or be removed (False)
         start: Whether the container should be running (True) or stopped (False)
 
     Examples:
-        # Basic usage with AI-suggested image:
-        >>> nginx = AppleContainerResource(
-        ...     name="nginx",
-        ...     description="Web server for serving static content",
-        ...     ports=["8080:80"]
+        # Minimal - AI completes everything:
+        >>> web = AppleContainerResource(
+        ...     description="lightweight nginx web server for testing"
         ... )
+        # AI generates: name="nginx-server", image="nginx:alpine", ports=["80:80"]
 
-        # Explicit image specification:
-        >>> redis = AppleContainerResource(
-        ...     name="redis",
-        ...     description="Redis cache server",
-        ...     image="redis:7-alpine",
-        ...     ports=["6379:6379"],
-        ...     volumes=["/data:/data"]
+        # Advanced - override specific fields:
+        >>> api = AppleContainerResource(
+        ...     description="lightweight web server for testing",
+        ...     ports=["8090:80"]  # Override port
         ... )
+        # AI generates: name="nginx-server", image="nginx:alpine", volumes, env_vars
     """
 
-    name: str
     description: str
+    name: Optional[str] = None
     image: Optional[str] = None
     ports: Optional[List[str]] = None
     volumes: Optional[List[str]] = None
@@ -49,27 +47,38 @@ class AppleContainerResource(Resource):
     present: bool = True
     start: bool = True
 
-    def needs_artifact_generation(self) -> bool:
-        """Returns True if image needs to be AI-suggested.
+    def needs_completion(self) -> bool:
+        """Returns True if any field needs AI completion.
 
-        When no image is specified, the AI will analyze the description and
-        suggest an appropriate container image to use.
+        When any of the key fields are None, the AI will analyze the description
+        and intelligently suggest appropriate values for all missing fields.
 
         Returns:
-            bool: True if image is None, False otherwise
+            bool: True if any field needs completion, False otherwise
         """
-        return self.image is None
+        return (
+            self.name is None or
+            self.image is None or
+            self.ports is None or
+            self.volumes is None or
+            self.env_vars is None or
+            self.networks is None
+        )
 
-    def to_pyinfra_operations(self, artifacts: Dict[str, Any]) -> str:
+    def needs_artifact_generation(self) -> bool:
+        """Alias for needs_completion() for compatibility with base class.
+
+        Returns:
+            bool: True if any field needs AI completion
+        """
+        return self.needs_completion()
+
+    def to_pyinfra_operations(self) -> str:
         """Generate PyInfra operations for Apple Containers.
 
         Creates PyInfra operations that deploy the Apple Container with the
         specified configuration using custom apple_containers operations.
-        If the image was AI-generated, it will be retrieved from the artifacts dictionary.
-
-        Args:
-            artifacts: Dict mapping resource names to generated content.
-                      For AppleContainerResource, should contain {"name": {"image": "image/name"}}
+        All fields should be populated by AI completion before this is called.
 
         Returns:
             str: PyInfra operation code as a string
@@ -77,22 +86,17 @@ class AppleContainerResource(Resource):
         Example generated code:
             ```python
             apple_containers.container_run(
-                name="Deploy nginx",
-                image="nginx:latest",
-                container_name="nginx",
-                ports=["8080:80"],
+                name="Deploy nginx-server",
+                image="nginx:alpine",
+                container_name="nginx-server",
+                ports=["80:80"],
                 detach=True,
             )
             ```
         """
-        # Get image from artifacts if not provided
-        image = self.image
-        if image is None:
-            artifact_data = artifacts.get(self.name, {})
-            image = artifact_data.get("image") if isinstance(artifact_data, dict) else artifact_data
-
-        # Use empty string as fallback (should not happen in practice)
-        image = image or ""
+        # All fields should be populated by AI completion
+        if self.name is None or self.image is None:
+            raise ValueError(f"Resource fields not completed. name={self.name}, image={self.image}")
 
         operations = []
 
@@ -110,7 +114,7 @@ apple_containers.container_remove(
             if self.start:
                 # Create and start the container
                 params = [
-                    f'    image="{image}"',
+                    f'    image="{self.image}"',
                     f'    name="{self.name}"',
                     '    detach=True',
                 ]
@@ -140,7 +144,7 @@ apple_containers.container_run(
             else:
                 # Create but don't start (stopped state)
                 params = [
-                    f'    image="{image}"',
+                    f'    image="{self.image}"',
                     f'    name="{self.name}"',
                 ]
 
@@ -179,14 +183,11 @@ apple_containers.container_remove(
 
         return "\n".join(operations)
 
-    def to_pyinfra_destroy_operations(self, artifacts: Dict[str, Any]) -> str:
+    def to_pyinfra_destroy_operations(self) -> str:
         """Generate PyInfra operations code to destroy/remove the container.
 
         Creates PyInfra operations that remove the Apple Container using
         the custom apple_containers.container_remove operation.
-
-        Args:
-            artifacts: Dict mapping resource names to generated content (unused for destroy)
 
         Returns:
             str: PyInfra operation code to remove the container
@@ -194,12 +195,15 @@ apple_containers.container_remove(
         Example generated code:
             ```python
             apple_containers.container_remove(
-                name="Remove nginx",
-                container_id="nginx",
+                name="Remove nginx-server",
+                container_id="nginx-server",
                 force=True,
             )
             ```
         """
+        if self.name is None:
+            raise ValueError("Resource name not completed")
+
         return f'''
 # Remove Apple Container: {self.name}
 apple_containers.container_remove(
@@ -209,7 +213,7 @@ apple_containers.container_remove(
 )
 '''
 
-    def to_pyinfra_assert_operations(self, artifacts: Dict[str, Any]) -> str:
+    def to_pyinfra_assert_operations(self) -> str:
         """Generate PyInfra operations code for Apple Container assertions.
 
         Provides default assertions for AppleContainerResource using custom facts:
@@ -218,25 +222,25 @@ apple_containers.container_remove(
 
         These can be overridden by specifying custom assertions.
 
-        Args:
-            artifacts: Dict mapping resource names to generated content
-
         Returns:
             str: PyInfra assertion operation code
 
         Example generated code:
             ```python
-            # Default assertions for Apple Container: nginx
+            # Default assertions for Apple Container: nginx-server
             from pyinfra.facts.server import Command
 
-            status = host.get_fact(ContainerStatus, container_id="nginx")
-            assert status is not None, "Container nginx does not exist"
-            assert status.get("running"), "Container nginx is not running"
+            status = host.get_fact(ContainerStatus, container_id="nginx-server")
+            assert status is not None, "Container nginx-server does not exist"
+            assert status.get("running"), "Container nginx-server is not running"
             ```
         """
+        if self.name is None:
+            raise ValueError("Resource name not completed")
+
         # If custom assertions are defined, use the base implementation
         if self.assertions:
-            return super().to_pyinfra_assert_operations(artifacts)
+            return super().to_pyinfra_assert_operations()
 
         operations = []
         operations.append(f"\n# Default assertions for Apple Container: {self.name}")

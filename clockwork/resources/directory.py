@@ -6,65 +6,58 @@ from .base import Resource
 
 
 class DirectoryResource(Resource):
-    """Directory resource - creates directories with specified permissions.
+    """Directory resource - creates directories with AI-completed permissions.
 
-    Declaratively define directories. No AI generation is needed for directories.
+    Minimal usage (AI completes name and mode):
+        DirectoryResource(description="Main application directory at scratch/myapp")
+        # AI generates: name="app-directory", mode="755"
+
+    Advanced usage (override specific fields):
+        DirectoryResource(
+            description="Application data storage with restricted access",
+            path="scratch/myapp/data",
+            mode="700"  # Override permissions
+        )
+        # AI generates: name="data-directory"
 
     Attributes:
-        name: Directory name (required)
-        description: Optional description of the directory's purpose
+        description: Directory purpose - used by AI for completion (required)
         path: Full path to the directory (required)
-        mode: Directory permissions as octal string (default: "755")
+        name: Directory identifier (optional - AI generates if not provided)
+        mode: Directory permissions as octal string (optional - AI picks if not provided)
         user: Owner username (optional)
         group: Group name (optional)
         present: Whether directory should exist (default: True)
         recursive: Create parent directories if needed (default: True)
-
-    Examples:
-        Basic directory creation:
-        >>> DirectoryResource(
-        ...     name="app_data",
-        ...     path="/var/app/data",
-        ...     mode="755"
-        ... )
-
-        Directory with owner and group:
-        >>> DirectoryResource(
-        ...     name="web_root",
-        ...     description="Web server document root",
-        ...     path="/var/www/html",
-        ...     mode="755",
-        ...     user="www-data",
-        ...     group="www-data"
-        ... )
-
-        Ensure directory is absent:
-        >>> DirectoryResource(
-        ...     name="temp_dir",
-        ...     path="/tmp/old_data",
-        ...     present=False
-        ... )
     """
 
-    name: str
-    description: Optional[str] = None
+    description: str
     path: str
-    mode: Optional[str] = "755"
+    name: Optional[str] = None
+    mode: Optional[str] = None
     user: Optional[str] = None
     group: Optional[str] = None
     present: bool = True
     recursive: bool = True
 
-    def needs_artifact_generation(self) -> bool:
-        """Returns False as directories do not need AI-generated content.
+    def needs_completion(self) -> bool:
+        """Returns True if name or mode need AI completion.
 
-        Directory creation is a straightforward filesystem operation that
-        does not require any AI assistance.
+        When name or mode are None, the AI will analyze the description
+        and path to suggest appropriate values.
 
         Returns:
-            bool: Always returns False
+            bool: True if name or mode is None, False otherwise
         """
-        return False
+        return self.name is None or self.mode is None
+
+    def needs_artifact_generation(self) -> bool:
+        """Alias for needs_completion() for compatibility with base class.
+
+        Returns:
+            bool: True if any field needs AI completion
+        """
+        return self.needs_completion()
 
     def _resolve_directory_path(self) -> str:
         """Resolve directory path to absolute path.
@@ -79,14 +72,12 @@ class DirectoryResource(Resource):
             dir_path = Path.cwd() / dir_path
         return str(dir_path)
 
-    def to_pyinfra_operations(self, artifacts: Dict[str, Any]) -> str:
+    def to_pyinfra_operations(self) -> str:
         """Generate PyInfra files.directory operation code.
 
         Creates a PyInfra operation that creates the directory with the
         specified configuration including permissions, owner, and group.
-
-        Args:
-            artifacts: Dict mapping resource names to generated content (unused for directories)
+        All fields should be populated by AI completion before this is called.
 
         Returns:
             str: PyInfra operation code as a string
@@ -104,8 +95,15 @@ class DirectoryResource(Resource):
             )
             ```
         """
+        # Name should be populated by AI completion
+        if self.name is None:
+            raise ValueError(f"Resource name not completed. name={self.name}")
+
         # Resolve absolute path
         abs_path = self._resolve_directory_path()
+
+        # Ensure mode is set (should be populated by AI completion)
+        mode = self.mode or "755"
 
         # Build operation parameters
         params = [
@@ -115,9 +113,10 @@ class DirectoryResource(Resource):
             f'    recursive={self.recursive},',
         ]
 
+        # Add mode parameter
+        params.append(f'    mode="{mode}",')
+
         # Add optional parameters
-        if self.mode is not None:
-            params.append(f'    mode="{self.mode}",')
         if self.user is not None:
             params.append(f'    user="{self.user}",')
         if self.group is not None:
@@ -132,15 +131,12 @@ files.directory(
 )
 '''
 
-    def to_pyinfra_destroy_operations(self, artifacts: Dict[str, Any]) -> str:
+    def to_pyinfra_destroy_operations(self) -> str:
         """Generate PyInfra operations code to destroy/remove the directory.
 
         Creates a PyInfra operation that removes the directory by setting
         present=False. This will only succeed if the directory is empty or
         PyInfra is configured to force removal.
-
-        Args:
-            artifacts: Dict mapping resource names to generated content (unused for destroy)
 
         Returns:
             str: PyInfra operation code to remove the directory
@@ -154,6 +150,10 @@ files.directory(
             )
             ```
         """
+        # Name should be populated by AI completion
+        if self.name is None:
+            raise ValueError(f"Resource name not completed. name={self.name}")
+
         # Resolve absolute path
         abs_path = self._resolve_directory_path()
 
@@ -166,7 +166,7 @@ files.directory(
 )
 '''
 
-    def to_pyinfra_assert_operations(self, artifacts: Dict[str, Any]) -> str:
+    def to_pyinfra_assert_operations(self) -> str:
         """Generate PyInfra operations code for directory assertions.
 
         Provides default assertions for DirectoryResource:
@@ -176,9 +176,6 @@ files.directory(
         - Directory has correct group (if group is specified)
 
         These can be overridden by specifying custom assertions.
-
-        Args:
-            artifacts: Dict mapping resource names to generated content
 
         Returns:
             str: PyInfra assertion operation code
@@ -204,12 +201,19 @@ files.directory(
             )
             ```
         """
+        # Name should be populated by AI completion
+        if self.name is None:
+            raise ValueError(f"Resource name not completed. name={self.name}")
+
         # If custom assertions are defined, use the base implementation
         if self.assertions:
-            return super().to_pyinfra_assert_operations(artifacts)
+            return super().to_pyinfra_assert_operations()
 
         # Resolve absolute path
         abs_path = self._resolve_directory_path()
+
+        # Ensure mode is set
+        mode = self.mode or "755"
 
         operations = []
         operations.append(f"\n# Default assertions for directory: {self.name}")
@@ -227,14 +231,13 @@ server.shell(
 )
 ''')
 
-            # Assert: Directory has correct permissions (if specified)
-            if self.mode is not None:
-                operations.append(f'''
+            # Assert: Directory has correct permissions
+            operations.append(f'''
 # Assert: Directory has correct permissions
 server.shell(
-    name="Assert: Directory {abs_path} has mode {self.mode}",
+    name="Assert: Directory {abs_path} has mode {mode}",
     commands=[
-        "[ \\"$(stat -c '%a' {abs_path})\\" = \\"{self.mode}\\" ] || exit 1"
+        "[ \\"$(stat -c '%a' {abs_path})\\" = \\"{mode}\\" ] || exit 1"
     ],
 )
 ''')

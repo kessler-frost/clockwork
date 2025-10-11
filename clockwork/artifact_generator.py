@@ -16,10 +16,13 @@ logger = logging.getLogger(__name__)
 
 
 class ContainerConfig(BaseModel):
-    """Structured output model for container image configuration."""
+    """Structured output model for complete container configuration."""
+    name: str
     image: str
-    suggested_ports: Optional[List[str]] = None
-    suggested_env_vars: Optional[Dict[str, str]] = None
+    ports: Optional[List[str]] = None
+    volumes: Optional[List[str]] = None
+    env_vars: Optional[Dict[str, str]] = None
+    networks: Optional[List[str]] = None
 
 
 class ArtifactGenerator:
@@ -129,20 +132,19 @@ class ArtifactGenerator:
 
         # Handle container resources specially - parse JSON from text response
         if self._is_container_resource(resource):
-            return self._parse_container_response(content, resource)
+            return self._parse_container_response(content)
 
         return content
 
-    def _parse_container_response(self, content: Any, resource: Any) -> Dict[str, Any]:
+    def _parse_container_response(self, content: Any) -> Dict[str, Any]:
         """
         Parse AI response for container resources.
 
         Args:
             content: AI-generated content (either ContainerConfig instance or JSON string)
-            resource: Container resource object
 
         Returns:
-            Dict with at least {"image": "..."} key
+            Dict with complete container configuration (name, image, ports, volumes, env_vars, networks)
         """
         import json
         import re
@@ -150,7 +152,7 @@ class ArtifactGenerator:
         # With PydanticAI structured output, content is already a ContainerConfig instance
         if isinstance(content, ContainerConfig):
             parsed = content.model_dump()
-            logger.info(f"Parsed container response for {resource.name}: {parsed}")
+            logger.info(f"Parsed container response: {parsed}")
             return parsed
 
         # Parse JSON from text response (for models without structured output support)
@@ -170,10 +172,12 @@ class ArtifactGenerator:
 
             try:
                 parsed = json.loads(json_str)
-                # Validate that we have at least an "image" key
+                # Validate required fields
+                if "name" not in parsed:
+                    raise ValueError(f"Response JSON missing 'name' key: {parsed}")
                 if "image" not in parsed:
                     raise ValueError(f"Response JSON missing 'image' key: {parsed}")
-                logger.info(f"Parsed container response for {resource.name}: {parsed}")
+                logger.info(f"Parsed container response: {parsed}")
                 return parsed
             except json.JSONDecodeError as e:
                 raise ValueError(f"Failed to parse JSON from response: {json_str}. Error: {e}")
@@ -211,20 +215,50 @@ class ArtifactGenerator:
         return resource.__class__.__name__ == 'AppleContainerResource'
 
     def _build_container_prompt(self, resource: Any) -> str:
-        """Build specialized prompt for container resources."""
+        """Build specialized prompt for container resources with full completion."""
+        # Collect what the user has already specified
+        user_specified = []
+        if resource.name is not None:
+            user_specified.append(f"name: {resource.name}")
+        if resource.image is not None:
+            user_specified.append(f"image: {resource.image}")
+        if resource.ports is not None:
+            user_specified.append(f"ports: {resource.ports}")
+        if resource.volumes is not None:
+            user_specified.append(f"volumes: {resource.volumes}")
+        if resource.env_vars is not None:
+            user_specified.append(f"env_vars: {resource.env_vars}")
+        if resource.networks is not None:
+            user_specified.append(f"networks: {resource.networks}")
+
+        user_spec_str = "\n".join(user_specified) if user_specified else "None"
+
         return f"""Based on this description: "{resource.description}"
 
-Suggest an appropriate container image for this service.
-Respond in JSON format:
+User has already specified:
+{user_spec_str}
+
+Complete the missing container configuration fields. Provide intelligent defaults based on the description and best practices.
+
+Respond in JSON format with ALL fields (even if some were already specified):
 {{
+  "name": "container-name",
   "image": "imagename:tag",
-  "suggested_ports": ["80:80"],
-  "suggested_env_vars": {{"KEY": "value"}}
+  "ports": ["80:80", "443:443"],
+  "volumes": ["volume_name:/container/path"],
+  "env_vars": {{"KEY": "value"}},
+  "networks": ["network-name"]
 }}
 
-If only the image is known, respond with just: {{"image": "imagename:tag"}}
+Guidelines:
+- name: Short, descriptive service name (e.g., "nginx-server", "postgres-db", "redis-cache")
+- image: Use official, well-maintained images with specific version tags (e.g., nginx:alpine, redis:7-alpine, postgres:16-alpine)
+- ports: Standard ports for the service in "host:container" format
+- volumes: Data persistence locations if needed (can be empty array if not needed)
+- env_vars: Required environment variables (can be empty object if not needed)
+- networks: Container networks to attach (can be empty array for simple cases)
 
-Be specific and use official, well-maintained images when possible. Examples: nginx:alpine, redis:7-alpine, postgres:16-alpine"""
+If user already specified a field, KEEP their value. Only complete the missing fields."""
 
     def _get_max_tokens(self, resource: Any) -> int:
         """Get max tokens based on resource size."""

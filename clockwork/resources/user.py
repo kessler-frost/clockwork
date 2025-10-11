@@ -50,26 +50,31 @@ class UserResource(Resource):
     present: bool = True
     system: bool = False
 
-    def needs_artifact_generation(self) -> bool:
-        """Returns False - user resources do not need AI generation.
+    def needs_completion(self) -> bool:
+        """Returns False - user resources do not need AI completion.
 
-        User creation is a simple declarative operation that doesn't require
-        AI-generated content. All configuration is provided directly by the user.
+        User creation requires explicit configuration and doesn't benefit from
+        AI completion. All fields should be provided by the user.
 
         Returns:
             bool: Always False
         """
         return False
 
-    def to_pyinfra_operations(self, artifacts: Dict[str, Any]) -> str:
+    def needs_artifact_generation(self) -> bool:
+        """Alias for needs_completion() for compatibility with base class.
+
+        Returns:
+            bool: Always False
+        """
+        return self.needs_completion()
+
+    def to_pyinfra_operations(self) -> str:
         """Generate PyInfra operations code for user creation.
 
         Creates platform-specific commands for user management. On macOS (Darwin),
         uses dscl commands for proper user creation. On Linux, uses standard
         server.user operations.
-
-        Args:
-            artifacts: Dict mapping resource names to generated content (unused)
 
         Returns:
             str: PyInfra operation code for creating/managing the user
@@ -300,14 +305,11 @@ fi
 )
 '''
 
-    def to_pyinfra_destroy_operations(self, artifacts: Dict[str, Any]) -> str:
+    def to_pyinfra_destroy_operations(self) -> str:
         """Generate PyInfra operations code to destroy/remove the user.
 
         Creates platform-specific commands for user removal. On macOS, uses dscl
         to delete the user. On Linux, uses userdel with -r to remove home directory.
-
-        Args:
-            artifacts: Dict mapping resource names to generated content (unused)
 
         Returns:
             str: PyInfra operation code to remove the user
@@ -342,7 +344,7 @@ fi
 )
 '''
 
-    def to_pyinfra_assert_operations(self, artifacts: Dict[str, Any]) -> str:
+    def to_pyinfra_assert_operations(self) -> str:
         """Generate PyInfra operations code for user assertions.
 
         Provides default assertions for UserResource:
@@ -350,9 +352,6 @@ fi
         - Home directory exists (if home is specified)
 
         These can be overridden by specifying custom assertions.
-
-        Args:
-            artifacts: Dict mapping resource names to generated content (unused)
 
         Returns:
             str: PyInfra assertion operation code
@@ -376,7 +375,7 @@ fi
         """
         # If custom assertions are defined, use the base implementation
         if self.assertions:
-            return super().to_pyinfra_assert_operations(artifacts)
+            return super().to_pyinfra_assert_operations()
 
         # Only assert if user should be present
         if not self.present:

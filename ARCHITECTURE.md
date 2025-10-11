@@ -5,10 +5,10 @@
 Clockwork provides **intelligent infrastructure orchestration in Python** that combines:
 
 - **Pydantic models** for declarative resource definition
-- **AI-powered intelligence** via PydanticAI + OpenRouter
+- **AI-powered resource completion** via PydanticAI (OpenAI-compatible APIs)
 - **PyInfra** for automated deployment
 
-The approach: Define infrastructure (Python) → AI intelligence (artifacts) → Automated deployment (PyInfra)
+The approach: Define infrastructure (Python) → AI completes resources → Automated deployment (PyInfra)
 
 ## Architecture Diagram
 
@@ -27,20 +27,21 @@ The approach: Define infrastructure (Python) → AI intelligence (artifacts) →
        │    (Execute main.py, collect        │
        │     Resource instances)              │
        │                                      │
-       ├─── 2. Generate Artifacts ────────────┤
-       │    (AI via OpenRouter/PydanticAI)   │
+       ├─── 2. Complete Resources ────────────┤
+       │    (AI via PydanticAI)              │
        │    • Only for resources with         │
-       │      needs_artifact_generation()     │
-       │    • Returns Dict[name, content]     │
+       │      needs_completion()              │
+       │    • Returns completed Resource objs │
        │                                      │
        ├─── 3. Compile to PyInfra ────────────┤
        │    (Template-based, no AI)          │
        │    • resource.to_pyinfra_operations()│
        │    • Generate inventory.py           │
        │    • Generate deploy.py              │
+       │    • Generate destroy.py             │
        │                                      │
        └─── 4. Execute Deploy ────────────────┘
-            (subprocess: pyinfra inventory.py deploy.py)
+            (subprocess: pyinfra -y inventory.py deploy.py)
 ```
 
 ## Core Components
@@ -56,12 +57,16 @@ class Resource(BaseModel):
     name: str
     description: Optional[str] = None
 
-    def needs_artifact_generation(self) -> bool:
-        """Does this resource need AI-generated content?"""
+    def needs_completion(self) -> bool:
+        """Does this resource need AI completion?"""
         raise NotImplementedError
 
-    def to_pyinfra_operations(self, artifacts: Dict[str, Any]) -> str:
+    def to_pyinfra_operations(self) -> str:
         """Generate PyInfra operation code."""
+        raise NotImplementedError
+
+    def to_pyinfra_destroy_operations(self) -> str:
+        """Generate PyInfra teardown code."""
         raise NotImplementedError
 ```
 
@@ -69,12 +74,12 @@ class Resource(BaseModel):
 
 ```python
 class FileResource(Resource):
-    name: str               # filename
-    description: str        # what it should contain (for AI)
-    size: ArtifactSize     # size hint for AI
-    path: Optional[str]     # where to create it
-    content: Optional[str]  # if provided, skip AI
-    mode: str = "644"       # file permissions
+    name: Optional[str] = None        # filename (AI suggests if None)
+    description: str                  # what it should contain (for AI)
+    size: ArtifactSize               # size hint for AI
+    directory: Optional[str] = None   # where to create it (AI suggests if None)
+    content: Optional[str] = None     # if provided, skips AI
+    mode: Optional[str] = None        # file permissions (AI suggests if None)
 ```
 
 #### Example: AppleContainerResource
@@ -83,7 +88,7 @@ class FileResource(Resource):
 class AppleContainerResource(Resource):
     name: str                         # container name
     description: str                  # what it does (for AI image suggestion)
-    image: Optional[str] = None      # Container image (AI suggests if not provided)
+    image: Optional[str] = None       # Container image (AI suggests if None)
     ports: Optional[List[str]] = None  # Port mappings ["8080:80"]
     volumes: Optional[List[str]] = None  # Volume mounts ["/host:/container"]
     env_vars: Optional[Dict[str, str]] = None  # Environment variables
@@ -92,43 +97,69 @@ class AppleContainerResource(Resource):
     start: bool = True                # Should container be running
 ```
 
-### 2. Artifact Generator (AI Stage)
+### 2. Resource Completer (AI Stage)
 
-**Location**: `clockwork/artifact_generator.py`
+**Location**: `clockwork/resource_completer.py`
 
-Generates content using AI when resources need it:
+Completes missing fields in resources using AI via PydanticAI structured outputs:
 
 ```python
-class ArtifactGenerator:
-    def generate(self, resources: List[Resource]) -> Dict[str, str]:
-        """Generate artifacts for resources that need them."""
-        artifacts = {}
+class ResourceCompleter:
+    async def complete(self, resources: List[Resource]) -> List[Resource]:
+        """Complete partial resources using AI."""
+        completed_resources = []
+
         for resource in resources:
-            if resource.needs_artifact_generation():
-                content = self._generate_for_resource(resource)
-                artifacts[resource.name] = content
-        return artifacts
+            if resource.needs_completion():
+                # Use PydanticAI to complete missing fields
+                completed = await self._complete_resource(resource)
+                completed_resources.append(completed)
+            else:
+                # Resource is already complete
+                completed_resources.append(resource)
+
+        return completed_resources
 ```
+
+**How It Works**:
+
+1. **Check Completion Needs**: For each resource, call `needs_completion()` to see if any fields are missing (None)
+2. **Build Prompt**: Create a detailed prompt describing what fields need to be filled
+3. **PydanticAI Agent**: Create an agent with the resource's Pydantic model as the output type
+4. **Structured Output**: AI returns a complete resource object with all fields filled
+5. **Merge**: User-provided values override AI suggestions
 
 **Integration**:
 
-- Uses **OpenRouter API** via PydanticAI
+- Uses **OpenAI-compatible APIs** (OpenRouter, LM Studio, Ollama, etc.)
 - Model: `meta-llama/llama-4-scout:free` (configurable)
-- Smart prompts based on resource type, size, file format
+- Supports PydanticAI tools (web search, file access via MCP)
+- Uses `PromptedOutput` for compatibility with free models
 
 ### 3. PyInfra Compiler (Template Stage)
 
 **Location**: `clockwork/pyinfra_compiler.py`
 
-Converts resources to executable PyInfra code:
+Converts completed resources to executable PyInfra code:
 
 ```python
 class PyInfraCompiler:
-    def compile(self, resources: List[Resource], artifacts: Dict[str, str]) -> Path:
+    def compile(self, resources: List[Resource]) -> Path:
         """Compile resources to PyInfra deployment files."""
-        # Generate inventory.py (localhost)
-        # Generate deploy.py (all operations)
-        # Return path to .clockwork/pyinfra/
+        operations = []
+        destroy_operations = []
+
+        for resource in resources:
+            # Get PyInfra code from each resource
+            operations.append(resource.to_pyinfra_operations())
+            destroy_operations.append(resource.to_pyinfra_destroy_operations())
+
+        # Generate files
+        self._write_inventory()
+        self._write_deploy(operations)
+        self._write_destroy(destroy_operations)
+
+        return self.output_dir
 ```
 
 **Output Structure**:
@@ -136,7 +167,8 @@ class PyInfraCompiler:
 ```text
 .clockwork/pyinfra/
 ├── inventory.py    # "@local" (localhost)
-└── deploy.py       # All PyInfra operations
+├── deploy.py       # All PyInfra deployment operations
+└── destroy.py      # All PyInfra teardown operations
 ```
 
 ### 4. Core Orchestrator
@@ -148,25 +180,57 @@ Main pipeline coordinator:
 ```python
 class ClockworkCore:
     def apply(self, main_file: Path, dry_run: bool = False):
-        resources = self._load_resources(main_file)      # 1. Load
-        artifacts = self.artifact_generator.generate(resources)  # 2. Generate
-        pyinfra_dir = self.pyinfra_compiler.compile(resources, artifacts)  # 3. Compile
+        # 1. Load resources from main.py
+        resources = self._load_resources(main_file)
+
+        # 2. Complete resources (AI fills missing fields)
+        completed_resources = asyncio.run(
+            self.resource_completer.complete(resources)
+        )
+
+        # 3. Compile to PyInfra (template-based)
+        pyinfra_dir = self.pyinfra_compiler.compile(completed_resources)
+
+        # 4. Execute PyInfra deployment
         if not dry_run:
-            result = self._execute_pyinfra(pyinfra_dir)  # 4. Deploy
+            result = self._execute_pyinfra(pyinfra_dir, "deploy.py")
+
         return result
+
+    def plan(self, main_file: Path):
+        """Complete and compile without deploying."""
+        return self.apply(main_file, dry_run=True)
 
     def destroy(self, main_file: Path, dry_run: bool = False):
-        resources = self._load_resources(main_file)      # 1. Load
-        artifacts = self.artifact_generator.generate(resources)  # 2. Generate (if needed)
-        pyinfra_dir = self.pyinfra_compiler.compile_destroy(resources, artifacts)  # 3. Compile destroy
+        """Execute pre-generated destroy operations."""
+        # Get PyInfra directory (generated during apply)
+        pyinfra_dir = self._get_pyinfra_dir(main_file)
+
+        # Execute destroy operations
         if not dry_run:
-            result = self._execute_pyinfra(pyinfra_dir)  # 4. Execute teardown
+            result = self._execute_pyinfra(pyinfra_dir, "destroy.py")
+
+        return result
+
+    def assert_resources(self, main_file: Path, dry_run: bool = False):
+        """Validate deployed resources."""
+        # 1. Load resources
+        resources = self._load_resources(main_file)
+
+        # 2. Complete resources (if needed)
+        completed_resources = asyncio.run(
+            self.resource_completer.complete(resources)
+        )
+
+        # 3. Compile assertions
+        pyinfra_dir = self.pyinfra_compiler.compile_assert(completed_resources)
+
+        # 4. Execute assertions
+        if not dry_run:
+            result = self._execute_pyinfra(pyinfra_dir, "assert.py")
+
         return result
 ```
-
-#### Destroy Operations
-
-Each resource implements `to_pyinfra_destroy_operations()` to generate teardown code. The destroy pipeline follows the same stages but generates removal operations instead of creation operations.
 
 ### 5. CLI
 
@@ -176,7 +240,7 @@ Simple Typer-based CLI:
 
 ```bash
 uv run clockwork apply       # Full pipeline (deploy resources)
-uv run clockwork generate    # Generate artifacts without deploying
+uv run clockwork plan        # Complete resources without deploying
 uv run clockwork assert      # Validate deployed resources
 uv run clockwork destroy     # Tear down resources
 uv run clockwork version     # Show version
@@ -190,9 +254,12 @@ uv run clockwork version     # Show version
 from clockwork.resources import FileResource, ArtifactSize
 
 article = FileResource(
-    name="article.md",
+    name=None,  # AI will suggest filename
     description="Write about Conway's Game of Life",
-    size=ArtifactSize.MEDIUM
+    size=ArtifactSize.MEDIUM,
+    directory=None,  # AI will suggest directory
+    content=None,  # AI will generate content
+    mode=None  # AI will suggest permissions
 )
 ```
 
@@ -200,57 +267,67 @@ article = FileResource(
 
 - Execute `main.py` as Python module
 - Extract all `Resource` instances
-- Result: `[FileResource(name="article.md", ...)]`
+- Result: `[FileResource(name=None, description="...", ...)]`
 
-### Stage 2: Generate (AI)
+### Stage 2: Complete (AI)
 
-- Check `article.needs_artifact_generation()` → True
-- Call OpenRouter API with smart prompt
-- Result: `{"article.md": "# Conway's Game of Life\n\n..."}`
+- Check `article.needs_completion()` → True (has None fields)
+- Build prompt: "Complete this FileResource with name, directory, content, and mode"
+- Call PydanticAI with `PromptedOutput(FileResource, ...)`
+- AI returns: `FileResource(name="conways_game_of_life.md", content="# Conway's...", directory=".", mode="644")`
+- Merge with user values (user values override AI)
+- Result: Fully completed `FileResource`
 
 ### Stage 3: Compile (Template)
 
-- Call `article.to_pyinfra_operations(artifacts)`
+- Call `article.to_pyinfra_operations()`
 - Generate PyInfra code:
 
 ```python
+# Create file: conways_game_of_life.md
+with open("_temp_conways_game_of_life.md", "w") as f:
+    f.write("""# Conway's Game of Life...""")
+
 files.put(
-    name="Create article.md",
-    src=StringIO("""# Conway's Game of Life\n\n..."""),
-    dest="/tmp/article.md",
+    name="Create conways_game_of_life.md",
+    src="_temp_conways_game_of_life.md",
+    dest="/path/to/conways_game_of_life.md",
     mode="644",
 )
 ```
 
 ### Stage 4: Deploy (PyInfra)
 
-- Run: `pyinfra inventory.py deploy.py`
+- Run: `pyinfra -y inventory.py deploy.py`
 - PyInfra executes operations
-- File created at `/tmp/article.md`
+- File created at specified path
 
 ### Destroy Pipeline
 
-The destroy pipeline follows the same stages but generates teardown operations:
+The destroy pipeline uses pre-generated destroy operations:
 
-**Stage 1-2**: Load resources and generate artifacts (same as apply)
+**Stage 1-3**: Already done during `apply` - `destroy.py` is generated alongside `deploy.py`
 
-**Stage 3 (Destroy Compile)**:
+**Stage 4 (Destroy Execute)**:
 
-- Call `article.to_pyinfra_destroy_operations(artifacts)`
-- Generate PyInfra code:
+- Run: `pyinfra -y inventory.py destroy.py`
+- PyInfra removes the file
 
 ```python
 files.file(
-    name="Remove article.md",
-    path="/tmp/article.md",
+    name="Remove conways_game_of_life.md",
+    path="/path/to/conways_game_of_life.md",
     present=False,
 )
 ```
 
-**Stage 4 (Destroy Execute)**:
+### Assert Pipeline
 
-- Run: `pyinfra inventory.py deploy.py`
-- PyInfra removes the file
+The assert pipeline validates deployed resources:
+
+**Stages 1-3**: Load → Complete → Compile assertions
+
+**Stage 4**: Execute `assert.py` with PyInfra to validate resources are correctly deployed
 
 ## Design Principles
 
@@ -260,10 +337,11 @@ files.file(
 - Pydantic for type safety and validation
 - Full IDE support and autocompletion
 
-### 2. Intelligent Processing
+### 2. Intelligent Completion
 
-- **AI Stage**: Dynamic, intelligent content and configuration generation
+- **AI Stage**: Fills in missing fields intelligently using structured outputs
 - **Compilation Stage**: Deterministic transformation to PyInfra operations
+- **User Override**: User-provided values always take precedence
 
 ### 3. Automated Deployment
 
@@ -273,7 +351,7 @@ files.file(
 
 ### 4. Simplicity
 
-- Linear orchestration pipeline: Load → Generate → Compile → Deploy
+- Linear orchestration pipeline: Load → Complete → Compile → Deploy
 - No complex dependency graphs or state management
 - Clear separation of concerns between stages
 
@@ -285,52 +363,50 @@ files.file(
 
 ```python
 class ServiceResource(Resource):
-    # Define fields
+    name: str
+    service_name: Optional[str] = None  # AI can suggest
+    port: Optional[int] = None          # AI can suggest
 
-    def needs_artifact_generation(self) -> bool:
-        # Logic to determine if AI needed
+    def needs_completion(self) -> bool:
+        return self.service_name is None or self.port is None
 
-    def to_pyinfra_operations(self, artifacts: Dict[str, Any]) -> str:
-        # Return PyInfra operation code for deployment
-        return '''
-        server.systemd.service(
-            name="Start my service",
-            service="myapp",
-            running=True,
-        )
-        '''
+    def to_pyinfra_operations(self) -> str:
+        return f'''
+server.systemd.service(
+    name="Start {self.name}",
+    service="{self.service_name}",
+    running=True,
+    enabled=True,
+)
+'''
 
-    def to_pyinfra_destroy_operations(self, artifacts: Dict[str, Any]) -> str:
-        # Return PyInfra operation code for teardown
-        return '''
-        server.systemd.service(
-            name="Stop my service",
-            service="myapp",
-            running=False,
-            enabled=False,
-        )
-        '''
+    def to_pyinfra_destroy_operations(self) -> str:
+        return f'''
+server.systemd.service(
+    name="Stop {self.name}",
+    service="{self.service_name}",
+    running=False,
+    enabled=False,
+)
+'''
 ```
 
-#### Real Example: AppleContainerResource
-
-See `clockwork/resources/apple_container.py` for a complete implementation that:
-
-- Uses AI to suggest container images when not specified
-- Supports ports, volumes, environment variables, and networks
-- Implements both deploy and destroy operations
-- Provides comprehensive documentation and examples
-
-1. Export in `__init__.py`
-2. Add tests
-3. Create example
+2. Export in `__init__.py`
+3. Add tests
+4. Create example
 
 ### Custom AI Models
 
 Change model via CLI or environment:
 
 ```bash
-clockwork apply main.py --model "anthropic/claude-3.5-sonnet"
+# Cloud (OpenRouter)
+clockwork apply --model "openai/gpt-4o-mini"
+
+# Local (LM Studio)
+export CW_BASE_URL="http://localhost:1234/v1"
+export CW_MODEL="local-model"
+clockwork apply
 ```
 
 ### Different Deployment Targets
@@ -340,11 +416,11 @@ PyInfra supports many targets (SSH, Docker, Kubernetes). Modify `inventory.py` g
 ```python
 def _generate_inventory(self) -> str:
     return '''
-    production_servers = [
-        "ssh://user@server1.example.com",
-        "ssh://user@server2.example.com",
-    ]
-    '''
+production_servers = [
+    "ssh://user@server1.example.com",
+    "ssh://user@server2.example.com",
+]
+'''
 ```
 
 ## Dependencies
@@ -357,9 +433,8 @@ dependencies = [
     "typer>=0.16.0",                             # CLI
     "rich>=13.0.0",                              # Terminal output
     "pydantic-ai-slim[mcp,duckduckgo]>=0.0.49", # AI framework with MCP support
-    "openai>=1.99.9",                            # OpenRouter client
+    "openai>=1.99.9",                            # OpenAI-compatible client
     "pyinfra>=3.0",                              # Deployment engine
-    "mcp>=1.0.0",                                # Model Context Protocol
 ]
 ```
 
@@ -368,11 +443,11 @@ dependencies = [
 | Feature | Implementation |
 |---------|----------------|
 | **Config Format** | Python (Pydantic models) |
-| **AI Integration** | OpenRouter API (cloud-based) |
+| **AI Integration** | OpenAI-compatible APIs (cloud or local) |
 | **Execution** | PyInfra (battle-tested) |
 | **State Management** | PyInfra handles it |
 | **Code Size** | ~1,000 lines of core logic |
-| **Dependencies** | 8 focused packages |
+| **Dependencies** | 7 focused packages |
 | **Complexity** | Simple linear pipeline |
 
 ## Future Enhancements
@@ -380,7 +455,7 @@ dependencies = [
 - More resource types for broader infrastructure coverage
 - Remote deployment targets (SSH, Kubernetes)
 - Resource dependency orchestration
-- AI artifact caching and optimization
+- Resource completion caching and optimization
 - Streaming output for real-time feedback
 - Multi-container orchestration patterns
 - Advanced state tracking and lifecycle management

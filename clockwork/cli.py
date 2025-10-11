@@ -66,7 +66,7 @@ def _create_command_panel(title: str, color: str) -> Panel:
     return Panel.fit(
         f"[bold {color}]{title}[/bold {color}]\n"
         f"Directory: {Path.cwd().name}\n"
-        f"Model: {settings.openrouter_model}",
+        f"Model: {settings.model}",
         border_style=color
     )
 
@@ -75,15 +75,15 @@ def _initialize_core(api_key: str = None, model: str = None) -> ClockworkCore:
     """Initialize ClockworkCore with optional overrides.
 
     Args:
-        api_key: Optional OpenRouter API key override
+        api_key: Optional API key override
         model: Optional model override
 
     Returns:
         Configured ClockworkCore instance
     """
     return ClockworkCore(
-        openrouter_api_key=api_key,
-        openrouter_model=model
+        api_key=api_key,
+        model=model
     )
 
 
@@ -113,15 +113,15 @@ def apply(
     api_key: str = typer.Option(
         None,
         "--api-key",
-        help="OpenRouter API key (overrides .env)"
+        help="API key for AI service (overrides .env)"
     ),
     model: str = typer.Option(
         None,
         "--model",
-        help="OpenRouter model (overrides .env)"
+        help="Model name (overrides .env)"
     ),
 ):
-    """Apply infrastructure: generate artifacts + compile + deploy."""
+    """Apply infrastructure: complete resources + compile + deploy."""
     main_file = _get_main_file()
     console.print(_create_command_panel("Clockwork Apply", "blue"))
 
@@ -139,34 +139,34 @@ def apply(
 
 
 @app.command()
-def generate(
+def plan(
     api_key: str = typer.Option(
         None,
         "--api-key",
-        help="OpenRouter API key (overrides .env)"
+        help="API key for AI service (overrides .env)"
     ),
     model: str = typer.Option(
         None,
         "--model",
-        help="OpenRouter model (overrides .env)"
+        help="Model name (overrides .env)"
     ),
 ):
-    """Generate artifacts and compile without deploying."""
+    """Complete resources and compile without deploying."""
     main_file = _get_main_file()
-    console.print(_create_command_panel("Clockwork Generate", "cyan"))
+    console.print(_create_command_panel("Clockwork Plan", "cyan"))
 
     try:
         core = _initialize_core(api_key, model)
         result = core.plan(main_file)
 
-        console.print(f"\n[bold]Generation Summary:[/bold]")
+        console.print(f"\n[bold]Plan Summary:[/bold]")
         console.print(f"  Resources: {result['resources']}")
-        console.print(f"  Artifacts generated: {result['artifacts']}")
+        console.print(f"  Completed resources: {result['completed_resources']}")
         console.print(f"  PyInfra directory: {result['pyinfra_dir']}")
         console.print("\n[dim]Run 'clockwork apply' to deploy these resources.[/dim]")
 
     except Exception as e:
-        _handle_command_error(e, "generation")
+        _handle_command_error(e, "plan")
 
 
 @app.command()
@@ -174,12 +174,12 @@ def destroy(
     api_key: str = typer.Option(
         None,
         "--api-key",
-        help="OpenRouter API key (overrides .env)"
+        help="API key for AI service (overrides .env)"
     ),
     model: str = typer.Option(
         None,
         "--model",
-        help="OpenRouter model (overrides .env)"
+        help="Model name (overrides .env)"
     ),
 ):
     """Destroy infrastructure: remove all deployed resources."""
@@ -204,12 +204,12 @@ def assert_cmd(
     api_key: str = typer.Option(
         None,
         "--api-key",
-        help="OpenRouter API key (overrides .env)"
+        help="API key for AI service (overrides .env)"
     ),
     model: str = typer.Option(
         None,
         "--model",
-        help="OpenRouter model (overrides .env)"
+        help="Model name (overrides .env)"
     ),
 ):
     """Run assertions to validate deployed resources."""

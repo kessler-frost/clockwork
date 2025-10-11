@@ -74,14 +74,18 @@ def test_needs_artifact_generation_no_image():
 
 
 def test_needs_artifact_generation_with_image():
-    """Test needs_artifact_generation() returns False when image is specified."""
+    """Test needs_completion() returns False when all fields are specified."""
     container = AppleContainerResource(
         name="nginx",
         description="Web server",
-        image="nginx:latest"
+        image="nginx:latest",
+        ports=[],
+        volumes=[],
+        env_vars={},
+        networks=[]
     )
 
-    assert container.needs_artifact_generation() is False
+    assert container.needs_completion() is False
 
 
 def test_to_pyinfra_operations_with_image():
@@ -96,7 +100,7 @@ def test_to_pyinfra_operations_with_image():
         networks=["cache"]
     )
 
-    operations = container.to_pyinfra_operations({})
+    operations = container.to_pyinfra_operations()
 
     # Check apple_containers operation calls
     assert 'apple_containers.container_remove(' in operations
@@ -120,20 +124,22 @@ def test_to_pyinfra_operations_with_image():
 
 
 def test_to_pyinfra_operations_with_ai_image():
-    """Test PyInfra code generation with AI-suggested image from artifacts."""
+    """Test PyInfra code generation with AI-completed fields."""
     container = AppleContainerResource(
         name="nginx-ai",
         description="Web server for static content"
     )
 
-    # Simulate AI-generated artifact
-    artifacts = {
-        "nginx-ai": {"image": "nginx:latest"}
-    }
+    # Simulate AI completion
+    container.image = "nginx:latest"
+    container.ports = []
+    container.volumes = []
+    container.env_vars = {}
+    container.networks = []
 
-    operations = container.to_pyinfra_operations(artifacts)
+    operations = container.to_pyinfra_operations()
 
-    # Check that AI-suggested image is used
+    # Check that AI-completed image is used
     assert 'nginx:latest' in operations
     assert 'name="nginx-ai"' in operations
     assert 'apple_containers.container_run(' in operations
@@ -148,7 +154,7 @@ def test_to_pyinfra_operations_multiple_ports():
         ports=["80:80", "443:443", "8080:8080"]
     )
 
-    operations = container.to_pyinfra_operations({})
+    operations = container.to_pyinfra_operations()
 
     assert '"80:80"' in operations
     assert '"443:443"' in operations
@@ -169,7 +175,7 @@ def test_to_pyinfra_operations_multiple_volumes():
         ]
     )
 
-    operations = container.to_pyinfra_operations({})
+    operations = container.to_pyinfra_operations()
 
     assert '"/host/data:/container/data"' in operations
     assert '"named_volume:/app"' in operations
@@ -186,7 +192,7 @@ def test_to_pyinfra_operations_multiple_networks():
         networks=["frontend", "backend", "monitoring"]
     )
 
-    operations = container.to_pyinfra_operations({})
+    operations = container.to_pyinfra_operations()
 
     assert '"frontend"' in operations
     assert '"backend"' in operations
@@ -208,7 +214,7 @@ def test_to_pyinfra_operations_complex_env_vars():
         }
     )
 
-    operations = container.to_pyinfra_operations({})
+    operations = container.to_pyinfra_operations()
 
     assert '"DATABASE_URL": "postgresql://user:pass@db:5432/mydb"' in operations
     assert '"REDIS_URL": "redis://cache:6379"' in operations
@@ -218,35 +224,34 @@ def test_to_pyinfra_operations_complex_env_vars():
 
 
 def test_to_pyinfra_operations_artifact_string_format():
-    """Test PyInfra code generation when artifact is a string (not dict)."""
+    """Test PyInfra code generation with completed fields."""
     container = AppleContainerResource(
         name="test",
-        description="Test container"
+        description="Test container",
+        image="simple:latest",
+        ports=[],
+        volumes=[],
+        env_vars={},
+        networks=[]
     )
 
-    # Artifact as simple string instead of dict
-    artifacts = {
-        "test": "simple:latest"
-    }
+    operations = container.to_pyinfra_operations()
 
-    operations = container.to_pyinfra_operations(artifacts)
-
-    # Should handle string artifact format
+    # Should use completed image field
     assert 'simple:latest' in operations
     assert 'apple_containers.container_run(' in operations
 
 
-def test_to_pyinfra_operations_missing_artifact():
-    """Test PyInfra code generation when artifact is missing uses empty string."""
+def test_to_pyinfra_operations_missing_fields_raises_error():
+    """Test PyInfra code generation when fields are not completed raises error."""
     container = AppleContainerResource(
         name="missing",
-        description="Container with missing artifact"
+        description="Container with missing fields"
     )
 
-    operations = container.to_pyinfra_operations({})
-
-    # Should fall back to empty string when artifact is missing
-    assert 'apple_containers.container_run(' in operations
+    # Should raise error when required fields are not completed
+    with pytest.raises(ValueError, match="Resource fields not completed"):
+        container.to_pyinfra_operations()
 
 
 def test_to_pyinfra_destroy_operations():
@@ -257,7 +262,7 @@ def test_to_pyinfra_destroy_operations():
         image="alpine:latest"
     )
 
-    operations = container.to_pyinfra_destroy_operations({})
+    operations = container.to_pyinfra_destroy_operations()
 
     # Check destroy operation uses apple_containers.container_remove
     assert 'name="Remove remove-me"' in operations
@@ -266,21 +271,19 @@ def test_to_pyinfra_destroy_operations():
     assert 'force=True' in operations
 
 
-def test_to_pyinfra_destroy_operations_ignores_artifacts():
-    """Test destroy operations don't use artifacts."""
+def test_to_pyinfra_destroy_operations_only_needs_name():
+    """Test destroy operations only need name field."""
     container = AppleContainerResource(
         name="test-destroy",
         description="Test"
     )
 
-    # Provide artifacts, but they should be ignored
-    artifacts = {"test-destroy": {"image": "nginx:latest"}}
-    operations = container.to_pyinfra_destroy_operations(artifacts)
+    # Destroy only needs name field
+    operations = container.to_pyinfra_destroy_operations()
 
     # Should only have container_remove operation
     assert 'apple_containers.container_remove(' in operations
     assert 'container_id="test-destroy"' in operations
-    assert 'nginx:latest' not in operations
 
 
 def test_apple_container_resource_present_false():
@@ -292,7 +295,7 @@ def test_apple_container_resource_present_false():
         present=False
     )
 
-    operations = container.to_pyinfra_operations({})
+    operations = container.to_pyinfra_operations()
 
     # When present=False, should remove the container
     assert 'apple_containers.container_remove(' in operations
@@ -308,7 +311,7 @@ def test_apple_container_resource_start_false():
         start=False
     )
 
-    operations = container.to_pyinfra_operations({})
+    operations = container.to_pyinfra_operations()
 
     # When start=False, should use 'container_create' instead of 'container_run'
     assert 'apple_containers.container_create(' in operations
@@ -326,7 +329,7 @@ def test_container_run_command_format():
         env_vars={"KEY": "value"}
     )
 
-    operations = container.to_pyinfra_operations({})
+    operations = container.to_pyinfra_operations()
 
     # Verify operation structure
     assert 'apple_containers.container_run(' in operations
@@ -345,7 +348,7 @@ def test_to_pyinfra_assert_operations_default():
         image="nginx:latest"
     )
 
-    operations = container.to_pyinfra_assert_operations({})
+    operations = container.to_pyinfra_assert_operations()
 
     # Check for default assertions using custom facts
     assert 'ContainerExists' in operations
@@ -364,7 +367,7 @@ def test_to_pyinfra_assert_operations_present_only():
         start=False
     )
 
-    operations = container.to_pyinfra_assert_operations({})
+    operations = container.to_pyinfra_assert_operations()
 
     # Should check existence but not running status
     assert 'ContainerExists' in operations
@@ -375,11 +378,7 @@ def test_to_pyinfra_assert_operations_present_only():
 
 
 def test_pydantic_validation():
-    """Test Pydantic validation enforces required fields."""
-    with pytest.raises(Exception):
-        # Missing required 'name' field
-        AppleContainerResource(description="Test")
-
+    """Test Pydantic validation enforces required description field."""
     with pytest.raises(Exception):
         # Missing required 'description' field
         AppleContainerResource(name="test")
@@ -393,9 +392,9 @@ def test_container_commands_not_docker():
         image="nginx:latest"
     )
 
-    operations = container.to_pyinfra_operations({})
-    destroy_ops = container.to_pyinfra_destroy_operations({})
-    assert_ops = container.to_pyinfra_assert_operations({})
+    operations = container.to_pyinfra_operations()
+    destroy_ops = container.to_pyinfra_destroy_operations()
+    assert_ops = container.to_pyinfra_assert_operations()
 
     # Verify no docker commands are used
     assert "docker" not in operations.lower()

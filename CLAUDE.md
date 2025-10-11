@@ -32,7 +32,7 @@ For Linux/remote deployments, modify the inventory in your `main.py` or use SSH 
 Clockwork provides **intelligent infrastructure orchestration** using a simple **Python + PyInfra** architecture:
 
 1. **Declare** (Pydantic models): Define infrastructure in pure Python
-2. **Generate** (AI via OpenRouter): Intelligent artifact and configuration creation
+2. **Complete** (AI): Intelligent resource completion with missing fields
 3. **Compile** (Templates): Convert resources to PyInfra operations
 4. **Deploy** (PyInfra): Execute infrastructure deployment
 
@@ -117,7 +117,7 @@ clockwork assert
 
 ## Tool Usage
 
-Clockwork supports **PydanticAI tools** and **MCP (Model Context Protocol) servers** to extend AI capabilities during artifact generation. Tools enable the AI to access real-time information, interact with external systems, and perform complex operations beyond its base knowledge.
+Clockwork supports **PydanticAI tools** and **MCP (Model Context Protocol) servers** to extend AI capabilities during resource completion. Tools enable the AI to access real-time information, interact with external systems, and perform complex operations beyond its base knowledge.
 
 ### Available Tool Types
 
@@ -130,7 +130,7 @@ Clockwork supports **PydanticAI tools** and **MCP (Model Context Protocol) serve
    - Filesystem access, database queries, API integrations
    - Any MCP-compatible server (stdio, HTTP, or Docker-based)
 
-> **Note on Built-in Tools:** PydanticAI has provider-specific built-in tools like `WebSearchTool` and `CodeExecutionTool` that only work with Anthropic (`claude-sonnet-4-0`) and OpenAI (`gpt-4.1`) native APIs. Since Clockwork uses **OpenRouter with free models**, we use **common tools** instead, which work universally with any provider.
+> **Note on Built-in Tools:** PydanticAI has provider-specific built-in tools like `WebSearchTool` and `CodeExecutionTool` that only work with Anthropic (`claude-sonnet-4-0`) and OpenAI (`gpt-4.1`) native APIs. Since Clockwork uses **OpenAI-compatible APIs** (which includes OpenRouter, LM Studio, Ollama, etc.), we use **common tools** instead, which work universally with any provider.
 
 ### Using PydanticAI Tools
 
@@ -353,10 +353,20 @@ Clockwork uses **Pydantic Settings** for configuration management via `.env` fil
 
 Create a `.env` file in the project root:
 
+**For LM Studio (local development):**
 ```bash
-CW_OPENROUTER_API_KEY=your-api-key-here
-CW_OPENROUTER_MODEL=meta-llama/llama-4-scout:free
-CW_OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+CW_API_KEY=lm-studio
+CW_MODEL=local-model
+CW_BASE_URL=http://localhost:1234/v1
+CW_PYINFRA_OUTPUT_DIR=.clockwork/pyinfra
+CW_LOG_LEVEL=INFO
+```
+
+**For OpenRouter (cloud):**
+```bash
+CW_API_KEY=your-api-key-here
+CW_MODEL=meta-llama/llama-4-scout:free
+CW_BASE_URL=https://openrouter.ai/api/v1
 CW_PYINFRA_OUTPUT_DIR=.clockwork/pyinfra
 CW_LOG_LEVEL=INFO
 ```
@@ -365,9 +375,9 @@ CW_LOG_LEVEL=INFO
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `CW_OPENROUTER_API_KEY` | None | OpenRouter API key (required) |
-| `CW_OPENROUTER_MODEL` | `meta-llama/llama-4-scout:free` | Model for AI generation |
-| `CW_OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | OpenRouter API endpoint |
+| `CW_API_KEY` | None | API key (required for cloud models) |
+| `CW_MODEL` | `meta-llama/llama-4-scout:free` | Model for AI completion |
+| `CW_BASE_URL` | `https://openrouter.ai/api/v1` | API endpoint (use `http://localhost:1234/v1` for LM Studio) |
 | `CW_PYINFRA_OUTPUT_DIR` | `.clockwork/pyinfra` | PyInfra output directory |
 | `CW_LOG_LEVEL` | `INFO` | Logging level |
 
@@ -376,14 +386,14 @@ CW_LOG_LEVEL=INFO
 Settings can be overridden:
 
 1. **CLI flags** (highest priority) - `--api-key`, `--model`
-2. **Environment variables** - `export CW_OPENROUTER_API_KEY="..."`
+2. **Environment variables** - `export CW_API_KEY="..."`
 3. **.env file** - loaded from project root
 4. **Defaults** (lowest priority) - defined in settings
 
 Example using CLI override:
 
 ```bash
-uv run clockwork apply --model "openai/gpt-4o-mini"
+uv run clockwork apply --model "meta-llama/llama-4-maverick:free"
 ```
 
 ### PyInfra Output
@@ -394,6 +404,46 @@ Clockwork generates PyInfra files in the configured output directory (default: `
 - `deploy.py` - Infrastructure operations
 - `destroy.py` - Cleanup operations (generated during apply)
 - `assert.py` - Assertion validations (generated during assert)
+
+### Recommended AI Models
+
+Clockwork supports both **local models** (LM Studio, Ollama) and **cloud models** (OpenRouter) for AI-powered resource completion.
+
+#### Local Models (LM Studio, Ollama)
+
+**LM Studio** ✅ **RECOMMENDED FOR LOCAL** - Best local development experience:
+```bash
+# .env configuration for LM Studio
+CW_API_KEY=lm-studio
+CW_MODEL=local-model
+CW_BASE_URL=http://localhost:1234/v1
+```
+
+**Ollama** - Alternative local option:
+```bash
+# .env configuration for Ollama
+CW_API_KEY=ollama
+CW_MODEL=llama3.2
+CW_BASE_URL=http://localhost:11434/v1
+```
+
+#### Cloud Models (OpenRouter)
+
+**Recommended FREE models**:
+- `meta-llama/llama-4-scout:free` ✅ Fast and capable
+- `qwen/qwen-2.5-72b-instruct:free` ✅ Alternative free option
+- `google/gemini-2.0-flash-exp:free` ⚠️ Can be rate-limited
+
+**Paid models** (better support for structured outputs):
+- `openai/gpt-4o-mini` - Inexpensive, excellent structured output support
+- `anthropic/claude-3-haiku` - Fast and reliable
+
+OpenRouter configuration:
+```bash
+CW_API_KEY=your-api-key-here
+CW_MODEL=meta-llama/llama-4-scout:free
+CW_BASE_URL=https://openrouter.ai/api/v1
+```
 
 ## Project Structure
 
@@ -408,7 +458,7 @@ clockwork/
 │   │   └── apple_containers.py # Apple Containers CLI operations
 │   ├── pyinfra_facts/         # Custom PyInfra facts
 │   │   └── apple_containers.py # Apple Containers CLI facts
-│   ├── artifact_generator.py  # AI-powered content generation
+│   ├── resource_completer.py  # AI-powered resource completion
 │   ├── pyinfra_compiler.py    # Template-based PyInfra code gen
 │   ├── core.py                # Main pipeline orchestrator
 │   ├── cli.py                 # CLI interface
@@ -435,8 +485,8 @@ class MyResource(Resource):
     name: str
     # ... your fields
 
-    def needs_artifact_generation(self) -> bool:
-        # Return True if AI should generate content
+    def needs_completion(self) -> bool:
+        # Return True if AI should complete missing fields
         return self.content is None
 
     def to_pyinfra_operations(self, artifacts: Dict[str, Any]) -> str:
@@ -512,7 +562,7 @@ Test the full pipeline:
 
 ```bash
 # Create .env file with API key
-echo "CW_OPENROUTER_API_KEY=your-key-here" > .env
+echo "CW_API_KEY=your-key-here" > .env
 
 # Run file generation example
 cd examples/file-generation
@@ -557,7 +607,7 @@ Key conventions:
 ## Important Notes
 
 - **Settings-based configuration**: Always use `.env` file or `get_settings()`, never hardcode
-- **AI requires API key**: OpenRouter API key must be configured in `.env` file
+- **AI requires API key**: API key must be configured in `.env` file (for cloud models)
 - **Keep it simple**: PyInfra handles all the complex execution logic
 - **Test the demo**: Always verify the examples work by running `clockwork apply` from their directories
 

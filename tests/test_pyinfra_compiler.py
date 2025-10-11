@@ -3,7 +3,7 @@
 import pytest
 from pathlib import Path
 from clockwork.pyinfra_compiler import PyInfraCompiler
-from clockwork.resources import FileResource, ArtifactSize
+from clockwork.resources import FileResource
 
 
 def test_pyinfra_compiler_initialization():
@@ -28,18 +28,17 @@ def test_deploy_generation():
     """Test deploy.py generation."""
     compiler = PyInfraCompiler()
 
+    # Resources must be completed (all fields set)
     resources = [
         FileResource(
             name="test.txt",
             description="Test",
-            size=ArtifactSize.SMALL,
-            path="/tmp/test.txt"
+            path="/tmp/test.txt",
+            content="test content"
         )
     ]
 
-    artifacts = {"test.txt": "test content"}
-
-    deploy = compiler._generate_deploy(resources, artifacts)
+    deploy = compiler._generate_deploy(resources)
 
     assert "from pyinfra.operations import files" in deploy
     assert "files.put" in deploy
@@ -50,21 +49,21 @@ def test_compile_creates_files(tmp_path):
     """Test that compile creates the necessary files."""
     compiler = PyInfraCompiler(output_dir=str(tmp_path))
 
+    # Resources must be completed (all fields set)
     resources = [
         FileResource(
             name="example.md",
             description="Example",
-            size=ArtifactSize.SMALL
+            content="# Example"
         )
     ]
 
-    artifacts = {"example.md": "# Example"}
-
-    result_dir = compiler.compile(resources, artifacts)
+    result_dir = compiler.compile(resources)
 
     assert result_dir.exists()
     assert (result_dir / "inventory.py").exists()
     assert (result_dir / "deploy.py").exists()
+    assert (result_dir / "destroy.py").exists()
 
     # Verify content
     deploy_content = (result_dir / "deploy.py").read_text()
@@ -75,34 +74,29 @@ def test_compile_multiple_resources(tmp_path):
     """Test compile with multiple resources."""
     compiler = PyInfraCompiler(output_dir=str(tmp_path))
 
+    # Resources must be completed (all fields set)
     resources = [
         FileResource(
             name="file1.txt",
             description="First file",
-            size=ArtifactSize.SMALL,
-            path="/tmp/file1.txt"
+            path="/tmp/file1.txt",
+            content="content1"
         ),
         FileResource(
             name="file2.md",
             description="Second file",
-            size=ArtifactSize.MEDIUM,
-            path="/tmp/file2.md"
+            path="/tmp/file2.md",
+            content="# content2"
         ),
         FileResource(
             name="file3.json",
             description="Third file",
-            size=ArtifactSize.LARGE,
-            path="/tmp/file3.json"
+            path="/tmp/file3.json",
+            content='{"key": "value"}'
         )
     ]
 
-    artifacts = {
-        "file1.txt": "content1",
-        "file2.md": "# content2",
-        "file3.json": '{"key": "value"}'
-    }
-
-    result_dir = compiler.compile(resources, artifacts)
+    result_dir = compiler.compile(resources)
 
     deploy_content = (result_dir / "deploy.py").read_text()
 
@@ -123,15 +117,11 @@ def test_compile_with_user_provided_content(tmp_path):
         FileResource(
             name="manual.txt",
             description="Manual file",
-            size=ArtifactSize.SMALL,
             content="This is manually provided content"
         )
     ]
 
-    # No artifacts needed for manual content
-    artifacts = {}
-
-    result_dir = compiler.compile(resources, artifacts)
+    result_dir = compiler.compile(resources)
     deploy_content = (result_dir / "deploy.py").read_text()
 
     assert "manually provided content" in deploy_content
@@ -148,11 +138,11 @@ def test_compile_creates_directory(tmp_path):
         FileResource(
             name="test.txt",
             description="Test",
-            size=ArtifactSize.SMALL
+            content="test content"
         )
     ]
 
-    result_dir = compiler.compile(resources, {})
+    result_dir = compiler.compile(resources)
 
     assert output_dir.exists()
     assert result_dir == output_dir
@@ -166,11 +156,11 @@ def test_deploy_has_proper_structure(tmp_path):
         FileResource(
             name="test.txt",
             description="Test",
-            size=ArtifactSize.SMALL
+            content="content"
         )
     ]
 
-    result_dir = compiler.compile(resources, {"test.txt": "content"})
+    result_dir = compiler.compile(resources)
     deploy_path = result_dir / "deploy.py"
 
     # Verify the file is valid Python by compiling it
@@ -186,11 +176,11 @@ def test_inventory_has_proper_structure(tmp_path):
         FileResource(
             name="test.txt",
             description="Test",
-            size=ArtifactSize.SMALL
+            content="content"
         )
     ]
 
-    result_dir = compiler.compile(resources, {})
+    result_dir = compiler.compile(resources)
     inventory_path = result_dir / "inventory.py"
 
     # Verify the file is valid Python by compiling it

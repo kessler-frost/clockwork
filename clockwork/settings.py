@@ -32,20 +32,20 @@ class ClockworkSettings(BaseSettings):
         env_prefix="CW_"  # All Clockwork env vars must start with CW_
     )
 
-    # OpenRouter Configuration
-    openrouter_api_key: Optional[str] = Field(
+    # AI Configuration (OpenAI-compatible API)
+    api_key: Optional[str] = Field(
         default=None,
-        description="OpenRouter API key for AI artifact generation (env: CW_OPENROUTER_API_KEY)"
+        description="API key for AI service (env: CW_API_KEY)"
     )
 
-    openrouter_model: str = Field(
+    model: str = Field(
         default="meta-llama/llama-4-scout:free",
-        description="OpenRouter model to use for artifact generation (env: CW_OPENROUTER_MODEL)"
+        description="Model name for AI resource completion (env: CW_MODEL)"
     )
 
-    openrouter_base_url: str = Field(
+    base_url: str = Field(
         default="https://openrouter.ai/api/v1",
-        description="OpenRouter API base URL (env: CW_OPENROUTER_BASE_URL)"
+        description="Base URL for OpenAI-compatible API endpoint (env: CW_BASE_URL)"
     )
 
     # PyInfra Configuration

@@ -18,53 +18,97 @@ class ArtifactSize(str, Enum):
 class Resource(BaseModel):
     """Base resource class - all resources inherit from this.
 
+    The new completion-based architecture allows resources to have optional fields
+    that can be filled in by AI during the completion stage. Instead of generating
+    separate "artifacts", the AI directly populates missing fields on the resource
+    objects themselves.
+
+    Completion Flow:
+    1. User creates resource with some fields set to None (e.g., name=None, image=None)
+    2. needs_completion() checks if any completable fields are None
+    3. AI fills in the missing fields by creating a new completed resource instance
+    4. PyInfra operations use self.* fields directly (no artifacts dict needed)
+
     Attributes:
-        name: Unique identifier for the resource
-        description: Optional human-readable description of the resource
+        name: Optional unique identifier (can be AI-completed if None)
+        description: Optional human-readable description (used as context for AI)
         assertions: Optional list of type-safe assertion objects for validation
-        tools: Optional list of PydanticAI tools (duckduckgo_search_tool(), MCPServerStdio, etc.) for AI-powered operations
+        tools: Optional list of PydanticAI tools (duckduckgo_search_tool(), MCPServerStdio, etc.)
+               for AI-powered completion operations
     """
 
-    name: str
+    name: Optional[str] = None
     description: Optional[str] = None
     assertions: Optional[List["BaseAssertion"]] = None
 
     # AI and integration capabilities
     tools: Optional[List[Any]] = None  # PydanticAI tools (duckduckgo_search_tool(), MCPServerStdio, etc.)
 
-    def needs_artifact_generation(self) -> bool:
-        """Does this resource need AI to generate content?"""
-        raise NotImplementedError(f"{self.__class__.__name__} must implement needs_artifact_generation()")
+    def needs_completion(self) -> bool:
+        """Check if this resource needs AI completion for any fields.
 
-    def to_pyinfra_operations(self, artifacts: Dict[str, Any]) -> str:
+        Override this method in subclasses to define which fields can be AI-completed.
+        The default implementation only checks if name is None.
+
+        Returns:
+            True if any completable fields are None, False otherwise
+
+        Example:
+            class MyResource(Resource):
+                content: Optional[str] = None
+
+                def needs_completion(self) -> bool:
+                    return self.name is None or self.content is None
+        """
+        return self.name is None
+
+    def to_pyinfra_operations(self) -> str:
         """Generate PyInfra operations code (template-based).
 
-        Args:
-            artifacts: Dict mapping resource names to generated content
+        This method is called after AI completion, so all required fields should
+        be populated. Access fields directly via self.* instead of using an
+        artifacts dict.
 
         Returns:
             String of PyInfra operation code
+
+        Example:
+            def to_pyinfra_operations(self) -> str:
+                return f'''
+files.file(
+    name="Create {self.name}",
+    path="/tmp/{self.name}",
+    content="{self.content}"
+)
+'''
         """
         raise NotImplementedError(f"{self.__class__.__name__} must implement to_pyinfra_operations()")
 
-    def to_pyinfra_destroy_operations(self, artifacts: Dict[str, Any]) -> str:
+    def to_pyinfra_destroy_operations(self) -> str:
         """Generate PyInfra operations code to destroy/remove this resource.
 
-        Args:
-            artifacts: Dict mapping resource names to generated content
+        Access resource fields directly via self.* to generate cleanup operations.
 
         Returns:
             String of PyInfra operation code to destroy the resource
+
+        Example:
+            def to_pyinfra_destroy_operations(self) -> str:
+                return f'''
+files.file(
+    name="Remove {self.name}",
+    path="/tmp/{self.name}",
+    present=False
+)
+'''
         """
         raise NotImplementedError(f"{self.__class__.__name__} must implement to_pyinfra_destroy_operations()")
 
-    def to_pyinfra_assert_operations(self, artifacts: Dict[str, Any]) -> str:
+    def to_pyinfra_assert_operations(self) -> str:
         """Generate PyInfra operations code for assertions.
 
         Only processes BaseAssertion objects (type-safe assertions).
-
-        Args:
-            artifacts: Dict mapping resource names to generated content
+        Access resource fields directly via self.* when generating assertions.
 
         Returns:
             String of PyInfra assertion operation code

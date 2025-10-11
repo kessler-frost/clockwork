@@ -3,7 +3,7 @@
 import pytest
 import subprocess
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch, MagicMock, AsyncMock
 from clockwork.core import ClockworkCore
 from clockwork.resources import FileResource, ArtifactSize
 
@@ -23,11 +23,12 @@ test_file = FileResource(
 ''')
 
     # Mock the artifact generator to avoid requiring API key
-    with patch('clockwork.core.ArtifactGenerator') as mock_generator:
+    with patch('clockwork.core.ResourceCompleter') as mock_generator:
         mock_instance = Mock()
+        mock_instance.complete = AsyncMock(return_value=[])  # Return completed resources
         mock_generator.return_value = mock_instance
 
-        core = ClockworkCore(openrouter_api_key="test-key")
+        core = ClockworkCore(api_key="test-key")
         resources = core._load_resources(main_file)
 
     assert len(resources) == 1
@@ -61,11 +62,12 @@ script = FileResource(
 )
 ''')
 
-    with patch('clockwork.core.ArtifactGenerator') as mock_generator:
+    with patch('clockwork.core.ResourceCompleter') as mock_generator:
         mock_instance = Mock()
+        mock_instance.complete = AsyncMock(return_value=[])  # Return completed resources
         mock_generator.return_value = mock_instance
 
-        core = ClockworkCore(openrouter_api_key="test-key")
+        core = ClockworkCore(api_key="test-key")
         resources = core._load_resources(main_file)
 
     assert len(resources) == 3
@@ -77,11 +79,12 @@ script = FileResource(
 
 def test_load_resources_file_not_found():
     """Test error handling when main file doesn't exist."""
-    with patch('clockwork.core.ArtifactGenerator') as mock_generator:
+    with patch('clockwork.core.ResourceCompleter') as mock_generator:
         mock_instance = Mock()
+        mock_instance.complete = AsyncMock(return_value=[])  # Return completed resources
         mock_generator.return_value = mock_instance
 
-        core = ClockworkCore(openrouter_api_key="test-key")
+        core = ClockworkCore(api_key="test-key")
 
         with pytest.raises(FileNotFoundError):
             core._load_resources(Path("/nonexistent/main.py"))
@@ -96,11 +99,12 @@ x = 42
 y = "hello"
 ''')
 
-    with patch('clockwork.core.ArtifactGenerator') as mock_generator:
+    with patch('clockwork.core.ResourceCompleter') as mock_generator:
         mock_instance = Mock()
+        mock_instance.complete = AsyncMock(return_value=[])  # Return completed resources
         mock_generator.return_value = mock_instance
 
-        core = ClockworkCore(openrouter_api_key="test-key")
+        core = ClockworkCore(api_key="test-key")
 
         with pytest.raises(ValueError, match="No resources found"):
             core._load_resources(main_file)
@@ -121,12 +125,15 @@ readme = FileResource(
 ''')
 
     # Mock the artifact generator
-    with patch('clockwork.core.ArtifactGenerator') as mock_generator:
+    with patch('clockwork.core.ResourceCompleter') as mock_generator:
         mock_instance = Mock()
-        mock_instance.generate.return_value = {}
+        # Mock complete to return resources (simulating completion)
+        async def mock_complete(resources):
+            return resources
+        mock_instance.complete = mock_complete
         mock_generator.return_value = mock_instance
 
-        core = ClockworkCore(openrouter_api_key="test-key")
+        core = ClockworkCore(api_key="test-key")
         result = core.plan(main_file)
 
     assert result["dry_run"] is True
@@ -147,18 +154,28 @@ readme = FileResource(
 )
 ''')
 
-    # Mock the artifact generator to return fake content
-    with patch('clockwork.core.ArtifactGenerator') as mock_generator:
+    # Mock the resource completer
+    with patch('clockwork.core.ResourceCompleter') as mock_generator:
         mock_instance = Mock()
-        mock_instance.generate.return_value = {"README.md": "# Generated Content"}
+        # Mock complete to simulate AI completing fields
+        async def mock_complete(resources):
+            for r in resources:
+                if hasattr(r, 'content') and r.content is None:
+                    r.content = "# Generated Content"
+                if hasattr(r, 'directory') and r.directory is None:
+                    r.directory = "."
+                if hasattr(r, 'mode') and r.mode is None:
+                    r.mode = "644"
+            return resources
+        mock_instance.complete = mock_complete
         mock_generator.return_value = mock_instance
 
-        core = ClockworkCore(openrouter_api_key="test-key")
+        core = ClockworkCore(api_key="test-key")
         result = core.plan(main_file)
 
     assert result["dry_run"] is True
     assert result["resources"] == 1
-    assert result["artifacts"] == 1
+    assert result["completed_resources"] == 1
 
 
 def test_apply_with_dry_run(tmp_path):
@@ -175,12 +192,15 @@ test_file = FileResource(
 )
 ''')
 
-    with patch('clockwork.core.ArtifactGenerator') as mock_generator:
+    with patch('clockwork.core.ResourceCompleter') as mock_generator:
         mock_instance = Mock()
-        mock_instance.generate.return_value = {}
+        # Mock complete to return resources (simulating completion)
+        async def mock_complete(resources):
+            return resources
+        mock_instance.complete = mock_complete
         mock_generator.return_value = mock_instance
 
-        core = ClockworkCore(openrouter_api_key="test-key")
+        core = ClockworkCore(api_key="test-key")
         result = core.apply(main_file, dry_run=True)
 
     assert result["dry_run"] is True
@@ -208,12 +228,27 @@ ai_file = FileResource(
 ''')
 
     # Mock the artifact generator and PyInfra execution
-    with patch('clockwork.core.ArtifactGenerator') as mock_generator, \
+    with patch('clockwork.core.ResourceCompleter') as mock_generator, \
          patch('clockwork.core.subprocess.run') as mock_subprocess:
 
         # Setup artifact generator mock
         mock_gen_instance = Mock()
-        mock_gen_instance.generate.return_value = {"ai.md": "# Python\n\nPython is great!"}
+        # Mock complete to return resources with completed fields
+        async def mock_complete(resources):
+            # Simulate AI completing missing fields
+            for r in resources:
+                if hasattr(r, 'content') and r.content is None:
+                    r.content = "AI-generated content"
+                if hasattr(r, 'name') and r.name is None:
+                    r.name = "ai-generated-name.md"
+                if hasattr(r, 'directory') and r.directory is None:
+                    r.directory = "."
+                if hasattr(r, 'mode') and r.mode is None:
+                    r.mode = "644"
+            return resources
+        mock_gen_instance.complete = mock_complete
+        # Old artifact-style return value for reference
+        old_artifacts = {"ai.md": "# Python\n\nPython is great!"}
         mock_generator.return_value = mock_gen_instance
 
         # Setup subprocess mock
@@ -224,7 +259,7 @@ ai_file = FileResource(
         mock_subprocess.return_value = mock_result
 
         # Run the pipeline
-        core = ClockworkCore(openrouter_api_key="test-key")
+        core = ClockworkCore(api_key="test-key")
         result = core.apply(main_file, dry_run=False)
 
     # Verify execution
@@ -233,20 +268,26 @@ ai_file = FileResource(
 
 
 def test_artifact_generator_initialization():
-    """Test that ClockworkCore properly initializes ArtifactGenerator."""
-    with patch('clockwork.core.ArtifactGenerator') as mock_generator:
+    """Test that ClockworkCore properly initializes ResourceCompleter."""
+    from clockwork.settings import get_settings
+
+    with patch('clockwork.core.ResourceCompleter') as mock_generator:
         mock_instance = Mock()
+        mock_instance.complete = AsyncMock(return_value=[])  # Return completed resources
         mock_generator.return_value = mock_instance
 
         core = ClockworkCore(
-            openrouter_api_key="test-key",
-            openrouter_model="custom-model"
-        )
-
-        # Verify ArtifactGenerator was called with correct params
-        mock_generator.assert_called_once_with(
             api_key="test-key",
             model="custom-model"
+        )
+
+        # Verify ResourceCompleter was called with correct params
+        # base_url should come from settings when not provided
+        settings = get_settings()
+        mock_generator.assert_called_once_with(
+            api_key="test-key",
+            model="custom-model",
+            base_url=settings.base_url
         )
 
 
@@ -264,12 +305,15 @@ test_file = FileResource(
 )
 ''')
 
-    with patch('clockwork.core.ArtifactGenerator') as mock_generator:
+    with patch('clockwork.core.ResourceCompleter') as mock_generator:
         mock_instance = Mock()
-        mock_instance.generate.return_value = {}
+        # Mock complete to return resources (simulating completion)
+        async def mock_complete(resources):
+            return resources
+        mock_instance.complete = mock_complete
         mock_generator.return_value = mock_instance
 
-        core = ClockworkCore(openrouter_api_key="test-key")
+        core = ClockworkCore(api_key="test-key")
         result = core.plan(main_file)
 
     # Verify PyInfra files were generated
@@ -301,51 +345,70 @@ dynamic_file = FileResource(
 )
 ''')
 
-    with patch('clockwork.core.ArtifactGenerator') as mock_generator:
+    with patch('clockwork.core.ResourceCompleter') as mock_generator:
         mock_instance = Mock()
-        # Only the dynamic file should be generated
-        mock_instance.generate.return_value = {"dynamic.md": "# Docker\n\nDocker is a containerization platform."}
+        # Mock complete to simulate AI filling content
+        async def mock_complete(resources):
+            for r in resources:
+                if hasattr(r, 'content') and r.content is None:
+                    r.content = "# Docker\n\nDocker is a containerization platform."
+                if hasattr(r, 'directory') and r.directory is None:
+                    r.directory = "."
+                if hasattr(r, 'mode') and r.mode is None:
+                    r.mode = "644"
+            return resources
+        mock_instance.complete = mock_complete
         mock_generator.return_value = mock_instance
 
-        core = ClockworkCore(openrouter_api_key="test-key")
+        core = ClockworkCore(api_key="test-key")
         result = core.plan(main_file)
 
     assert result["resources"] == 2
-    assert result["artifacts"] == 1  # Only one AI-generated
+    assert result["completed_resources"] == 2
 
 
 def test_destroy_file_resources(tmp_path):
     """Test destroying FileResources."""
     main_file = tmp_path / "main.py"
     main_file.write_text('''
-from clockwork.resources import FileResource, ArtifactSize
+from clockwork.resources import FileResource
 
 test_file = FileResource(
     name="test.txt",
     description="Test file",
-    size=ArtifactSize.SMALL,
     content="Test content"
 )
 ''')
 
-    # Mock the artifact generator and PyInfra execution
-    with patch('clockwork.core.ArtifactGenerator') as mock_generator, \
+    # Mock the resource completer and PyInfra execution
+    with patch('clockwork.core.ResourceCompleter') as mock_generator, \
          patch('clockwork.core.subprocess.run') as mock_subprocess:
 
-        # Setup artifact generator mock
+        # Setup resource completer mock
         mock_gen_instance = Mock()
-        mock_gen_instance.generate.return_value = {}
+        async def mock_complete(resources):
+            # Complete any missing fields
+            for r in resources:
+                if hasattr(r, 'directory') and r.directory is None:
+                    r.directory = "."
+                if hasattr(r, 'mode') and r.mode is None:
+                    r.mode = "644"
+            return resources
+        mock_gen_instance.complete = mock_complete
         mock_generator.return_value = mock_gen_instance
 
-        # Setup subprocess mock for destroy
+        # Setup subprocess mock
         mock_result = Mock()
-        mock_result.stdout = "PyInfra destroy output"
+        mock_result.stdout = "PyInfra output"
         mock_result.stderr = ""
         mock_result.returncode = 0
         mock_subprocess.return_value = mock_result
 
-        # Run destroy
-        core = ClockworkCore(openrouter_api_key="test-key")
+        # First run apply to generate destroy.py
+        core = ClockworkCore(api_key="test-key")
+        core.apply(main_file, dry_run=True)
+
+        # Now run destroy
         result = core.destroy(main_file, dry_run=False)
 
     # Verify execution
@@ -361,27 +424,36 @@ def test_destroy_with_dry_run(tmp_path):
     """Test destroy in dry run mode."""
     main_file = tmp_path / "main.py"
     main_file.write_text('''
-from clockwork.resources import FileResource, ArtifactSize
+from clockwork.resources import FileResource
 
 readme = FileResource(
     name="README.md",
     description="Test readme",
-    size=ArtifactSize.SMALL,
     content="# Test"
 )
 ''')
 
-    with patch('clockwork.core.ArtifactGenerator') as mock_generator:
+    with patch('clockwork.core.ResourceCompleter') as mock_generator:
         mock_instance = Mock()
-        mock_instance.generate.return_value = {}
+        # Mock complete to return resources with fields filled
+        async def mock_complete(resources):
+            for r in resources:
+                if hasattr(r, 'directory') and r.directory is None:
+                    r.directory = "."
+                if hasattr(r, 'mode') and r.mode is None:
+                    r.mode = "644"
+            return resources
+        mock_instance.complete = mock_complete
         mock_generator.return_value = mock_instance
 
-        core = ClockworkCore(openrouter_api_key="test-key")
+        core = ClockworkCore(api_key="test-key")
+        # First run apply to generate destroy.py
+        core.apply(main_file, dry_run=True)
+        # Now test destroy in dry run
         result = core.destroy(main_file, dry_run=True)
 
     # Verify dry run behavior
     assert result["dry_run"] is True
-    assert result["resources"] == 1
     assert "pyinfra_dir" in result
 
     # Verify destroy.py was generated
@@ -391,34 +463,47 @@ readme = FileResource(
 
 
 def test_destroy_mixed_resources(tmp_path):
-    """Test destroying both files and Docker resources."""
+    """Test destroying both files."""
     main_file = tmp_path / "main.py"
     main_file.write_text('''
-from clockwork.resources import FileResource, ArtifactSize
+from clockwork.resources import FileResource
 
 # User-provided content
 static_file = FileResource(
     name="static.txt",
     description="Static file",
-    size=ArtifactSize.SMALL,
     content="Static content"
 )
 
 # AI-generated content
 dynamic_file = FileResource(
     name="dynamic.md",
-    description="Generate documentation",
-    size=ArtifactSize.MEDIUM
+    description="Generate documentation"
 )
 ''')
 
     # Mock the artifact generator and PyInfra execution
-    with patch('clockwork.core.ArtifactGenerator') as mock_generator, \
+    with patch('clockwork.core.ResourceCompleter') as mock_generator, \
          patch('clockwork.core.subprocess.run') as mock_subprocess:
 
         # Setup artifact generator mock
         mock_gen_instance = Mock()
-        mock_gen_instance.generate.return_value = {"dynamic.md": "# Generated Doc"}
+        # Mock complete to return resources with completed fields
+        async def mock_complete(resources):
+            # Simulate AI completing missing fields
+            for r in resources:
+                if hasattr(r, 'content') and r.content is None:
+                    r.content = "AI-generated content"
+                if hasattr(r, 'name') and r.name is None:
+                    r.name = "ai-generated-name.md"
+                if hasattr(r, 'directory') and r.directory is None:
+                    r.directory = "."
+                if hasattr(r, 'mode') and r.mode is None:
+                    r.mode = "644"
+            return resources
+        mock_gen_instance.complete = mock_complete
+        # Old artifact-style return value for reference
+        old_artifacts = {"dynamic.md": "# Generated Doc"}
         mock_generator.return_value = mock_gen_instance
 
         # Setup subprocess mock
@@ -428,8 +513,11 @@ dynamic_file = FileResource(
         mock_result.returncode = 0
         mock_subprocess.return_value = mock_result
 
-        # Run destroy
-        core = ClockworkCore(openrouter_api_key="test-key")
+        # First run apply to generate destroy.py
+        core = ClockworkCore(api_key="test-key")
+        core.apply(main_file, dry_run=True)
+
+        # Now run destroy
         result = core.destroy(main_file, dry_run=False)
 
     # Verify execution
@@ -444,22 +532,32 @@ def test_destroy_compiler_integration(tmp_path):
     """Test that the PyInfra compiler properly generates destroy operations."""
     main_file = tmp_path / "main.py"
     main_file.write_text('''
-from clockwork.resources import FileResource, ArtifactSize
+from clockwork.resources import FileResource
 
 test_file = FileResource(
     name="test.txt",
     description="Test",
-    size=ArtifactSize.SMALL,
     content="Test content"
 )
 ''')
 
-    with patch('clockwork.core.ArtifactGenerator') as mock_generator:
+    with patch('clockwork.core.ResourceCompleter') as mock_generator:
         mock_instance = Mock()
-        mock_instance.generate.return_value = {}
+        # Mock complete to return resources with completed fields
+        async def mock_complete(resources):
+            for r in resources:
+                if hasattr(r, 'directory') and r.directory is None:
+                    r.directory = "."
+                if hasattr(r, 'mode') and r.mode is None:
+                    r.mode = "644"
+            return resources
+        mock_instance.complete = mock_complete
         mock_generator.return_value = mock_instance
 
-        core = ClockworkCore(openrouter_api_key="test-key")
+        core = ClockworkCore(api_key="test-key")
+        # First run apply to generate destroy.py
+        core.apply(main_file, dry_run=True)
+        # Now test destroy
         result = core.destroy(main_file, dry_run=True)
 
     # Verify PyInfra destroy files were generated
@@ -498,12 +596,15 @@ test_file = FileResource(
 )
 ''')
 
-    with patch('clockwork.core.ArtifactGenerator') as mock_artifact_gen, \
+    with patch('clockwork.core.ResourceCompleter') as mock_artifact_gen, \
          patch('clockwork.core.subprocess.run') as mock_subprocess:
 
         # Setup artifact generator mock
         mock_artifact_instance = Mock()
-        mock_artifact_instance.generate.return_value = {}
+        # Mock complete to return resources
+        async def mock_complete(resources):
+            return resources
+        mock_artifact_instance.complete = mock_complete
         mock_artifact_gen.return_value = mock_artifact_instance
 
         # Setup subprocess mock
@@ -514,7 +615,7 @@ test_file = FileResource(
         mock_subprocess.return_value = mock_result
 
         # Run assert pipeline
-        core = ClockworkCore(openrouter_api_key="test-key")
+        core = ClockworkCore(api_key="test-key")
         result = core.assert_resources(main_file, dry_run=False)
 
     # Verify execution
@@ -542,13 +643,16 @@ test_file = FileResource(
 )
 ''')
 
-    with patch('clockwork.core.ArtifactGenerator') as mock_artifact_gen:
+    with patch('clockwork.core.ResourceCompleter') as mock_artifact_gen:
 
         mock_artifact_instance = Mock()
-        mock_artifact_instance.generate.return_value = {}
+        # Mock complete to return resources
+        async def mock_complete(resources):
+            return resources
+        mock_artifact_instance.complete = mock_complete
         mock_artifact_gen.return_value = mock_artifact_instance
 
-        core = ClockworkCore(openrouter_api_key="test-key")
+        core = ClockworkCore(api_key="test-key")
         result = core.assert_resources(main_file, dry_run=True)
 
     # Verify PyInfra files were generated
@@ -577,11 +681,14 @@ test_file = FileResource(
 )
 ''')
 
-    with patch('clockwork.core.ArtifactGenerator') as mock_artifact_gen, \
+    with patch('clockwork.core.ResourceCompleter') as mock_artifact_gen, \
          patch('clockwork.core.subprocess.run') as mock_subprocess:
 
         mock_artifact_instance = Mock()
-        mock_artifact_instance.generate.return_value = {}
+        # Mock complete to return resources
+        async def mock_complete(resources):
+            return resources
+        mock_artifact_instance.complete = mock_complete
         mock_artifact_gen.return_value = mock_artifact_instance
 
         # No assertions to process
@@ -592,7 +699,7 @@ test_file = FileResource(
         mock_result.returncode = 0
         mock_subprocess.return_value = mock_result
 
-        core = ClockworkCore(openrouter_api_key="test-key")
+        core = ClockworkCore(api_key="test-key")
         result = core.assert_resources(main_file, dry_run=False)
 
     # Should still execute successfully
@@ -615,11 +722,14 @@ test_file = FileResource(
 )
 ''')
 
-    with patch('clockwork.core.ArtifactGenerator') as mock_artifact_gen, \
+    with patch('clockwork.core.ResourceCompleter') as mock_artifact_gen, \
          patch('clockwork.core.subprocess.run') as mock_subprocess:
 
         mock_artifact_instance = Mock()
-        mock_artifact_instance.generate.return_value = {}
+        # Mock complete to return resources
+        async def mock_complete(resources):
+            return resources
+        mock_artifact_instance.complete = mock_complete
         mock_artifact_gen.return_value = mock_artifact_instance
 
         # Mock PyInfra failure
@@ -627,7 +737,7 @@ test_file = FileResource(
             1, ["pyinfra"], stderr="Assertion failed: File does not exist"
         )
 
-        core = ClockworkCore(openrouter_api_key="test-key")
+        core = ClockworkCore(api_key="test-key")
 
         with pytest.raises(RuntimeError, match="assertions failed"):
             core.assert_resources(main_file, dry_run=False)
@@ -635,11 +745,12 @@ test_file = FileResource(
 
 def test_assert_command_no_main_file():
     """Test assert command error when no main.py exists."""
-    with patch('clockwork.core.ArtifactGenerator') as mock_generator:
+    with patch('clockwork.core.ResourceCompleter') as mock_generator:
         mock_instance = Mock()
+        mock_instance.complete = AsyncMock(return_value=[])  # Return completed resources
         mock_generator.return_value = mock_instance
 
-        core = ClockworkCore(openrouter_api_key="test-key")
+        core = ClockworkCore(api_key="test-key")
 
         with pytest.raises(FileNotFoundError):
             core.assert_resources(Path("/nonexistent/main.py"))
@@ -672,11 +783,14 @@ file2 = FileResource(
 )
 ''')
 
-    with patch('clockwork.core.ArtifactGenerator') as mock_artifact_gen, \
+    with patch('clockwork.core.ResourceCompleter') as mock_artifact_gen, \
          patch('clockwork.core.subprocess.run') as mock_subprocess:
 
         mock_artifact_instance = Mock()
-        mock_artifact_instance.generate.return_value = {}
+        # Mock complete to return resources
+        async def mock_complete(resources):
+            return resources
+        mock_artifact_instance.complete = mock_complete
         mock_artifact_gen.return_value = mock_artifact_instance
 
         mock_result = Mock()
@@ -685,7 +799,7 @@ file2 = FileResource(
         mock_result.returncode = 0
         mock_subprocess.return_value = mock_result
 
-        core = ClockworkCore(openrouter_api_key="test-key")
+        core = ClockworkCore(api_key="test-key")
         result = core.assert_resources(main_file, dry_run=True)
 
     assert result["resources"] == 2

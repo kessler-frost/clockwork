@@ -1,9 +1,9 @@
 """
 Clockwork Core - Intelligent Infrastructure Orchestration in Python.
 
-Apply Pipeline: Load resources → Generate artifacts (AI) → Compile (deploy.py + destroy.py) → Execute deploy
+Apply Pipeline: Load resources → Complete resources (AI) → Compile (deploy.py + destroy.py) → Execute deploy
 Destroy Pipeline: Execute pre-generated destroy.py (from apply)
-Assert Pipeline: Load resources → Generate artifacts (AI) → Compile assertions → Execute assert
+Assert Pipeline: Load resources → Complete resources (AI) → Compile assertions → Execute assert
 """
 
 import asyncio
@@ -14,7 +14,7 @@ import traceback
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .artifact_generator import ArtifactGenerator
+from .resource_completer import ResourceCompleter
 from .pyinfra_compiler import PyInfraCompiler
 from .settings import get_settings
 
@@ -26,26 +26,30 @@ class ClockworkCore:
 
     def __init__(
         self,
-        openrouter_api_key: Optional[str] = None,
-        openrouter_model: Optional[str] = None
+        api_key: Optional[str] = None,
+        model: Optional[str] = None,
+        base_url: Optional[str] = None
     ):
         """
         Initialize ClockworkCore.
 
         Args:
-            openrouter_api_key: OpenRouter API key (overrides settings/.env)
-            openrouter_model: Model to use for artifact generation (overrides settings/.env)
+            api_key: API key for AI service (overrides settings/.env)
+            model: Model to use for resource completion (overrides settings/.env)
+            base_url: Base URL for API endpoint (overrides settings/.env)
         """
         # Load settings
         settings = get_settings()
 
         # Use provided values or fall back to settings
-        api_key = openrouter_api_key or settings.openrouter_api_key
-        model = openrouter_model or settings.openrouter_model
+        api_key = api_key or settings.api_key
+        model = model or settings.model
+        base_url = base_url or settings.base_url
 
-        self.artifact_generator = ArtifactGenerator(
+        self.resource_completer = ResourceCompleter(
             api_key=api_key,
-            model=model
+            model=model,
+            base_url=base_url
         )
         self.pyinfra_compiler = PyInfraCompiler(
             output_dir=settings.pyinfra_output_dir
@@ -55,7 +59,7 @@ class ClockworkCore:
 
     def apply(self, main_file: Path, dry_run: bool = False) -> Dict[str, Any]:
         """
-        Full pipeline: load → generate → compile → deploy.
+        Full pipeline: load → complete → compile → deploy.
 
         Args:
             main_file: Path to main.py file with resource definitions
@@ -70,20 +74,24 @@ class ClockworkCore:
         resources = self._load_resources(main_file)
         logger.info(f"Loaded {len(resources)} resources")
 
-        # 2. Generate artifacts (AI stage)
-        artifacts = self._generate_artifacts_safe(resources)
+        # 2. Complete resources (AI stage)
+        completed_resources = self._complete_resources_safe(resources)
 
-        # 3. Compile to PyInfra (template stage)
-        pyinfra_dir = self.pyinfra_compiler.compile(resources, artifacts)
+        # 3. Set compiler output directory relative to main.py location
+        settings = get_settings()
+        self.pyinfra_compiler.output_dir = Path(main_file).parent / settings.pyinfra_output_dir
+
+        # 4. Compile to PyInfra (template stage)
+        pyinfra_dir = self.pyinfra_compiler.compile(completed_resources)
         logger.info(f"Compiled to PyInfra: {pyinfra_dir}")
 
-        # 4. Execute PyInfra deploy (unless dry run)
+        # 5. Execute PyInfra deploy (unless dry run)
         if dry_run:
             logger.info("Dry run - skipping execution")
             return {
                 "dry_run": True,
                 "resources": len(resources),
-                "artifacts": len(artifacts),
+                "completed_resources": len(completed_resources),
                 "pyinfra_dir": str(pyinfra_dir)
             }
 
@@ -94,13 +102,13 @@ class ClockworkCore:
 
     def plan(self, main_file: Path) -> Dict[str, Any]:
         """
-        Generate mode: generate artifacts and compile without deploying.
+        Plan mode: complete resources and compile without deploying.
 
         Args:
             main_file: Path to main.py file
 
         Returns:
-            Dict with generation information
+            Dict with planning information
         """
         return self.apply(main_file, dry_run=True)
 
@@ -139,26 +147,26 @@ class ClockworkCore:
 
         return resources
 
-    def _generate_artifacts_safe(self, resources: List[Any]) -> Dict[str, Any]:
-        """Generate artifacts with error handling and logging.
+    def _complete_resources_safe(self, resources: List[Any]) -> List[Any]:
+        """Complete resources with error handling and logging.
 
         Args:
-            resources: List of Resource objects
+            resources: List of partial Resource objects
 
         Returns:
-            Dict mapping resource names to generated artifacts
+            List of completed Resource objects
 
         Raises:
-            RuntimeError: If artifact generation fails
+            RuntimeError: If resource completion fails
         """
         try:
-            artifacts = asyncio.run(self.artifact_generator.generate(resources))
-            logger.info(f"Generated {len(artifacts)} artifacts")
-            return artifacts
+            completed_resources = asyncio.run(self.resource_completer.complete(resources))
+            logger.info(f"Completed {len(completed_resources)} resources")
+            return completed_resources
         except Exception as e:
-            logger.error(f"Failed to generate artifacts: {e}")
+            logger.error(f"Failed to complete resources: {e}")
             logger.error(f"Traceback: {traceback.format_exc()}")
-            raise RuntimeError(f"Artifact generation failed: {e}") from e
+            raise RuntimeError(f"Resource completion failed: {e}") from e
 
     def destroy(self, main_file: Path, dry_run: bool = False) -> Dict[str, Any]:
         """
@@ -205,7 +213,7 @@ class ClockworkCore:
 
     def assert_resources(self, main_file: Path, dry_run: bool = False) -> Dict[str, Any]:
         """
-        Full assertion pipeline: load → compile assertions → execute.
+        Full assertion pipeline: load → complete → compile assertions → execute.
 
         Args:
             main_file: Path to main.py file with resource definitions
@@ -220,14 +228,18 @@ class ClockworkCore:
         resources = self._load_resources(main_file)
         logger.info(f"Loaded {len(resources)} resources")
 
-        # 2. Generate artifacts if needed (AI stage)
-        artifacts = self._generate_artifacts_safe(resources)
+        # 2. Complete resources if needed (AI stage)
+        completed_resources = self._complete_resources_safe(resources)
 
-        # 3. Compile to PyInfra using compile_assert()
-        pyinfra_dir = self.pyinfra_compiler.compile_assert(resources, artifacts)
+        # 3. Set compiler output directory relative to main.py location
+        settings = get_settings()
+        self.pyinfra_compiler.output_dir = Path(main_file).parent / settings.pyinfra_output_dir
+
+        # 4. Compile to PyInfra using compile_assert()
+        pyinfra_dir = self.pyinfra_compiler.compile_assert(completed_resources)
         logger.info(f"Compiled assertions to PyInfra: {pyinfra_dir}")
 
-        # 4. Execute PyInfra assert.py (unless dry run)
+        # 5. Execute PyInfra assert.py (unless dry run)
         if dry_run:
             logger.info("Dry run - skipping execution")
             return {

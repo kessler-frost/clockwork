@@ -24,16 +24,16 @@ class PyInfraCompiler:
         settings = get_settings()
         self.output_dir = Path(output_dir or settings.pyinfra_output_dir)
 
-    def compile(self, resources: List[Any], artifacts: Dict[str, str]) -> Path:
+    def compile(self, resources: List[Any]) -> Path:
         """
         Compile resources to PyInfra deployment files.
 
         Generates both deploy.py and destroy.py so that destroy can be run
-        later without re-loading resources or regenerating artifacts.
+        later without re-loading resources. Resources are expected to be
+        fully completed (all required fields populated) before compilation.
 
         Args:
-            resources: List of Resource objects
-            artifacts: Dict of generated artifacts (from AI stage)
+            resources: List of completed Resource objects
 
         Returns:
             Path to the PyInfra directory
@@ -51,13 +51,13 @@ class PyInfraCompiler:
 
         # Generate deploy file
         deploy_path = self.output_dir / "deploy.py"
-        deploy_code = self._generate_deploy(resources, artifacts)
+        deploy_code = self._generate_deploy(resources)
         deploy_path.write_text(deploy_code)
         logger.info(f"Generated deploy: {deploy_path}")
 
         # Generate destroy file (for later use)
         destroy_path = self.output_dir / "destroy.py"
-        destroy_code = self._generate_destroy(resources, artifacts)
+        destroy_code = self._generate_destroy(resources)
         destroy_path.write_text(destroy_code)
         logger.info(f"Generated destroy: {destroy_path}")
 
@@ -102,13 +102,15 @@ from clockwork.pyinfra_operations import apple_containers
 # End of {operation_type}
 '''
 
-    def _generate_deploy(self, resources: List[Any], artifacts: Dict[str, str]) -> str:
+    def _generate_deploy(self, resources: List[Any]) -> str:
         """
         Generate PyInfra deploy.py file with all operations.
 
+        Resources should be fully completed before calling this method.
+        Each resource generates its PyInfra code using its own fields directly.
+
         Args:
-            resources: List of Resource objects
-            artifacts: Dict of generated artifacts
+            resources: List of completed Resource objects
 
         Returns:
             Deploy file content as string
@@ -120,7 +122,7 @@ from clockwork.pyinfra_operations import apple_containers
         operations = []
         for resource in resources:
             try:
-                op_code = resource.to_pyinfra_operations(artifacts)
+                op_code = resource.to_pyinfra_operations()
                 operations.append(op_code)
             except Exception as e:
                 logger.error(f"Failed to generate operations for {resource.name}: {e}")
@@ -136,15 +138,15 @@ from clockwork.pyinfra_operations import apple_containers
 
     def compile_assert(
         self,
-        resources: List[Any],
-        artifacts: Dict[str, str]
+        resources: List[Any]
     ) -> Path:
         """
         Compile resources to PyInfra assert files.
 
+        Resources should be fully completed before calling this method.
+
         Args:
-            resources: List of Resource objects
-            artifacts: Dict of generated artifacts (from AI stage)
+            resources: List of completed Resource objects
 
         Returns:
             Path to the PyInfra directory
@@ -162,20 +164,22 @@ from clockwork.pyinfra_operations import apple_containers
 
         # Generate assert file
         assert_path = self.output_dir / "assert.py"
-        assert_code = self._generate_assert(resources, artifacts)
+        assert_code = self._generate_assert(resources)
         assert_path.write_text(assert_code)
         logger.info(f"Generated assert: {assert_path}")
 
         logger.info(f"PyInfra assert compilation complete: {self.output_dir}")
         return self.output_dir
 
-    def _generate_destroy(self, resources: List[Any], artifacts: Dict[str, str]) -> str:
+    def _generate_destroy(self, resources: List[Any]) -> str:
         """
         Generate PyInfra destroy.py file with all destroy operations.
 
+        Resources should be fully completed before calling this method.
+        Each resource generates its cleanup code using its own fields directly.
+
         Args:
-            resources: List of Resource objects
-            artifacts: Dict of generated artifacts
+            resources: List of completed Resource objects
 
         Returns:
             Destroy file content as string
@@ -187,7 +191,7 @@ from clockwork.pyinfra_operations import apple_containers
         operations = []
         for resource in resources:
             try:
-                op_code = resource.to_pyinfra_destroy_operations(artifacts)
+                op_code = resource.to_pyinfra_destroy_operations()
                 operations.append(op_code)
             except Exception as e:
                 logger.error(f"Failed to generate destroy operations for {resource.name}: {e}")
@@ -203,15 +207,16 @@ from clockwork.pyinfra_operations import apple_containers
 
     def _generate_assert(
         self,
-        resources: List[Any],
-        artifacts: Dict[str, str]
+        resources: List[Any]
     ) -> str:
         """
         Generate PyInfra assert.py file with all assertion operations.
 
+        Resources should be fully completed before calling this method.
+        Each resource generates its assertion code using its own fields directly.
+
         Args:
-            resources: List of Resource objects
-            artifacts: Dict of generated artifacts
+            resources: List of completed Resource objects
 
         Returns:
             Assert file content as string
@@ -231,7 +236,7 @@ from clockwork.pyinfra_operations import apple_containers
             # Add resource assertions (type-safe BaseAssertion objects only)
             if hasattr(resource, 'to_pyinfra_assert_operations'):
                 try:
-                    assertions = resource.to_pyinfra_assert_operations(artifacts)
+                    assertions = resource.to_pyinfra_assert_operations()
                     if assertions.strip():
                         resource_ops.append(assertions)
                 except Exception as e:

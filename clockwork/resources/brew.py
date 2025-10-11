@@ -5,72 +5,63 @@ from .base import Resource
 
 
 class BrewPackageResource(Resource):
-    """Brew package resource - manages Homebrew packages and casks with AI suggestions.
+    """Brew package resource - manages Homebrew packages and casks with AI completion.
 
-    Declaratively define Homebrew packages and casks. When no packages are specified,
-    AI suggests appropriate packages based on the description.
+    Minimal usage (AI completes everything):
+        BrewPackageResource(description="essential development tools like jq and htop")
+        # AI generates: name="dev-tools", packages=["jq", "htop", "wget"], cask=False
+
+    Advanced usage (override specific fields):
+        BrewPackageResource(
+            description="code editors",
+            cask=True  # Force GUI apps
+        )
+        # AI generates: name="editors", packages=["visual-studio-code", "sublime-text"]
 
     Attributes:
-        name: Resource identifier (required)
-        description: Package purpose - used by AI for package suggestions (required)
+        description: Package purpose - used by AI for completion (required)
+        name: Resource identifier (optional - AI generates if not provided)
         packages: List of packages/casks to install (optional - AI suggests if not provided)
+        cask: Use brew casks for GUI applications (optional - AI determines if not provided)
         present: Whether packages should be installed (default: True)
         update: Run brew update before installing (default: False)
-        cask: Use brew casks for GUI applications (default: False)
-
-    Examples:
-        AI-suggested packages:
-        >>> BrewPackageResource(
-        ...     name="dev-tools",
-        ...     description="Essential development tools like jq, htop, and wget"
-        ... )
-
-        Explicit packages:
-        >>> BrewPackageResource(
-        ...     name="cli-tools",
-        ...     description="CLI utilities",
-        ...     packages=["jq", "htop", "wget"],
-        ...     update=True
-        ... )
-
-        GUI applications via cask:
-        >>> BrewPackageResource(
-        ...     name="editors",
-        ...     description="Code editors",
-        ...     packages=["visual-studio-code", "sublime-text"],
-        ...     cask=True
-        ... )
     """
 
-    name: str
     description: str
+    name: Optional[str] = None
     packages: Optional[List[str]] = None
+    cask: Optional[bool] = None
     present: bool = True
     update: bool = False
-    cask: bool = False
 
-    def needs_artifact_generation(self) -> bool:
-        """Returns True if packages need to be AI-suggested.
+    def needs_completion(self) -> bool:
+        """Returns True if any field needs AI completion.
 
-        When no packages are specified, the AI will analyze the description and
-        suggest appropriate Homebrew packages or casks to install.
+        When any of name, packages, or cask are None, the AI will analyze the
+        description and suggest appropriate values.
 
         Returns:
-            bool: True if packages is None, False otherwise
+            bool: True if any field needs completion, False otherwise
         """
-        return self.packages is None
+        return (
+            self.name is None or
+            self.packages is None or
+            self.cask is None
+        )
 
-    def to_pyinfra_operations(self, artifacts: Dict[str, Any]) -> str:
+    def needs_artifact_generation(self) -> bool:
+        """Alias for needs_completion() for compatibility with base class.
+
+        Returns:
+            bool: True if any field needs AI completion
+        """
+        return self.needs_completion()
+
+    def to_pyinfra_operations(self) -> str:
         """Generate PyInfra brew.packages or brew.casks operation code.
 
         Creates a PyInfra operation that installs the specified Homebrew packages
-        or casks. If the packages were AI-generated, they will be retrieved from
-        the artifacts dictionary.
-
-        Args:
-            artifacts: Dict mapping resource names to generated content.
-                      For BrewPackageResource, should contain {"name": ["pkg1", "pkg2"]}
-                      or {"name": {"packages": ["pkg1", "pkg2"]}}
+        or casks. All fields should be populated by AI completion before this is called.
 
         Returns:
             str: PyInfra operation code as a string
@@ -85,22 +76,12 @@ class BrewPackageResource(Resource):
             )
             ```
         """
-        # Get packages from artifacts if not provided
-        packages = self.packages
-        if packages is None:
-            artifact_data = artifacts.get(self.name, [])
-            if isinstance(artifact_data, dict):
-                packages = artifact_data.get("packages", [])
-            elif isinstance(artifact_data, list):
-                packages = artifact_data
-            else:
-                packages = []
-
-        # Use empty list as fallback
-        packages = packages or []
+        # All fields should be populated by AI completion
+        if self.name is None or self.packages is None or self.cask is None:
+            raise ValueError(f"Resource fields not completed. name={self.name}, packages={self.packages}, cask={self.cask}")
 
         # Format packages as Python list
-        packages_str = repr(packages)
+        packages_str = repr(self.packages)
 
         # Determine operation type
         operation = "brew.casks" if self.cask else "brew.packages"
@@ -116,14 +97,11 @@ class BrewPackageResource(Resource):
 )
 '''
 
-    def to_pyinfra_destroy_operations(self, artifacts: Dict[str, Any]) -> str:
+    def to_pyinfra_destroy_operations(self) -> str:
         """Generate PyInfra operations code to uninstall the packages/casks.
 
         Creates a PyInfra operation that removes the Homebrew packages or casks
         by setting present=False.
-
-        Args:
-            artifacts: Dict mapping resource names to generated content
 
         Returns:
             str: PyInfra operation code to remove the packages/casks
@@ -137,22 +115,12 @@ class BrewPackageResource(Resource):
             )
             ```
         """
-        # Get packages from artifacts if not provided
-        packages = self.packages
-        if packages is None:
-            artifact_data = artifacts.get(self.name, [])
-            if isinstance(artifact_data, dict):
-                packages = artifact_data.get("packages", [])
-            elif isinstance(artifact_data, list):
-                packages = artifact_data
-            else:
-                packages = []
-
-        # Use empty list as fallback
-        packages = packages or []
+        # All fields should be populated by AI completion
+        if self.name is None or self.packages is None or self.cask is None:
+            raise ValueError(f"Resource fields not completed. name={self.name}, packages={self.packages}, cask={self.cask}")
 
         # Format packages as Python list
-        packages_str = repr(packages)
+        packages_str = repr(self.packages)
 
         # Determine operation type
         operation = "brew.casks" if self.cask else "brew.packages"
@@ -167,16 +135,13 @@ class BrewPackageResource(Resource):
 )
 '''
 
-    def to_pyinfra_assert_operations(self, artifacts: Dict[str, Any]) -> str:
+    def to_pyinfra_assert_operations(self) -> str:
         """Generate PyInfra operations code for brew package assertions.
 
         Provides default assertions for BrewPackageResource:
         - Each package/cask is installed
 
         These can be overridden by specifying custom assertions.
-
-        Args:
-            artifacts: Dict mapping resource names to generated content
 
         Returns:
             str: PyInfra assertion operation code
@@ -196,23 +161,13 @@ class BrewPackageResource(Resource):
         """
         # If custom assertions are defined, use the base implementation
         if self.assertions:
-            return super().to_pyinfra_assert_operations(artifacts)
+            return super().to_pyinfra_assert_operations()
 
-        # Get packages from artifacts if not provided
-        packages = self.packages
-        if packages is None:
-            artifact_data = artifacts.get(self.name, [])
-            if isinstance(artifact_data, dict):
-                packages = artifact_data.get("packages", [])
-            elif isinstance(artifact_data, list):
-                packages = artifact_data
-            else:
-                packages = []
+        # All fields should be populated by AI completion
+        if self.name is None or self.packages is None or self.cask is None:
+            raise ValueError(f"Resource fields not completed. name={self.name}, packages={self.packages}, cask={self.cask}")
 
-        # Use empty list as fallback
-        packages = packages or []
-
-        if not packages:
+        if not self.packages:
             return ""
 
         # Determine package type for assertion message
@@ -222,7 +177,7 @@ class BrewPackageResource(Resource):
         operations = []
         operations.append(f"\n# Default assertions for brew {package_type}s: {self.name}")
 
-        for package in packages:
+        for package in self.packages:
             operations.append(f'''
 # Assert: {package_type.capitalize()} {package} is installed
 server.shell(

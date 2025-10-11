@@ -1,34 +1,24 @@
 """
 Homebrew Package Example - Install macOS packages via Homebrew.
 
-This example demonstrates:
-- BrewPackageResource with AI-suggested packages (description only)
-- BrewPackageResource with explicit package list
-- Installing GUI apps via Homebrew cask
-- Package updates and state management
+This example demonstrates the AI completion architecture where you provide
+minimal information and the AI intelligently completes all fields.
 """
 
 from clockwork.resources import BrewPackageResource
 
-# AI suggests packages based on description
+# Minimal - AI completes everything (name, packages, cask)
 dev_tools = BrewPackageResource(
-    name="dev-tools",
-    description="Install essential command-line development tools like jq for JSON processing, htop for system monitoring, and wget for downloading files",
-    update=True,
+    description="essential development tools like jq and htop"
 )
 
-# Explicit package list
-networking_tools = BrewPackageResource(
-    name="networking-tools",
-    description="Network utilities",
-    packages=["curl", "nmap", "telnet"],
-    present=True,
+# AI determines it's a GUI app and sets cask=True
+code_editor = BrewPackageResource(
+    description="Visual Studio Code editor"
 )
 
-# GUI app via cask
-visual_tools = BrewPackageResource(
-    name="visual-studio-code",
-    description="Code editor",
-    packages=["visual-studio-code"],
-    cask=True,
+# Override specific fields if needed
+network_utils = BrewPackageResource(
+    description="network diagnostic tools",
+    packages=["curl", "nmap"]  # Explicit packages, AI fills in name and cask
 )

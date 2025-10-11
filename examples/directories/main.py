@@ -1,72 +1,33 @@
 """
 Directory Management Example - Create and manage directories.
 
-This example demonstrates:
-- DirectoryResource for creating directories
-- Setting directory permissions
-- Nested directory structures
-- Recursive directory creation
+This example demonstrates the AI completion architecture where you provide
+minimal information and the AI intelligently determines names and permissions.
 """
 
 from clockwork.resources import DirectoryResource
-from clockwork.assertions import FileExistsAssert
 
-# Simple directory - main application directory
+# Minimal - AI generates name and picks appropriate permissions
 app_dir = DirectoryResource(
-    name="app-directory",
-    description="Main application directory",
-    path="scratch/myapp",
-    mode="755",
-    recursive=True,
-    assertions=[
-        FileExistsAssert(path="scratch/myapp"),
-    ]
+    description="Main application directory at scratch/myapp",
+    path="scratch/myapp"
 )
 
-# Data directory with restricted permissions
+# AI recognizes "restricted access" and sets mode to 700
 data_dir = DirectoryResource(
-    name="data-directory",
     description="Application data storage with restricted access",
-    path="scratch/myapp/data",
-    mode="700",  # Only owner can read/write/execute
-    recursive=True,
-    assertions=[
-        FileExistsAssert(path="scratch/myapp/data"),
-    ]
+    path="scratch/myapp/data"
 )
 
-# Logs directory with standard permissions
+# AI picks standard permissions for logs
 logs_dir = DirectoryResource(
-    name="logs-directory",
     description="Application logs directory",
-    path="scratch/myapp/logs",
-    mode="755",
-    recursive=True,
-    assertions=[
-        FileExistsAssert(path="scratch/myapp/logs"),
-    ]
+    path="scratch/myapp/logs"
 )
 
-# Config directory
+# Override mode if needed
 config_dir = DirectoryResource(
-    name="config-directory",
     description="Application configuration files",
     path="scratch/myapp/config",
-    mode="755",
-    recursive=True,
-    assertions=[
-        FileExistsAssert(path="scratch/myapp/config"),
-    ]
-)
-
-# Cache directory with read-write permissions
-cache_dir = DirectoryResource(
-    name="cache-directory",
-    description="Temporary cache storage",
-    path="scratch/myapp/cache",
-    mode="755",
-    recursive=True,
-    assertions=[
-        FileExistsAssert(path="scratch/myapp/cache"),
-    ]
+    mode="644"  # Explicit mode, AI generates name
 )

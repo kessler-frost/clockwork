@@ -1,20 +1,15 @@
 """
 User Management Example - Create and manage system users.
 
-This example demonstrates:
-- UserResource for creating users
-- Platform-specific user management (macOS/Linux)
-- Custom home directories and shells
-- System vs regular users
+This example demonstrates UserResource for platform-specific user management.
+
+NOTE: UserResource does not support AI completion as user creation requires
+explicit configuration for security reasons. All fields must be provided.
 
 IMPORTANT: User creation requires administrative privileges.
 On macOS:
   - Run with sudo: sudo uv run clockwork apply
   - Or ensure your user has necessary permissions via dscl
-
-Note: On macOS, user creation is more complex than Linux.
-This example uses dscl (Directory Service Command Line) for proper
-macOS user management. The operations are idempotent and safe to re-run.
 """
 
 from clockwork.resources import UserResource

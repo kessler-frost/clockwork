@@ -5,68 +5,69 @@ from .base import Resource
 
 
 class GitRepoResource(Resource):
-    """Git repository resource - clones and manages Git repositories.
+    """Git repository resource - clones and manages Git repositories with AI completion.
 
-    Declaratively define Git repository clones. When no repository URL is specified,
-    AI suggests an appropriate repository based on the description using PydanticAI's
-    structured output.
+    Minimal usage (AI completes everything):
+        GitRepoResource(description="FastAPI Python web framework repository")
+        # AI generates: name="fastapi", repo_url="https://github.com/tiangolo/fastapi.git",
+        #               dest="./fastapi", branch="master"
+
+    Advanced usage (override specific fields):
+        GitRepoResource(
+            description="Django web framework",
+            dest="/opt/django"  # Override destination
+        )
+        # AI generates: name="django", repo_url="https://github.com/django/django.git",
+        #               branch="main"
 
     Attributes:
-        name: Repository identifier (required)
-        description: Repository description - used by AI for URL suggestions (required)
+        description: Repository description - used by AI for completion (required)
+        name: Repository identifier (optional - AI generates if not provided)
         repo_url: Git repository URL (optional - AI suggests if not provided)
-        dest: Destination directory for cloning (required)
-        branch: Git branch to checkout (default: "main")
+        dest: Destination directory for cloning (optional - AI picks if not provided)
+        branch: Git branch to checkout (optional - AI picks main/master if not provided)
         pull: Update repository if it already exists (default: True)
         present: Whether repository should exist (default: True)
-
-    Examples:
-        AI-suggested repository:
-        >>> GitRepoResource(
-        ...     name="flask-repo",
-        ...     description="Python Flask web framework",
-        ...     dest="/opt/flask"
-        ... )
-
-        Explicit repository URL:
-        >>> GitRepoResource(
-        ...     name="django-repo",
-        ...     description="Django web framework",
-        ...     repo_url="https://github.com/django/django.git",
-        ...     dest="/opt/django",
-        ...     branch="stable/4.2.x"
-        ... )
     """
 
-    name: str
     description: str
+    name: Optional[str] = None
     repo_url: Optional[str] = None
-    dest: str
-    branch: Optional[str] = "main"
+    dest: Optional[str] = None
+    branch: Optional[str] = None
     pull: bool = True
     present: bool = True
 
-    def needs_artifact_generation(self) -> bool:
-        """Returns True if repository URL needs to be AI-suggested.
+    def needs_completion(self) -> bool:
+        """Returns True if any field needs AI completion.
 
-        When no repo_url is specified, the AI will analyze the description and
-        suggest an appropriate Git repository URL to clone.
+        When any of name, repo_url, dest, or branch are None, the AI will analyze
+        the description and suggest appropriate values.
 
         Returns:
-            bool: True if repo_url is None, False otherwise
+            bool: True if any field needs completion, False otherwise
         """
-        return self.repo_url is None
+        return (
+            self.name is None or
+            self.repo_url is None or
+            self.dest is None or
+            self.branch is None
+        )
 
-    def to_pyinfra_operations(self, artifacts: Dict[str, Any]) -> str:
+    def needs_artifact_generation(self) -> bool:
+        """Alias for needs_completion() for compatibility with base class.
+
+        Returns:
+            bool: True if any field needs AI completion
+        """
+        return self.needs_completion()
+
+    def to_pyinfra_operations(self) -> str:
         """Generate PyInfra git.repo operation code.
 
         Creates a PyInfra operation that clones or updates the Git repository with
-        the specified configuration. If the repo_url was AI-generated, it will be
-        retrieved from the artifacts dictionary.
-
-        Args:
-            artifacts: Dict mapping resource names to generated content.
-                      For GitRepoResource, should contain {"name": {"repo_url": "https://..."}}
+        the specified configuration. All fields should be populated by AI completion
+        before this is called.
 
         Returns:
             str: PyInfra operation code as a string
@@ -79,41 +80,29 @@ class GitRepoResource(Resource):
                 dest="/opt/flask",
                 branch="main",
                 pull=True,
-                present=True,
             )
             ```
         """
-        # Get repo_url from artifacts if not provided
-        repo_url = self.repo_url
-        if repo_url is None:
-            artifact_data = artifacts.get(self.name, {})
-            repo_url = artifact_data.get("repo_url") if isinstance(artifact_data, dict) else artifact_data
-
-        # Use empty string as fallback (should not happen in practice)
-        repo_url = repo_url or ""
-
-        # Use "main" as default branch if None
-        branch = self.branch or "main"
+        # All fields should be populated by AI completion
+        if self.name is None or self.repo_url is None or self.dest is None or self.branch is None:
+            raise ValueError(f"Resource fields not completed. name={self.name}, repo_url={self.repo_url}, dest={self.dest}, branch={self.branch}")
 
         return f'''
 # Clone/update Git repository: {self.name}
 git.repo(
     name="Clone {self.name}",
-    src="{repo_url}",
+    src="{self.repo_url}",
     dest="{self.dest}",
-    branch="{branch}",
+    branch="{self.branch}",
     pull={self.pull},
 )
 '''
 
-    def to_pyinfra_destroy_operations(self, artifacts: Dict[str, Any]) -> str:
+    def to_pyinfra_destroy_operations(self) -> str:
         """Generate PyInfra operations code to destroy/remove the repository.
 
         Creates a PyInfra operation that removes the cloned repository by deleting
         the destination directory.
-
-        Args:
-            artifacts: Dict mapping resource names to generated content (unused for destroy)
 
         Returns:
             str: PyInfra operation code to remove the repository
@@ -127,6 +116,10 @@ git.repo(
             )
             ```
         """
+        # Name and dest should be populated by AI completion
+        if self.name is None or self.dest is None:
+            raise ValueError(f"Resource fields not completed. name={self.name}, dest={self.dest}")
+
         return f'''
 # Remove Git repository: {self.name}
 files.directory(
@@ -136,7 +129,7 @@ files.directory(
 )
 '''
 
-    def to_pyinfra_assert_operations(self, artifacts: Dict[str, Any]) -> str:
+    def to_pyinfra_assert_operations(self) -> str:
         """Generate PyInfra operations code for Git repository assertions.
 
         Provides default assertions for GitRepoResource:
@@ -144,9 +137,6 @@ files.directory(
         - Directory is a valid Git repository (.git directory exists)
 
         These can be overridden by specifying custom assertions.
-
-        Args:
-            artifacts: Dict mapping resource names to generated content
 
         Returns:
             str: PyInfra assertion operation code
@@ -168,9 +158,13 @@ files.directory(
             )
             ```
         """
+        # Name and dest should be populated by AI completion
+        if self.name is None or self.dest is None:
+            raise ValueError(f"Resource fields not completed. name={self.name}, dest={self.dest}")
+
         # If custom assertions are defined, use the base implementation
         if self.assertions:
-            return super().to_pyinfra_assert_operations(artifacts)
+            return super().to_pyinfra_assert_operations()
 
         operations = []
         operations.append(f"\n# Default assertions for Git repository: {self.name}")

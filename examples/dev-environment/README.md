@@ -56,7 +56,7 @@ scratch/devenv/
 - **macOS** (this example is Mac-specific)
 - **Homebrew** installed
 - **Docker Desktop for Mac** installed and running
-- **OpenRouter API key** configured in `.env` file
+- **API key** configured in `.env` file (for cloud AI models)
 
 ## Usage
 
@@ -65,7 +65,7 @@ scratch/devenv/
 Create a `.env` file in the project root:
 ```bash
 cd /Users/sankalp/dev/clockwork
-echo "CW_OPENROUTER_API_KEY=your-api-key-here" > .env
+echo "CW_API_KEY=your-api-key-here" > .env
 ```
 
 ### 2. Deploy the Environment
