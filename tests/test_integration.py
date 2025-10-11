@@ -5,7 +5,7 @@ import subprocess
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock, AsyncMock
 from clockwork.core import ClockworkCore
-from clockwork.resources import FileResource, ArtifactSize
+from clockwork.resources import FileResource
 
 
 def test_load_resources_from_file(tmp_path):
@@ -13,12 +13,12 @@ def test_load_resources_from_file(tmp_path):
     # Create a test main.py
     main_file = tmp_path / "main.py"
     main_file.write_text('''
-from clockwork.resources import FileResource, ArtifactSize
+from clockwork.resources import FileResource
 
 test_file = FileResource(
     name="test.md",
     description="Test file",
-    size=ArtifactSize.SMALL
+    content="Test content"
 )
 ''')
 
@@ -40,24 +40,24 @@ def test_load_multiple_resources(tmp_path):
     """Test loading multiple resources from a Python file."""
     main_file = tmp_path / "main.py"
     main_file.write_text('''
-from clockwork.resources import FileResource, ArtifactSize
+from clockwork.resources import FileResource
 
 readme = FileResource(
     name="README.md",
     description="Project readme",
-    size=ArtifactSize.MEDIUM
+    content="Test content"
 )
 
 config = FileResource(
     name="config.json",
     description="Configuration file",
-    size=ArtifactSize.SMALL
+    content="Test content"
 )
 
 script = FileResource(
     name="setup.sh",
     description="Setup script",
-    size=ArtifactSize.SMALL,
+    content="Test content",
     mode="755"
 )
 ''')
@@ -114,12 +114,11 @@ def test_generate_mode(tmp_path):
     """Test generate (dry run) mode."""
     main_file = tmp_path / "main.py"
     main_file.write_text('''
-from clockwork.resources import FileResource, ArtifactSize
+from clockwork.resources import FileResource
 
 readme = FileResource(
     name="README.md",
     description="Test readme",
-    size=ArtifactSize.SMALL,
     content="# Test"
 )
 ''')
@@ -145,12 +144,11 @@ def test_generate_mode_with_ai_generation(tmp_path):
     """Test generate mode with resources needing AI generation."""
     main_file = tmp_path / "main.py"
     main_file.write_text('''
-from clockwork.resources import FileResource, ArtifactSize
+from clockwork.resources import FileResource
 
 readme = FileResource(
     name="README.md",
     description="Generate a detailed project readme",
-    size=ArtifactSize.LARGE
 )
 ''')
 
@@ -182,12 +180,11 @@ def test_apply_with_dry_run(tmp_path):
     """Test apply with dry_run=True."""
     main_file = tmp_path / "main.py"
     main_file.write_text('''
-from clockwork.resources import FileResource, ArtifactSize
+from clockwork.resources import FileResource
 
 test_file = FileResource(
     name="test.txt",
     description="Test",
-    size=ArtifactSize.SMALL,
     content="Static content"
 )
 ''')
@@ -211,19 +208,18 @@ def test_full_pipeline_integration(tmp_path):
     """Test the full pipeline: load -> generate -> compile -> deploy."""
     main_file = tmp_path / "main.py"
     main_file.write_text('''
-from clockwork.resources import FileResource, ArtifactSize
+from clockwork.resources import FileResource
 
 manual_file = FileResource(
     name="manual.txt",
     description="Manual content",
-    size=ArtifactSize.SMALL,
     content="User provided content"
 )
 
 ai_file = FileResource(
     name="ai.md",
     description="Generate a markdown file about Python",
-    size=ArtifactSize.SMALL
+    content="Test content"
 )
 ''')
 
@@ -295,12 +291,11 @@ def test_pyinfra_compiler_integration(tmp_path):
     """Test that the PyInfra compiler is properly integrated."""
     main_file = tmp_path / "main.py"
     main_file.write_text('''
-from clockwork.resources import FileResource, ArtifactSize
+from clockwork.resources import FileResource
 
 test_file = FileResource(
     name="test.txt",
     description="Test",
-    size=ArtifactSize.SMALL,
     content="Test content"
 )
 ''')
@@ -327,13 +322,12 @@ def test_resources_with_mixed_content(tmp_path):
     """Test pipeline with mix of user-provided and AI-generated content."""
     main_file = tmp_path / "main.py"
     main_file.write_text('''
-from clockwork.resources import FileResource, ArtifactSize
+from clockwork.resources import FileResource
 
 # User-provided content
 static_file = FileResource(
     name="static.txt",
     description="Static",
-    size=ArtifactSize.SMALL,
     content="I wrote this myself"
 )
 
@@ -341,7 +335,7 @@ static_file = FileResource(
 dynamic_file = FileResource(
     name="dynamic.md",
     description="Generate documentation about Docker",
-    size=ArtifactSize.MEDIUM
+    content="Test content"
 )
 ''')
 
@@ -581,13 +575,12 @@ def test_assert_command_with_object_assertions(tmp_path):
     """Test clockwork assert command with BaseAssertion objects."""
     main_file = tmp_path / "main.py"
     main_file.write_text('''
-from clockwork.resources import FileResource, ArtifactSize
+from clockwork.resources import FileResource
 from clockwork.assertions import FileExistsAssert, FilePermissionsAssert
 
 test_file = FileResource(
     name="test.txt",
     description="Test file",
-    size=ArtifactSize.SMALL,
     content="Test content",
     assertions=[
         FileExistsAssert(path="test.txt"),
@@ -631,13 +624,12 @@ def test_assert_command_generates_correct_pyinfra_files(tmp_path):
     """Test that assert command generates correct PyInfra files."""
     main_file = tmp_path / "main.py"
     main_file.write_text('''
-from clockwork.resources import FileResource, ArtifactSize
+from clockwork.resources import FileResource
 from clockwork.assertions import FileExistsAssert
 
 test_file = FileResource(
     name="test.txt",
     description="Test",
-    size=ArtifactSize.SMALL,
     content="Test",
     assertions=[FileExistsAssert(path="test.txt")]
 )
@@ -671,12 +663,11 @@ def test_assert_command_with_no_assertions(tmp_path):
     """Test assert command with resources that have no assertions."""
     main_file = tmp_path / "main.py"
     main_file.write_text('''
-from clockwork.resources import FileResource, ArtifactSize
+from clockwork.resources import FileResource
 
 test_file = FileResource(
     name="test.txt",
     description="Test",
-    size=ArtifactSize.SMALL,
     content="Test"
 )
 ''')
@@ -710,13 +701,12 @@ def test_assert_command_failure_handling(tmp_path):
     """Test that assert command properly handles assertion failures."""
     main_file = tmp_path / "main.py"
     main_file.write_text('''
-from clockwork.resources import FileResource, ArtifactSize
+from clockwork.resources import FileResource
 from clockwork.assertions import FileExistsAssert
 
 test_file = FileResource(
     name="test.txt",
     description="Test",
-    size=ArtifactSize.SMALL,
     content="Test",
     assertions=[FileExistsAssert(path="/nonexistent/file.txt")]
 )
@@ -760,13 +750,12 @@ def test_assert_multiple_resources_with_assertions(tmp_path):
     """Test assert command with multiple resources."""
     main_file = tmp_path / "main.py"
     main_file.write_text('''
-from clockwork.resources import FileResource, ArtifactSize
+from clockwork.resources import FileResource
 from clockwork.assertions import FileExistsAssert, FilePermissionsAssert
 
 file1 = FileResource(
     name="file1.txt",
     description="First file",
-    size=ArtifactSize.SMALL,
     content="Content 1",
     assertions=[FileExistsAssert(path="file1.txt")]
 )
@@ -774,7 +763,6 @@ file1 = FileResource(
 file2 = FileResource(
     name="file2.txt",
     description="Second file",
-    size=ArtifactSize.SMALL,
     content="Content 2",
     assertions=[
         FileExistsAssert(path="file2.txt"),

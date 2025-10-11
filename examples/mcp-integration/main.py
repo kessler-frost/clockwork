@@ -4,7 +4,7 @@ MCP Integration Example - Model Context Protocol Server Integration.
 This example demonstrates how to use MCPTools with Clockwork resources.
 """
 
-from clockwork.resources import FileResource, ArtifactSize
+from clockwork.resources import FileResource
 from clockwork.assertions import (
     FileExistsAssert,
     FileSizeAssert,
@@ -22,7 +22,6 @@ filesystem_mcp = MCPServerStdio(
 project_analysis = FileResource(
     name="project_analysis.md",
     description="Analyze the Clockwork project structure, read the main files, and provide insights about the architecture and design patterns used",
-    size=ArtifactSize.LARGE,
     directory="scratch",
     toolsets=[filesystem_mcp],
     assertions=[
@@ -45,7 +44,6 @@ from pydantic_ai.common_tools.duckduckgo import duckduckgo_search_tool
 hybrid_analysis = FileResource(
     name="hybrid_analysis.md",
     description="Compare our Clockwork codebase architecture with industry best practices for Python infrastructure tools",
-    size=ArtifactSize.LARGE,
     directory="scratch",
     tools=[duckduckgo_search_tool()],  # Web search
     toolsets=[filesystem_mcp],         # Local file access (MCP)

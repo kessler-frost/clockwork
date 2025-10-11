@@ -138,13 +138,12 @@ Clockwork supports **PydanticAI tools** and **MCP (Model Context Protocol) serve
 
 ```python
 from pydantic_ai.common_tools.duckduckgo import duckduckgo_search_tool
-from clockwork.resources import FileResource, ArtifactSize
+from clockwork.resources import FileResource
 
 # AI can search the web for real-time information
 tech_news = FileResource(
     name="tech_news_today.md",
     description="Write about the latest AI developments and breakthroughs from this week",
-    size=ArtifactSize.MEDIUM,
     directory="scratch",
     # Enable web search capability
     tools=[duckduckgo_search_tool()],
@@ -162,7 +161,7 @@ tech_news = FileResource(
 **MCP servers** allow AI to interact with external systems through a standardized protocol:
 
 ```python
-from clockwork.resources import FileResource, ArtifactSize
+from clockwork.resources import FileResource
 from pydantic_ai.mcp import MCPServerStdio
 
 # Initialize MCP filesystem server
@@ -175,7 +174,6 @@ filesystem_mcp = MCPServerStdio(
 project_analysis = FileResource(
     name="project_analysis.md",
     description="Analyze the project structure and provide insights about the architecture",
-    size=ArtifactSize.LARGE,
     directory="scratch",
     toolsets=[filesystem_mcp],  # Note: toolsets not tools for MCP
 )
@@ -238,7 +236,7 @@ You can use both PydanticAI tools and MCP servers together:
 ```python
 from pydantic_ai.common_tools.duckduckgo import duckduckgo_search_tool
 from pydantic_ai.mcp import MCPServerStdio
-from clockwork.resources import FileResource, ArtifactSize
+from clockwork.resources import FileResource
 
 # Initialize MCP server
 filesystem_mcp = MCPServerStdio(
@@ -250,7 +248,6 @@ filesystem_mcp = MCPServerStdio(
 comprehensive_report = FileResource(
     name="comprehensive_analysis.md",
     description="Analyze our codebase and compare with industry best practices from the web",
-    size=ArtifactSize.LARGE,
     directory="scratch",
     tools=[duckduckgo_search_tool()],  # Web search
     toolsets=[filesystem_mcp],         # Filesystem access (note: separate parameter)
@@ -478,7 +475,7 @@ clockwork/
 1. Create a new resource class in `clockwork/resources/`:
 
 ```python
-from .base import Resource, ArtifactSize
+from .base import Resource
 from typing import Optional, Dict, Any
 
 class MyResource(Resource):
@@ -489,7 +486,7 @@ class MyResource(Resource):
         # Return True if AI should complete missing fields
         return self.content is None
 
-    def to_pyinfra_operations(self, artifacts: Dict[str, Any]) -> str:
+    def to_pyinfra_operations(self) -> str:
         # Return PyInfra operation code as string
         return f'''
 # Your PyInfra operation
@@ -499,7 +496,7 @@ server.shell(
 )
 '''
 
-    def to_pyinfra_destroy_operations(self, artifacts: Dict[str, Any]) -> str:
+    def to_pyinfra_destroy_operations(self) -> str:
         # Return PyInfra operation code to tear down the resource
         return f'''
 # Remove MyResource

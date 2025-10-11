@@ -1,14 +1,7 @@
 """Tests for resource models."""
 
 import pytest
-from clockwork.resources import Resource, FileResource, ArtifactSize
-
-
-def test_artifact_size_enum():
-    """Test ArtifactSize enum values."""
-    assert ArtifactSize.SMALL == "small"
-    assert ArtifactSize.MEDIUM == "medium"
-    assert ArtifactSize.LARGE == "large"
+from clockwork.resources import Resource, FileResource
 
 
 def test_file_resource_minimal():
@@ -22,21 +15,6 @@ def test_file_resource_minimal():
     assert file.directory is None
     assert file.mode is None
     assert file.needs_completion() is True
-    assert file.needs_artifact_generation() is True
-
-
-def test_file_resource_needs_generation():
-    """Test FileResource.needs_artifact_generation()."""
-    # Resource without content needs generation
-    file1 = FileResource(description="Test file")
-    assert file1.needs_artifact_generation() is True
-
-    # Resource with content doesn't need generation
-    file2 = FileResource(
-        description="Test file",
-        content="existing content"
-    )
-    assert file2.needs_artifact_generation() is False
 
 
 def test_file_resource_needs_completion():

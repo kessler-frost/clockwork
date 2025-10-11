@@ -63,17 +63,17 @@ def test_apple_container_resource_full_config():
     assert container.start is True
 
 
-def test_needs_artifact_generation_no_image():
-    """Test needs_artifact_generation() returns True when no image specified."""
+def test_needs_completion_no_image():
+    """Test needs_completion() returns True when no image specified."""
     container = AppleContainerResource(
         name="nginx",
         description="Web server"
     )
 
-    assert container.needs_artifact_generation() is True
+    assert container.needs_completion() is True
 
 
-def test_needs_artifact_generation_with_image():
+def test_needs_completion_with_all_fields():
     """Test needs_completion() returns False when all fields are specified."""
     container = AppleContainerResource(
         name="nginx",
@@ -223,7 +223,7 @@ def test_to_pyinfra_operations_complex_env_vars():
     assert 'apple_containers.container_run(' in operations
 
 
-def test_to_pyinfra_operations_artifact_string_format():
+def test_to_pyinfra_operations_completed_fields():
     """Test PyInfra code generation with completed fields."""
     container = AppleContainerResource(
         name="test",

@@ -48,10 +48,6 @@ class FileResource(Resource):
             self.mode is None
         )
 
-    def needs_artifact_generation(self) -> bool:
-        """Returns True if content needs to be AI-generated."""
-        return self.content is None
-
     def _resolve_file_path(self) -> tuple[str, Optional[str]]:
         """Resolve file path and directory from resource configuration.
 

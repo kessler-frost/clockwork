@@ -51,14 +51,6 @@ class DirectoryResource(Resource):
         """
         return self.name is None or self.mode is None
 
-    def needs_artifact_generation(self) -> bool:
-        """Alias for needs_completion() for compatibility with base class.
-
-        Returns:
-            bool: True if any field needs AI completion
-        """
-        return self.needs_completion()
-
     def _resolve_directory_path(self) -> str:
         """Resolve directory path to absolute path.
 

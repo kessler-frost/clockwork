@@ -61,14 +61,6 @@ class UserResource(Resource):
         """
         return False
 
-    def needs_artifact_generation(self) -> bool:
-        """Alias for needs_completion() for compatibility with base class.
-
-        Returns:
-            bool: Always False
-        """
-        return self.needs_completion()
-
     def to_pyinfra_operations(self) -> str:
         """Generate PyInfra operations code for user creation.
 

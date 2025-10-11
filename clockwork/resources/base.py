@@ -2,17 +2,9 @@
 
 from typing import Dict, Any, Optional, List, TYPE_CHECKING
 from pydantic import BaseModel
-from enum import Enum
 
 if TYPE_CHECKING:
     from clockwork.assertions.base import BaseAssertion
-
-
-class ArtifactSize(str, Enum):
-    """Size hint for AI artifact generation."""
-    SMALL = "small"      # ~100-500 words
-    MEDIUM = "medium"    # ~500-2000 words
-    LARGE = "large"      # ~2000+ words
 
 
 class Resource(BaseModel):

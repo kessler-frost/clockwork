@@ -54,14 +54,6 @@ class GitRepoResource(Resource):
             self.branch is None
         )
 
-    def needs_artifact_generation(self) -> bool:
-        """Alias for needs_completion() for compatibility with base class.
-
-        Returns:
-            bool: True if any field needs AI completion
-        """
-        return self.needs_completion()
-
     def to_pyinfra_operations(self) -> str:
         """Generate PyInfra git.repo operation code.
 
