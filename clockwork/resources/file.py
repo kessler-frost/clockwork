@@ -197,7 +197,7 @@ server.shell(
 server.shell(
     name="Assert: File {file_path} has mode {mode}",
     commands=[
-        "[ \\"$(stat -c '%a' {file_path})\\" = \\"{mode}\\" ] || exit 1"
+        "[ \\"$(stat -c '%a' {file_path} 2>/dev/null || stat -f '%A' {file_path})\\" = \\"{mode}\\" ] || exit 1"
     ],
 )
 '''

@@ -5,6 +5,7 @@ Clockwork Resources - Pydantic models for declarative infrastructure.
 from .base import Resource
 from .file import FileResource
 from .apple_container import AppleContainerResource
+from .docker import DockerResource
 from .directory import DirectoryResource
 from .git import GitRepoResource
 from .user import UserResource
@@ -15,9 +16,10 @@ from clockwork.assertions.base import BaseAssertion  # noqa: F401
 Resource.model_rebuild()
 FileResource.model_rebuild()
 AppleContainerResource.model_rebuild()
+DockerResource.model_rebuild()
 DirectoryResource.model_rebuild()
 GitRepoResource.model_rebuild()
 UserResource.model_rebuild()
 BrewPackageResource.model_rebuild()
 
-__all__ = ["Resource", "FileResource", "AppleContainerResource", "DirectoryResource", "GitRepoResource", "UserResource", "BrewPackageResource"]
+__all__ = ["Resource", "FileResource", "AppleContainerResource", "DockerResource", "DirectoryResource", "GitRepoResource", "UserResource", "BrewPackageResource"]

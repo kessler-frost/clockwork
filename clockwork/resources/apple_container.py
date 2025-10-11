@@ -241,6 +241,7 @@ apple_containers.container_remove(
         if self.present:
             operations.append(f'''
 # Assert: Container exists
+from pyinfra.api import host
 from clockwork.pyinfra_facts.apple_containers import ContainerExists
 
 container_exists = host.get_fact(ContainerExists, container_id="{self.name}")

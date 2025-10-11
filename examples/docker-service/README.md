@@ -1,22 +1,22 @@
-# Apple Container Service Example
+# Docker Service Example
 
-Intelligent container orchestration with AI-suggested images using Apple Containers CLI (macOS).
+Cross-platform container orchestration with AI-powered Docker management.
 
 ## What it does
 
-AppleContainerResource provides intelligent container management using Apple's native container runtime on macOS. Works with the Apple Containers CLI (`container` command).
+DockerResource provides intelligent Docker container management using PyInfra's native docker operations. Works on Mac, Linux, Windows, and remote servers via SSH.
 
 ## Prerequisites
 
-- Apple Containers CLI installed and running
-- macOS system with container support
+- Docker installed and running
+- Docker daemon accessible from command line
 - Network access to pull container images
 
 ## Run the example
 
 ```bash
 # Navigate to example directory
-cd examples/apple-container-service
+cd examples/docker-service
 
 # Deploy containers
 clockwork apply
@@ -26,7 +26,7 @@ clockwork assert
 
 # Test the services
 curl localhost:80      # Minimal example
-curl localhost:8090    # Advanced example with custom port
+curl localhost:8091    # Advanced example with custom port
 
 # Clean up
 clockwork destroy
@@ -35,23 +35,23 @@ clockwork destroy
 ## How it works
 
 1. **AI completion**: Analyzes descriptions and suggests appropriate container images, ports, volumes, and configuration
-2. **macOS Optimized**: Uses Apple Containers CLI for native macOS container support
+2. **Cross-platform**: Uses PyInfra's docker.container operation for universal Docker support
 3. **Orchestration**: Deploys containers with specified configuration
 4. **Assertions**: Validates deployment with health checks and port accessibility tests
 5. **`.clockwork/`** directory created in current directory with generated PyInfra code
 
 ## Platform support
 
-- **macOS**: Apple Containers CLI (native container runtime)
-- **Best for**: Local macOS development and testing
-
-For cross-platform Docker support, see the `docker-service` example.
+- **macOS**: Docker Desktop
+- **Linux**: Docker Engine
+- **Windows**: Docker Desktop (WSL2)
+- **Remote servers**: SSH connector with Docker installed
 
 ## Examples included
 
 ### Minimal example
 ```python
-minimal = AppleContainerResource(
+minimal = DockerResource(
     description="lightweight nginx web server for testing"
 )
 ```
@@ -60,13 +60,13 @@ AI completes all fields: name, image, ports, volumes, env_vars, networks
 
 ### Advanced example
 ```python
-api = AppleContainerResource(
+api = DockerResource(
     description="lightweight web server for testing and demos",
-    ports=["8090:80"],  # Override port mapping
+    ports=["8091:80"],  # Override port mapping
     assertions=[
         ContainerRunningAssert(timeout_seconds=10),
-        PortAccessibleAssert(port=8090, host="localhost", protocol="tcp"),
-        HealthcheckAssert(url="http://localhost:8090", expected_status=200, timeout_seconds=5),
+        PortAccessibleAssert(port=8091, host="localhost", protocol="tcp"),
+        HealthcheckAssert(url="http://localhost:8091", expected_status=200, timeout_seconds=5),
     ]
 )
 ```
@@ -78,7 +78,7 @@ AI completes missing fields while preserving user overrides.
 The `clockwork assert` command validates:
 - Container existence
 - Container running state
-- Port accessibility (8090)
+- Port accessibility (8091)
 - HTTP health check endpoint
 - Response time
 

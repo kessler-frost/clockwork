@@ -211,6 +211,8 @@ Missing fields (you MUST complete ALL of these):
             prompt += self._build_file_completion_instructions(resource)
         elif resource_type == "AppleContainerResource":
             prompt += self._build_container_completion_instructions(resource)
+        elif resource_type == "DockerResource":
+            prompt += self._build_docker_completion_instructions(resource)
         elif resource_type == "BrewPackageResource":
             prompt += self._build_brew_completion_instructions(resource)
         elif resource_type == "GitRepoResource":
@@ -232,7 +234,7 @@ and resource type. Return a COMPLETE {resource_type} object with all fields fill
 For FileResource, please complete:
 - name: appropriate filename with extension (e.g., "README.md", "config.json")
 - content: the actual file content based on the description
-- directory: where to create the file (default: "." for current directory)
+- directory: where to create the file (use None for current directory, or specify subdirectory like "scratch")
 - mode: file permissions (default: "644" for regular files)
 
 The content should be well-formatted and production-ready.
@@ -253,6 +255,22 @@ For AppleContainerResource, please complete:
 - networks: container networks (optional, can be None or empty list)
 
 Return a complete AppleContainerResource object with production-ready defaults.
+"""
+
+    def _build_docker_completion_instructions(self, resource: Any) -> str:
+        """Build completion instructions for DockerResource."""
+        return """
+For DockerResource, please complete:
+- name: container service name (e.g., "nginx-web", "postgres-db", "redis-cache")
+- image: Docker image with version tag (e.g., "nginx:alpine", "postgres:16-alpine", "redis:7-alpine")
+  * Prefer official images with alpine variants for smaller size
+  * Include version tags (not :latest) for reproducibility
+- ports: standard port mappings (e.g., ["8080:80"] for web servers, ["5432:5432"] for postgres)
+- env_vars: required environment variables as dict (e.g., {"POSTGRES_PASSWORD": "secret"})
+- volumes: data persistence volumes (e.g., ["postgres_data:/var/lib/postgresql/data"])
+- networks: container networks (optional, can be None or empty list)
+
+Return a complete DockerResource object with production-ready defaults.
 """
 
     def _build_brew_completion_instructions(self, resource: Any) -> str:

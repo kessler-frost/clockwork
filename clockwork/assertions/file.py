@@ -108,8 +108,8 @@ class FilePermissionsAssert(BaseAssertion):
         # Build validation commands
         checks = []
 
-        # Check mode (permissions)
-        checks.append(f"[ \"$(stat -c '%a' {resolved_path})\" = \"{self.mode}\" ]")
+        # Check mode (permissions) - cross-platform: try Linux -c first, then macOS -f
+        checks.append(f"[ \"$(stat -c '%a' {resolved_path} 2>/dev/null || stat -f '%A' {resolved_path})\" = \"{self.mode}\" ]")
 
         # Check owner if specified (cross-platform: try Linux -c first, then macOS -f)
         if self.owner:

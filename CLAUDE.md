@@ -20,12 +20,14 @@ uv run clockwork apply
 
 ### Platform Requirements
 
-**macOS Compatible**: All examples in this repository are designed to run on macOS using the `@local` connector. Examples use Mac-compatible tools like:
-- Docker (requires Docker Desktop for Mac)
-- Homebrew for package management
-- Standard Unix utilities (git, cron, etc.)
+**Cross-Platform Support**: Clockwork works on macOS, Linux, and Windows with support for both local and remote deployments:
+- **Docker**: Works on any platform with Docker installed (Docker Desktop for Mac/Windows, native Docker for Linux)
+- **macOS tools**: Homebrew, Apple Containers CLI
+- **Standard Unix utilities**: git, cron, etc.
 
-For Linux/remote deployments, modify the inventory in your `main.py` or use SSH connectors as documented in the PyInfra documentation.
+**Deployment options:**
+- `@local` connector: Run operations on your local machine (Mac/Linux/Windows)
+- SSH connectors: Deploy to remote Linux servers (see PyInfra documentation)
 
 ## Architecture
 
@@ -37,6 +39,33 @@ Clockwork provides **intelligent infrastructure orchestration** using a simple *
 4. **Deploy** (PyInfra): Execute infrastructure deployment
 
 The orchestration flow: Python definitions → AI intelligence → PyInfra automation → Deployed infrastructure.
+
+## Resource Types
+
+Clockwork provides multiple resource types for different infrastructure needs:
+
+### Container Resources
+
+**DockerResource** - Cross-platform Docker container management:
+- Uses PyInfra's native `docker.container` operation
+- Works on Mac, Linux, Windows, and remote servers via SSH
+- Standard Docker commands and workflows
+- Best for: Production deployments, Linux servers, cross-platform compatibility
+
+**AppleContainerResource** - macOS-optimized container management:
+- Uses Apple Containers CLI (`container` command)
+- macOS-specific optimizations
+- Best for: Local macOS development and testing
+
+Both resources provide the same API (description, name, image, ports, volumes, env_vars, networks) and support AI completion of missing fields.
+
+### Other Resources
+
+- **FileResource** - File generation and management
+- **DirectoryResource** - Directory creation with permissions
+- **GitRepoResource** - Git repository cloning
+- **BrewPackageResource** - Homebrew package installation (macOS)
+- **UserResource** - User account management
 
 ## Assertions
 
@@ -58,9 +87,9 @@ Clockwork provides a **type-safe assertion system** for validating deployed reso
 - `ResponseTimeAssert(url, max_ms)` - Performance validation
 
 **Container:**
-- `ContainerRunningAssert()` - Apple Container status
-- `ContainerHealthyAssert()` - Health check validation
-- `LogContainsAssert(pattern, lines=100)` - Log pattern matching
+- `ContainerRunningAssert()` - Container running status (Docker or Apple Containers)
+- `ContainerHealthyAssert()` - Health check validation (Docker or Apple Containers)
+- `LogContainsAssert(pattern, lines=100)` - Log pattern matching (Docker or Apple Containers)
 
 **File:**
 - `FileExistsAssert(path)` - File/directory existence
@@ -325,12 +354,11 @@ hybrid_analysis = FileResource(
 ### Tool Examples Directory
 
 See the complete example:
-- `examples/mcp-integration/` - MCP server usage patterns
+- `examples/tool-integration/` - PydanticAI tool usage (web search) with optional MCP examples
 
 ```bash
-# Try the MCP example
-cd examples/mcp-integration
-npm install -g @modelcontextprotocol/server-filesystem
+# Try the tool integration example (no setup required)
+cd examples/tool-integration
 uv run clockwork apply
 ```
 
@@ -462,7 +490,8 @@ clockwork/
 │   ├── resources/              # Pydantic resource models
 │   │   ├── base.py            # Base Resource class
 │   │   ├── file.py            # FileResource
-│   │   └── apple_container.py # AppleContainerResource
+│   │   ├── docker.py          # DockerResource (cross-platform)
+│   │   └── apple_container.py # AppleContainerResource (macOS)
 │   ├── pyinfra_operations/    # Custom PyInfra operations
 │   │   └── apple_containers.py # Apple Containers CLI operations
 │   ├── pyinfra_facts/         # Custom PyInfra facts
@@ -474,8 +503,9 @@ clockwork/
 │   └── settings.py            # Configuration via Pydantic Settings
 ├── examples/
 │   ├── file-generation/           # File generation example
-│   ├── apple-container-service/   # Apple Container service example
-│   └── mcp-integration/           # MCP server integration example
+│   ├── docker-service/            # Docker service example (cross-platform)
+│   ├── apple-container-service/   # Apple Container service example (macOS)
+│   └── tool-integration/           # Tool integration example (web search)
 ├── tests/                  # Test suite
 └── pyproject.toml         # Dependencies
 ```
@@ -583,7 +613,17 @@ uv run clockwork assert
 # Destroy deployed resources
 uv run clockwork destroy
 
-# Test Apple Container service example
+# Test Docker service example (cross-platform)
+cd ../docker-service
+uv run clockwork apply
+
+# Run assertions
+uv run clockwork assert
+
+# Destroy containers
+uv run clockwork destroy
+
+# Test Apple Container service example (macOS)
 cd ../apple-container-service
 uv run clockwork apply
 
@@ -593,9 +633,8 @@ uv run clockwork assert
 # Destroy containers
 uv run clockwork destroy
 
-# Test MCP integration (filesystem access)
-cd ../mcp-integration
-npm install -g @modelcontextprotocol/server-filesystem
+# Test tool integration (web search - no setup required)
+cd ../tool-integration
 uv run clockwork apply
 ```
 

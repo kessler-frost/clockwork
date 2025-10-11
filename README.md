@@ -118,9 +118,24 @@ FileResource(
 )
 ```
 
+### DockerResource
+
+Runs Docker containers with optional AI-suggested images. Cross-platform support (Mac, Linux, Windows).
+
+```python
+DockerResource(
+    name="web-server",
+    description="A lightweight web server for testing and demos",
+    ports=["8080:80"]  # Host port 8080 -> Container port 80
+)
+```
+
+**AI-Powered**: When `image` is not specified, AI suggests appropriate container images (e.g., nginx:alpine).
+**Cross-Platform**: Uses PyInfra's native docker.container operation for universal Docker support.
+
 ### AppleContainerResource
 
-Runs Apple Containers with optional AI-suggested images.
+Runs Apple Containers with optional AI-suggested images. macOS-specific using Apple Containers CLI.
 
 ```python
 AppleContainerResource(
@@ -131,6 +146,7 @@ AppleContainerResource(
 ```
 
 **AI-Powered**: When `image` is not specified, AI suggests appropriate container images (e.g., nginx:alpine).
+**macOS Optimized**: Uses Apple's native container runtime for local development.
 
 ## Assertions
 
@@ -228,7 +244,13 @@ uv run clockwork apply
 uv run clockwork assert
 uv run clockwork destroy
 
-# Apple Container services
+# Docker services (cross-platform)
+cd examples/docker-service
+uv run clockwork apply
+uv run clockwork assert
+uv run clockwork destroy
+
+# Apple Container services (macOS)
 cd examples/apple-container-service
 uv run clockwork apply
 uv run clockwork assert
@@ -240,11 +262,38 @@ See `examples/` directory for more.
 ## Development
 
 ```bash
+# Install dependencies including dev tools
+uv sync --all-groups
+
+# Install pre-commit hooks
+uv run pre-commit install
+
+# Run pre-commit on all files (optional)
+uv run pre-commit run --all-files
+
 # Run tests
 uv run pytest tests/ -v
 
+# Lint and format code
+uv run ruff check --fix .
+uv run ruff format .
+
 # Clean up
 rm -rf .clockwork/ scratch/
+```
+
+### Pre-commit Hooks
+
+This project uses [pre-commit](https://pre-commit.com/) with [Ruff](https://docs.astral.sh/ruff/) for code quality:
+
+- **Ruff linter**: Checks code for errors, style issues, and import sorting
+- **Ruff formatter**: Formats code according to Google Python Style Guide
+- **Standard hooks**: Trailing whitespace, EOF fixing, YAML/TOML validation
+
+After installation, hooks run automatically on `git commit`. To run manually:
+
+```bash
+uv run pre-commit run --all-files
 ```
 
 See [CLAUDE.md](./CLAUDE.md) for development guide.

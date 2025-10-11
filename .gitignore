@@ -47,6 +47,7 @@ dmypy.json
 .idea/
 *.swp
 *.swo
+.claude/
 
 # Clockwork specific
 .clockwork/
