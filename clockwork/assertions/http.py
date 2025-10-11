@@ -31,7 +31,7 @@ class HealthcheckAssert(BaseAssertion):
         """Generate PyInfra operation for HTTP health check.
 
         Args:
-            resource: Parent resource (typically a DockerServiceResource)
+            resource: Parent resource (typically an AppleContainerResource)
 
         Returns:
             PyInfra server.shell operation that uses curl to check HTTP status
@@ -78,7 +78,7 @@ class PortAccessibleAssert(BaseAssertion):
         """Generate PyInfra operation for port accessibility check.
 
         Args:
-            resource: Parent resource (typically a DockerServiceResource)
+            resource: Parent resource (typically an AppleContainerResource)
 
         Returns:
             PyInfra server.shell operation that uses nc to check port
@@ -125,7 +125,7 @@ class ResponseTimeAssert(BaseAssertion):
         """Generate PyInfra operation for response time check.
 
         Args:
-            resource: Parent resource (typically a DockerServiceResource)
+            resource: Parent resource (typically an AppleContainerResource)
 
         Returns:
             PyInfra server.shell operation that uses curl to measure response time

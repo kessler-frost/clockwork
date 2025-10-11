@@ -15,8 +15,8 @@ from .settings import get_settings
 logger = logging.getLogger(__name__)
 
 
-class DockerConfig(BaseModel):
-    """Structured output model for Docker image configuration."""
+class ContainerConfig(BaseModel):
+    """Structured output model for container image configuration."""
     image: str
     suggested_ports: Optional[List[str]] = None
     suggested_env_vars: Optional[Dict[str, str]] = None
@@ -71,7 +71,7 @@ class ArtifactGenerator:
             resources: List of Resource objects
 
         Returns:
-            Dict mapping resource names to generated content (str or dict for Docker)
+            Dict mapping resource names to generated content (str or dict for containers)
         """
         artifacts = {}
 
@@ -83,7 +83,7 @@ class ArtifactGenerator:
 
                 # Log based on content type
                 if isinstance(content, dict):
-                    logger.info(f"Generated Docker config for {resource.name}: {content}")
+                    logger.info(f"Generated container config for {resource.name}: {content}")
                 else:
                     logger.info(f"Generated {len(content)} chars for {resource.name}")
 
@@ -97,7 +97,7 @@ class ArtifactGenerator:
             resource: Resource object needing content generation
 
         Returns:
-            Generated content - either a string or a dict (for Docker resources)
+            Generated content - either a string or a dict (for container resources)
         """
         # Build prompt based on resource type
         prompt = self._build_prompt(resource)
@@ -112,21 +112,14 @@ class ArtifactGenerator:
             provider=OpenRouterProvider(api_key=self.api_key)
         )
 
-        # Create PydanticAI Agent with structured output for Docker, plain for others
-        if self._is_docker_resource(resource):
-            agent = Agent(
-                model,
-                output_type=DockerConfig,
-                system_prompt=self.SYSTEM_PROMPT
-            )
-        else:
-            # Pass tools via the tools parameter for individual Tool objects
-            # Note: PydanticAI requires a list (even empty []), not None
-            agent = Agent(
-                model,
-                tools=tools,  # tools is already [] if resource.tools is None
-                system_prompt=self.SYSTEM_PROMPT
-            )
+        # Create PydanticAI Agent
+        # Note: We don't use output_type for container resources because
+        # free OpenRouter models don't support structured outputs (tool use)
+        agent = Agent(
+            model,
+            tools=tools,  # tools is already [] if resource.tools is None
+            system_prompt=self.SYSTEM_PROMPT
+        )
 
         # Get response from agent
         result = await agent.run(prompt)
@@ -134,38 +127,66 @@ class ArtifactGenerator:
         # Extract content from result
         content = result.output
 
-        # Handle Docker resources specially
-        if self._is_docker_resource(resource):
-            return self._parse_docker_response(content, resource)
+        # Handle container resources specially - parse JSON from text response
+        if self._is_container_resource(resource):
+            return self._parse_container_response(content, resource)
 
         return content
 
-    def _parse_docker_response(self, content: Any, resource: Any) -> Dict[str, Any]:
+    def _parse_container_response(self, content: Any, resource: Any) -> Dict[str, Any]:
         """
-        Parse AI response for Docker resources.
+        Parse AI response for container resources.
 
         Args:
-            content: AI-generated content (DockerConfig instance with structured output)
-            resource: Docker resource object
+            content: AI-generated content (either ContainerConfig instance or JSON string)
+            resource: Container resource object
 
         Returns:
             Dict with at least {"image": "..."} key
         """
-        # With PydanticAI structured output, content is already a DockerConfig instance
-        if isinstance(content, DockerConfig):
+        import json
+        import re
+
+        # With PydanticAI structured output, content is already a ContainerConfig instance
+        if isinstance(content, ContainerConfig):
             parsed = content.model_dump()
-            logger.info(f"Parsed Docker response for {resource.name}: {parsed}")
+            logger.info(f"Parsed container response for {resource.name}: {parsed}")
             return parsed
 
+        # Parse JSON from text response (for models without structured output support)
+        if isinstance(content, str):
+            # Try to extract JSON from the response
+            # Look for JSON block (with or without markdown code fences)
+            json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', content, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(1)
+            else:
+                # Try to find raw JSON object
+                json_match = re.search(r'\{.*?\}', content, re.DOTALL)
+                if json_match:
+                    json_str = json_match.group(0)
+                else:
+                    raise ValueError(f"No JSON found in response: {content}")
+
+            try:
+                parsed = json.loads(json_str)
+                # Validate that we have at least an "image" key
+                if "image" not in parsed:
+                    raise ValueError(f"Response JSON missing 'image' key: {parsed}")
+                logger.info(f"Parsed container response for {resource.name}: {parsed}")
+                return parsed
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Failed to parse JSON from response: {json_str}. Error: {e}")
+
         # Fallback for unexpected format
-        raise ValueError(f"Expected DockerConfig instance, got: {type(content)}")
+        raise ValueError(f"Expected ContainerConfig instance or string, got: {type(content)}")
 
     def _build_prompt(self, resource: Any) -> str:
         """Build generation prompt based on resource."""
 
-        # Check if this is a DockerServiceResource
-        if self._is_docker_resource(resource):
-            return self._build_docker_prompt(resource)
+        # Check if this is a container resource
+        if self._is_container_resource(resource):
+            return self._build_container_prompt(resource)
 
         # Base prompt
         prompt = f"Generate content for: {resource.description}\n\n"
@@ -185,11 +206,11 @@ class ArtifactGenerator:
 
         return prompt
 
-    def _is_docker_resource(self, resource: Any) -> bool:
-        """Check if resource is a AppleContainerResource (or legacy DockerServiceResource)."""
-        return resource.__class__.__name__ in ('AppleContainerResource', 'DockerServiceResource')
+    def _is_container_resource(self, resource: Any) -> bool:
+        """Check if resource is a AppleContainerResource."""
+        return resource.__class__.__name__ == 'AppleContainerResource'
 
-    def _build_docker_prompt(self, resource: Any) -> str:
+    def _build_container_prompt(self, resource: Any) -> str:
         """Build specialized prompt for container resources."""
         return f"""Based on this description: "{resource.description}"
 

@@ -45,7 +45,7 @@ class MemoryUsageAssert(BaseAssertion):
 server.shell(
     name="Assert: {desc}",
     commands=[
-        "MEM_BYTES=$(docker stats --no-stream --format '{{{{.MemUsage}}}}' {container} | awk '{{print $1}}' | sed 's/[^0-9.]//g'); "
+        "MEM_BYTES=$(container stats --no-stream --format '{{{{.MemUsage}}}}' {container} | awk '{{print $1}}' | sed 's/[^0-9.]//g'); "
         "MEM_MB=$(echo \"$MEM_BYTES\" | awk '{{printf \"%d\", $1}}'); "
         "[ $MEM_MB -le {self.max_mb} ] || exit 1"
     ],
@@ -107,7 +107,7 @@ class CpuUsageAssert(BaseAssertion):
 server.shell(
     name="Assert: {desc}",
     commands=[
-        "CPU=$(docker stats --no-stream --format '{{{{.CPUPerc}}}}' {container} | sed 's/%//'); "
+        "CPU=$(container stats --no-stream --format '{{{{.CPUPerc}}}}' {container} | sed 's/%//'); "
         "[ \"$(echo \"$CPU < {self.max_percent}\" | bc)\" -eq 1 ] || exit 1"
     ],
 )

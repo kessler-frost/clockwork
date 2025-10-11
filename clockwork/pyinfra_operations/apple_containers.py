@@ -37,7 +37,7 @@ def container_run(
     """Run a container using Apple Containers CLI.
 
     Args:
-        image: Docker image name (e.g., "nginx:latest")
+        image: Container image name (e.g., "nginx:latest")
         name: Container name/ID to use
         command: Command and arguments to run in container
         detach: Run container in detached mode (default: True)
@@ -312,7 +312,7 @@ def container_create(
     """Create a container without starting it.
 
     Args:
-        image: Docker image name
+        image: Container image name
         name: Container name/ID
         command: Command and arguments
         ports: Port mappings
