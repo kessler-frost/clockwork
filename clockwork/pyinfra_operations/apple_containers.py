@@ -16,7 +16,7 @@ from ..pyinfra_facts.apple_containers import ContainerStatus
 @operation()
 def container_run(
     image: str,
-    name: Optional[str] = None,
+    container_name: Optional[str] = None,
     command: Optional[List[str]] = None,
     detach: bool = True,
     ports: Optional[List[str]] = None,
@@ -38,7 +38,7 @@ def container_run(
 
     Args:
         image: Container image name (e.g., "nginx:latest")
-        name: Container name/ID to use
+        container_name: Logical container name for tracking (not supported by Apple Containers CLI, stored in label)
         command: Command and arguments to run in container
         detach: Run container in detached mode (default: True)
         ports: Port mappings in format ["host:container", ...]
@@ -61,7 +61,7 @@ def container_run(
 
     Example:
         container_run(
-            name="nginx-web",
+            container_name="nginx-web",
             image="nginx:latest",
             ports=["8080:80"],
             volumes=["./html:/usr/share/nginx/html"],
@@ -69,16 +69,28 @@ def container_run(
             detach=True,
         )
     """
-    # Check if container already exists
-    if name:
-        status = host.get_fact(ContainerStatus, container_id=name)
-        if status:
-            # Container exists, check if running
-            if status.get("running"):
-                host.noop(f"Container {name} is already running")
+    # Check if container already exists (by label since Apple Containers doesn't support named containers)
+    if container_name:
+        # Get all containers and check for one with matching label
+        from ..pyinfra_facts.apple_containers import ContainerList
+        containers = host.get_fact(ContainerList)
+        existing_container = None
+        if containers:
+            for container in containers:
+                container_labels = container.get("configuration", {}).get("labels", {})
+                if container_labels.get("clockwork.name") == container_name:
+                    existing_container = container
+                    break
+
+        if existing_container:
+            container_id = existing_container.get("configuration", {}).get("id")
+            is_running = existing_container.get("status") == "running"
+
+            if is_running:
+                host.noop(f"Container {container_name} (ID: {container_id}) is already running")
                 return
             # Container exists but not running - start it instead
-            yield f"container start {name}"
+            yield f"container start {container_id}"
             return
 
     # Build container run command
@@ -94,9 +106,12 @@ def container_run(
     if remove:
         cmd_parts.append("--rm")
 
-    # Add named arguments
-    if name:
-        cmd_parts.extend(["--name", name])
+    # Add labels (using labels since Apple Containers doesn't support --name)
+    if container_name:
+        # Add clockwork.name label for tracking
+        if not labels:
+            labels = {}
+        labels["clockwork.name"] = container_name
 
     if memory:
         cmd_parts.extend(["--memory", memory])
@@ -202,7 +217,7 @@ def container_remove(
     """Remove a container.
 
     Args:
-        container_id: Container ID or name
+        container_id: Container ID or logical name (will lookup by clockwork.name label)
         force: Force removal of running container
         **kwargs: Additional global operation arguments
 
@@ -212,20 +227,37 @@ def container_remove(
             force=True,
         )
     """
+    # Lookup container by label if container_id looks like a name
+    # (UUIDs contain hyphens but are longer, names are typically shorter)
+    from ..pyinfra_facts.apple_containers import ContainerList
+
+    actual_container_id = container_id
+    if len(container_id) < 36:  # UUID is 36 chars with hyphens
+        containers = host.get_fact(ContainerList)
+        if containers:
+            for container in containers:
+                container_labels = container.get("configuration", {}).get("labels", {})
+                if container_labels.get("clockwork.name") == container_id:
+                    actual_container_id = container.get("configuration", {}).get("id")
+                    break
+
     # Check if container exists
-    status = host.get_fact(ContainerStatus, container_id=container_id)
+    status = host.get_fact(ContainerStatus, container_id=actual_container_id)
     if not status:
         host.noop(f"Container {container_id} does not exist")
         return
 
     # Stop container first if running and not forcing
     if status.get("running") and not force:
-        yield from container_stop._inner(container_id=container_id)
+        yield from container_stop._inner(container_id=actual_container_id)
 
     # Build remove command
     cmd_parts = ["container", "rm"]
 
-    cmd_parts.append(container_id)
+    if force:
+        cmd_parts.append("-f")
+
+    cmd_parts.append(actual_container_id)
 
     yield " ".join(cmd_parts)
 
@@ -295,7 +327,7 @@ def container_exec(
 @operation()
 def container_create(
     image: str,
-    name: Optional[str] = None,
+    container_name: Optional[str] = None,
     command: Optional[List[str]] = None,
     ports: Optional[List[str]] = None,
     volumes: Optional[List[str]] = None,
@@ -313,7 +345,7 @@ def container_create(
 
     Args:
         image: Container image name
-        name: Container name/ID
+        container_name: Logical container name for tracking (stored in label)
         command: Command and arguments
         ports: Port mappings
         volumes: Volume mounts
@@ -329,23 +361,30 @@ def container_create(
 
     Example:
         container_create(
-            name="nginx-web",
+            container_name="nginx-web",
             image="nginx:latest",
             ports=["8080:80"],
         )
     """
-    # Check if container already exists
-    if name:
-        status = host.get_fact(ContainerStatus, container_id=name)
-        if status:
-            host.noop(f"Container {name} already exists")
-            return
+    # Check if container already exists (by label)
+    if container_name:
+        from ..pyinfra_facts.apple_containers import ContainerList
+        containers = host.get_fact(ContainerList)
+        if containers:
+            for container in containers:
+                container_labels = container.get("configuration", {}).get("labels", {})
+                if container_labels.get("clockwork.name") == container_name:
+                    host.noop(f"Container {container_name} already exists")
+                    return
 
     # Build container create command
     cmd_parts = ["container", "create"]
 
-    if name:
-        cmd_parts.extend(["--name", name])
+    # Add clockwork.name label for tracking
+    if container_name:
+        if not labels:
+            labels = {}
+        labels["clockwork.name"] = container_name
 
     if memory:
         cmd_parts.extend(["--memory", memory])

@@ -68,13 +68,14 @@ class ContainerStatus(FactBase):
         """Generate command to get container status.
 
         Args:
-            container_id: Container ID or name
+            container_id: Container ID (UUID format)
 
         Returns:
             Command string to execute
         """
-        # First check if container exists in the list
-        return f"container ls --all --format json | grep -q '{container_id}' && container inspect {container_id} || echo '{{}}'"
+        # Use inspect directly with the container ID
+        # If container doesn't exist, this will return an empty array
+        return f"container inspect {container_id} 2>/dev/null || echo '[]'"
 
     def process(self, output: List[str]) -> Optional[Dict[str, Any]]:
         """Process the container inspect output.
@@ -92,36 +93,33 @@ class ContainerStatus(FactBase):
             json_str = "".join(output)
             data = json.loads(json_str)
 
-            # Empty dict means container doesn't exist
-            if not data or data == {}:
+            # Empty array or dict means container doesn't exist
+            if not data or data == [] or data == {}:
                 return None
 
             # Extract relevant status information
-            # The inspect output format may vary, so we handle it flexibly
-            if isinstance(data, list) and len(data) > 0:
+            # Apple Containers returns an array from inspect
+            if isinstance(data, list):
+                if len(data) == 0:
+                    return None
                 container_info = data[0]
             elif isinstance(data, dict):
                 container_info = data
             else:
                 return None
 
+            # Apple Containers structure: {configuration: {...}, status: "...", networks: [...]}
+            config = container_info.get("configuration", {})
+            status_str = container_info.get("status", "")
+
             # Build a simplified status dict
             status = {
-                "id": container_info.get("ID") or container_info.get("id"),
-                "name": container_info.get("Name") or container_info.get("name"),
-                "image": container_info.get("Image") or container_info.get("image"),
-                "state": container_info.get("State", {}),
-                "running": False,
+                "id": config.get("id"),
+                "image": config.get("image", {}).get("reference"),
+                "labels": config.get("labels", {}),
+                "running": status_str == "running",
+                "status": status_str,
             }
-
-            # Check if container is running
-            state = container_info.get("State", {})
-            if isinstance(state, dict):
-                status["running"] = state.get("Running", False) or state.get("running", False)
-                status["status"] = state.get("Status", "unknown")
-            elif isinstance(state, str):
-                status["running"] = state.lower() in ("running", "up")
-                status["status"] = state
 
             return status
         except (json.JSONDecodeError, ValueError, KeyError, AttributeError):

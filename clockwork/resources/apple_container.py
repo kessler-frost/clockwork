@@ -107,7 +107,7 @@ apple_containers.container_remove(
                 # Create and start the container
                 params = [
                     f'    image="{self.image}"',
-                    f'    name="{self.name}"',
+                    f'    container_name="{self.name}"',
                     '    detach=True',
                 ]
 
@@ -137,7 +137,7 @@ apple_containers.container_run(
                 # Create but don't start (stopped state)
                 params = [
                     f'    image="{self.image}"',
-                    f'    name="{self.name}"',
+                    f'    container_name="{self.name}"',
                 ]
 
                 if self.ports:
