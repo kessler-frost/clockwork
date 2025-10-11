@@ -14,7 +14,7 @@ class AppleContainerResource(Resource):
         name: Container name (required)
         description: What the service does - used by AI for image suggestions (required)
         image: Container image to use (optional - AI will suggest if not provided)
-        ports: Port mappings as list of strings (e.g., ["80:80", "443:443"])
+        ports: Port mappings as list of strings (e.g., ["8080:80", "8443:443"])
         volumes: Volume mounts as list of strings (e.g., ["/host:/container"])
         env_vars: Environment variables as key-value pairs
         networks: Container networks to attach the container to
@@ -26,7 +26,7 @@ class AppleContainerResource(Resource):
         >>> nginx = AppleContainerResource(
         ...     name="nginx",
         ...     description="Web server for serving static content",
-        ...     ports=["80:80"]
+        ...     ports=["8080:80"]
         ... )
 
         # Explicit image specification:
@@ -61,11 +61,11 @@ class AppleContainerResource(Resource):
         return self.image is None
 
     def to_pyinfra_operations(self, artifacts: Dict[str, Any]) -> str:
-        """Generate PyInfra shell operations for Apple Containers.
+        """Generate PyInfra operations for Apple Containers.
 
         Creates PyInfra operations that deploy the Apple Container with the
-        specified configuration using the 'container' CLI. If the image was
-        AI-generated, it will be retrieved from the artifacts dictionary.
+        specified configuration using custom apple_containers operations.
+        If the image was AI-generated, it will be retrieved from the artifacts dictionary.
 
         Args:
             artifacts: Dict mapping resource names to generated content.
@@ -76,11 +76,12 @@ class AppleContainerResource(Resource):
 
         Example generated code:
             ```python
-            server.shell(
+            apple_containers.container_run(
                 name="Deploy nginx",
-                commands=[
-                    "container run -d --name nginx -p 80:80 nginx:latest"
-                ]
+                image="nginx:latest",
+                container_name="nginx",
+                ports=["8080:80"],
+                detach=True,
             )
             ```
         """
@@ -93,78 +94,86 @@ class AppleContainerResource(Resource):
         # Use empty string as fallback (should not happen in practice)
         image = image or ""
 
-        # Build the container run command
-        cmd_parts = ["container run -d"]
-
-        # Add container name
-        cmd_parts.append(f"--name {self.name}")
-
-        # Add port mappings
-        if self.ports:
-            for port in self.ports:
-                cmd_parts.append(f"-p {port}")
-
-        # Add volume mounts
-        if self.volumes:
-            for volume in self.volumes:
-                cmd_parts.append(f"-v {volume}")
-
-        # Add environment variables
-        if self.env_vars:
-            for key, value in self.env_vars.items():
-                cmd_parts.append(f"-e {key}={value}")
-
-        # Add networks
-        if self.networks:
-            for network in self.networks:
-                cmd_parts.append(f"--network {network}")
-
-        # Add image
-        cmd_parts.append(image)
-
-        run_command = " ".join(cmd_parts)
-
         operations = []
 
         if self.present:
+            # First, remove existing container if present
+            operations.append(f'''
+# Remove existing container if present: {self.name}
+apple_containers.container_remove(
+    name="Remove existing {self.name}",
+    container_id="{self.name}",
+    force=True,
+)
+''')
+
             if self.start:
                 # Create and start the container
+                params = [
+                    f'    image="{image}"',
+                    f'    name="{self.name}"',
+                    '    detach=True',
+                ]
+
+                if self.ports:
+                    ports_str = ', '.join([f'"{p}"' for p in self.ports])
+                    params.append(f'    ports=[{ports_str}]')
+
+                if self.volumes:
+                    volumes_str = ', '.join([f'"{v}"' for v in self.volumes])
+                    params.append(f'    volumes=[{volumes_str}]')
+
+                if self.env_vars:
+                    env_items = ', '.join([f'"{k}": "{v}"' for k, v in self.env_vars.items()])
+                    params.append(f'    env_vars={{{env_items}}}')
+
+                if self.networks:
+                    networks_str = ', '.join([f'"{n}"' for n in self.networks])
+                    params.append(f'    networks=[{networks_str}]')
+
                 operations.append(f'''
 # Deploy Apple Container: {self.name}
-server.shell(
-    name="Deploy {self.name}",
-    commands=[
-        # Remove existing container if present
-        "container rm -f {self.name} 2>/dev/null || true",
-        # Run new container
-        "{run_command}"
-    ],
+apple_containers.container_run(
+{',\n'.join(params)},
 )
 ''')
             else:
                 # Create but don't start (stopped state)
-                stop_command = run_command.replace("container run -d", "container create")
+                params = [
+                    f'    image="{image}"',
+                    f'    name="{self.name}"',
+                ]
+
+                if self.ports:
+                    ports_str = ', '.join([f'"{p}"' for p in self.ports])
+                    params.append(f'    ports=[{ports_str}]')
+
+                if self.volumes:
+                    volumes_str = ', '.join([f'"{v}"' for v in self.volumes])
+                    params.append(f'    volumes=[{volumes_str}]')
+
+                if self.env_vars:
+                    env_items = ', '.join([f'"{k}": "{v}"' for k, v in self.env_vars.items()])
+                    params.append(f'    env_vars={{{env_items}}}')
+
+                if self.networks:
+                    networks_str = ', '.join([f'"{n}"' for n in self.networks])
+                    params.append(f'    networks=[{networks_str}]')
+
                 operations.append(f'''
 # Create Apple Container (stopped): {self.name}
-server.shell(
-    name="Create {self.name} (stopped)",
-    commands=[
-        # Remove existing container if present
-        "container rm -f {self.name} 2>/dev/null || true",
-        # Create container without starting
-        "{stop_command}"
-    ],
+apple_containers.container_create(
+{',\n'.join(params)},
 )
 ''')
         else:
-            # Container should not be present - handled in destroy
+            # Container should not be present
             operations.append(f'''
 # Ensure Apple Container is removed: {self.name}
-server.shell(
+apple_containers.container_remove(
     name="Remove {self.name}",
-    commands=[
-        "container rm -f {self.name} 2>/dev/null || true"
-    ],
+    container_id="{self.name}",
+    force=True,
 )
 ''')
 
@@ -174,7 +183,7 @@ server.shell(
         """Generate PyInfra operations code to destroy/remove the container.
 
         Creates PyInfra operations that remove the Apple Container using
-        'container rm' command.
+        the custom apple_containers.container_remove operation.
 
         Args:
             artifacts: Dict mapping resource names to generated content (unused for destroy)
@@ -184,28 +193,26 @@ server.shell(
 
         Example generated code:
             ```python
-            server.shell(
+            apple_containers.container_remove(
                 name="Remove nginx",
-                commands=[
-                    "container rm -f nginx 2>/dev/null || true"
-                ]
+                container_id="nginx",
+                force=True,
             )
             ```
         """
         return f'''
 # Remove Apple Container: {self.name}
-server.shell(
+apple_containers.container_remove(
     name="Remove {self.name}",
-    commands=[
-        "container rm -f {self.name} 2>/dev/null || true"
-    ],
+    container_id="{self.name}",
+    force=True,
 )
 '''
 
     def to_pyinfra_assert_operations(self, artifacts: Dict[str, Any]) -> str:
         """Generate PyInfra operations code for Apple Container assertions.
 
-        Provides default assertions for AppleContainerResource:
+        Provides default assertions for AppleContainerResource using custom facts:
         - Container is running (if start=True)
         - Container exists (if present=True)
 
@@ -220,12 +227,11 @@ server.shell(
         Example generated code:
             ```python
             # Default assertions for Apple Container: nginx
-            server.shell(
-                name="Assert: Container nginx is running",
-                commands=[
-                    "container ls --filter name=^nginx$ --filter status=running ..."
-                ]
-            )
+            from pyinfra.facts.server import Command
+
+            status = host.get_fact(ContainerStatus, container_id="nginx")
+            assert status is not None, "Container nginx does not exist"
+            assert status.get("running"), "Container nginx is not running"
             ```
         """
         # If custom assertions are defined, use the base implementation
@@ -239,24 +245,22 @@ server.shell(
         if self.present:
             operations.append(f'''
 # Assert: Container exists
-server.shell(
-    name="Assert: Container {self.name} exists",
-    commands=[
-        "container ls -a --filter name=^{self.name}$ --format '{{{{.Names}}}}' | grep -q '^{self.name}$' || exit 1"
-    ],
-)
+from clockwork.pyinfra_facts.apple_containers import ContainerExists
+
+container_exists = host.get_fact(ContainerExists, container_id="{self.name}")
+if not container_exists:
+    raise Exception("Container {self.name} does not exist")
 ''')
 
             # Check if container should be running
             if self.start:
                 operations.append(f'''
 # Assert: Container is running
-server.shell(
-    name="Assert: Container {self.name} is running",
-    commands=[
-        "container ls --filter name=^{self.name}$ --filter status=running --format '{{{{.Names}}}}' | grep -q '^{self.name}$' || exit 1"
-    ],
-)
+from clockwork.pyinfra_facts.apple_containers import ContainerRunning
+
+container_running = host.get_fact(ContainerRunning, container_id="{self.name}")
+if not container_running:
+    raise Exception("Container {self.name} is not running")
 ''')
 
         return "\n".join(operations)

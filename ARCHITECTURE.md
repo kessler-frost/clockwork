@@ -84,7 +84,7 @@ class AppleContainerResource(Resource):
     name: str                         # container name
     description: str                  # what it does (for AI image suggestion)
     image: Optional[str] = None      # Container image (AI suggests if not provided)
-    ports: Optional[List[str]] = None  # Port mappings ["80:80"]
+    ports: Optional[List[str]] = None  # Port mappings ["8080:80"]
     volumes: Optional[List[str]] = None  # Volume mounts ["/host:/container"]
     env_vars: Optional[Dict[str, str]] = None  # Environment variables
     networks: Optional[List[str]] = None  # Networks

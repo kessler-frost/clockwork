@@ -48,7 +48,7 @@ Clockwork provides a **type-safe assertion system** for validating deployed reso
 - Pydantic-based classes with IDE autocomplete
 - Instant compilation to PyInfra operations
 - No API costs or latency
-- Example: `HealthcheckAssert(url="http://localhost:80")`
+- Example: `HealthcheckAssert(url="http://localhost:8080")`
 
 ### Available Assertion Classes
 
@@ -90,13 +90,13 @@ from clockwork.assertions import (
 nginx = AppleContainerResource(
     name="nginx-web",
     description="Web server",
-    ports=["80:80"],
+    ports=["8080:80"],
     assertions=[
         # Type-safe assertions
         ContainerRunningAssert(),
-        PortAccessibleAssert(port=80),
-        HealthcheckAssert(url="http://localhost:80/health"),
-        ResponseTimeAssert(url="http://localhost:80", max_ms=200),
+        PortAccessibleAssert(port=8080),
+        HealthcheckAssert(url="http://localhost:8080/health"),
+        ResponseTimeAssert(url="http://localhost:8080", max_ms=200),
     ]
 )
 ```
@@ -110,8 +110,8 @@ clockwork assert
 # Output:
 # ✓ All assertions passed
 #   ✓ nginx-web: ContainerRunningAssert
-#   ✓ nginx-web: PortAccessibleAssert (port 80)
-#   ✓ nginx-web: HealthcheckAssert (http://localhost:80/health)
+#   ✓ nginx-web: PortAccessibleAssert (port 8080)
+#   ✓ nginx-web: HealthcheckAssert (http://localhost:8080/health)
 #   ✓ nginx-web: ResponseTimeAssert (< 200ms)
 ```
 

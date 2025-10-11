@@ -98,25 +98,25 @@ def test_to_pyinfra_operations_with_image():
 
     operations = container.to_pyinfra_operations({})
 
-    # Check operation name and container name
-    assert 'name="Deploy redis"' in operations
-    assert 'container run' in operations
-    assert '--name redis' in operations
+    # Check apple_containers operation calls
+    assert 'apple_containers.container_remove(' in operations
+    assert 'apple_containers.container_run(' in operations
+
+    # Check container name
+    assert 'name="redis"' in operations
 
     # Check image
     assert 'redis:7-alpine' in operations
 
     # Check ports, volumes, env_vars, networks
-    assert "-p 6379:6379" in operations
-    assert "-v redis_data:/data" in operations
-    assert "-e REDIS_PASSWORD=secret" in operations
-    assert "--network cache" in operations
+    assert '"6379:6379"' in operations
+    assert '"redis_data:/data"' in operations
+    assert '"REDIS_PASSWORD": "secret"' in operations
+    assert '"cache"' in operations
 
-    # Check server.shell call
-    assert "server.shell(" in operations
-
-    # Check container removal command
-    assert "container rm -f redis" in operations
+    # Check container removal operation
+    assert 'container_id="redis"' in operations
+    assert 'force=True' in operations
 
 
 def test_to_pyinfra_operations_with_ai_image():
@@ -135,8 +135,8 @@ def test_to_pyinfra_operations_with_ai_image():
 
     # Check that AI-suggested image is used
     assert 'nginx:latest' in operations
-    assert '--name nginx-ai' in operations
-    assert 'name="Deploy nginx-ai"' in operations
+    assert 'name="nginx-ai"' in operations
+    assert 'apple_containers.container_run(' in operations
 
 
 def test_to_pyinfra_operations_multiple_ports():
@@ -150,9 +150,10 @@ def test_to_pyinfra_operations_multiple_ports():
 
     operations = container.to_pyinfra_operations({})
 
-    assert "-p 80:80" in operations
-    assert "-p 443:443" in operations
-    assert "-p 8080:8080" in operations
+    assert '"80:80"' in operations
+    assert '"443:443"' in operations
+    assert '"8080:8080"' in operations
+    assert 'apple_containers.container_run(' in operations
 
 
 def test_to_pyinfra_operations_multiple_volumes():
@@ -170,9 +171,10 @@ def test_to_pyinfra_operations_multiple_volumes():
 
     operations = container.to_pyinfra_operations({})
 
-    assert "-v /host/data:/container/data" in operations
-    assert "-v named_volume:/app" in operations
-    assert "-v /etc/config:/config:ro" in operations
+    assert '"/host/data:/container/data"' in operations
+    assert '"named_volume:/app"' in operations
+    assert '"/etc/config:/config:ro"' in operations
+    assert 'apple_containers.container_run(' in operations
 
 
 def test_to_pyinfra_operations_multiple_networks():
@@ -186,9 +188,10 @@ def test_to_pyinfra_operations_multiple_networks():
 
     operations = container.to_pyinfra_operations({})
 
-    assert "--network frontend" in operations
-    assert "--network backend" in operations
-    assert "--network monitoring" in operations
+    assert '"frontend"' in operations
+    assert '"backend"' in operations
+    assert '"monitoring"' in operations
+    assert 'apple_containers.container_run(' in operations
 
 
 def test_to_pyinfra_operations_complex_env_vars():
@@ -207,10 +210,11 @@ def test_to_pyinfra_operations_complex_env_vars():
 
     operations = container.to_pyinfra_operations({})
 
-    assert "-e DATABASE_URL=postgresql://user:pass@db:5432/mydb" in operations
-    assert "-e REDIS_URL=redis://cache:6379" in operations
-    assert "-e DEBUG=false" in operations
-    assert "-e PORT=3000" in operations
+    assert '"DATABASE_URL": "postgresql://user:pass@db:5432/mydb"' in operations
+    assert '"REDIS_URL": "redis://cache:6379"' in operations
+    assert '"DEBUG": "false"' in operations
+    assert '"PORT": "3000"' in operations
+    assert 'apple_containers.container_run(' in operations
 
 
 def test_to_pyinfra_operations_artifact_string_format():
@@ -228,7 +232,8 @@ def test_to_pyinfra_operations_artifact_string_format():
     operations = container.to_pyinfra_operations(artifacts)
 
     # Should handle string artifact format
-    assert 'simple:latest' in operations or 'container run' in operations
+    assert 'simple:latest' in operations
+    assert 'apple_containers.container_run(' in operations
 
 
 def test_to_pyinfra_operations_missing_artifact():
@@ -241,7 +246,7 @@ def test_to_pyinfra_operations_missing_artifact():
     operations = container.to_pyinfra_operations({})
 
     # Should fall back to empty string when artifact is missing
-    assert 'container run' in operations
+    assert 'apple_containers.container_run(' in operations
 
 
 def test_to_pyinfra_destroy_operations():
@@ -254,10 +259,11 @@ def test_to_pyinfra_destroy_operations():
 
     operations = container.to_pyinfra_destroy_operations({})
 
-    # Check destroy operation uses container rm
+    # Check destroy operation uses apple_containers.container_remove
     assert 'name="Remove remove-me"' in operations
-    assert 'container rm -f remove-me' in operations
-    assert 'server.shell(' in operations
+    assert 'container_id="remove-me"' in operations
+    assert 'apple_containers.container_remove(' in operations
+    assert 'force=True' in operations
 
 
 def test_to_pyinfra_destroy_operations_ignores_artifacts():
@@ -271,8 +277,9 @@ def test_to_pyinfra_destroy_operations_ignores_artifacts():
     artifacts = {"test-destroy": {"image": "nginx:latest"}}
     operations = container.to_pyinfra_destroy_operations(artifacts)
 
-    # Should only have container rm command
-    assert 'container rm -f test-destroy' in operations
+    # Should only have container_remove operation
+    assert 'apple_containers.container_remove(' in operations
+    assert 'container_id="test-destroy"' in operations
     assert 'nginx:latest' not in operations
 
 
@@ -288,7 +295,8 @@ def test_apple_container_resource_present_false():
     operations = container.to_pyinfra_operations({})
 
     # When present=False, should remove the container
-    assert "container rm -f stopped" in operations
+    assert 'apple_containers.container_remove(' in operations
+    assert 'container_id="stopped"' in operations
 
 
 def test_apple_container_resource_start_false():
@@ -302,13 +310,13 @@ def test_apple_container_resource_start_false():
 
     operations = container.to_pyinfra_operations({})
 
-    # When start=False, should use 'container create' instead of 'container run'
-    assert "container create" in operations
-    assert "--name not-running" in operations
+    # When start=False, should use 'container_create' instead of 'container_run'
+    assert 'apple_containers.container_create(' in operations
+    assert 'name="not-running"' in operations
 
 
 def test_container_run_command_format():
-    """Test that container run command is properly formatted."""
+    """Test that container run operation is properly formatted."""
     container = AppleContainerResource(
         name="test",
         description="Test container",
@@ -320,13 +328,13 @@ def test_container_run_command_format():
 
     operations = container.to_pyinfra_operations({})
 
-    # Verify command structure
-    assert "container run -d" in operations
-    assert "--name test" in operations
-    assert "-p 80:80" in operations
-    assert "-v /data:/data" in operations
-    assert "-e KEY=value" in operations
-    assert "nginx:latest" in operations
+    # Verify operation structure
+    assert 'apple_containers.container_run(' in operations
+    assert 'name="test"' in operations
+    assert '"80:80"' in operations
+    assert '"/data:/data"' in operations
+    assert '"KEY": "value"' in operations
+    assert 'nginx:latest' in operations
 
 
 def test_to_pyinfra_assert_operations_default():
@@ -339,11 +347,12 @@ def test_to_pyinfra_assert_operations_default():
 
     operations = container.to_pyinfra_assert_operations({})
 
-    # Check for default assertions using container ls
-    assert "container ls -a" in operations
-    assert "container ls --filter" in operations
-    assert 'name="Assert: Container nginx exists"' in operations
-    assert 'name="Assert: Container nginx is running"' in operations
+    # Check for default assertions using custom facts
+    assert 'ContainerExists' in operations
+    assert 'ContainerRunning' in operations
+    assert 'container_id="nginx"' in operations
+    assert 'Container nginx does not exist' in operations
+    assert 'Container nginx is not running' in operations
 
 
 def test_to_pyinfra_assert_operations_present_only():
@@ -358,10 +367,11 @@ def test_to_pyinfra_assert_operations_present_only():
     operations = container.to_pyinfra_assert_operations({})
 
     # Should check existence but not running status
-    assert 'name="Assert: Container stopped exists"' in operations
-    assert "container ls -a" in operations
+    assert 'ContainerExists' in operations
+    assert 'container_id="stopped"' in operations
     # Should not check for running status since start=False
-    assert "status=running" not in operations
+    assert 'ContainerRunning' not in operations
+    assert 'is not running' not in operations
 
 
 def test_pydantic_validation():
@@ -376,7 +386,7 @@ def test_pydantic_validation():
 
 
 def test_container_commands_not_docker():
-    """Test that generated commands use 'container' CLI, not 'docker'."""
+    """Test that generated operations use 'apple_containers', not 'docker'."""
     container = AppleContainerResource(
         name="test",
         description="Test container",
@@ -392,7 +402,7 @@ def test_container_commands_not_docker():
     assert "docker" not in destroy_ops.lower()
     assert "docker" not in assert_ops.lower()
 
-    # Verify container commands are used
-    assert "container run" in operations or "container create" in operations
-    assert "container rm" in destroy_ops
-    assert "container ls" in assert_ops
+    # Verify apple_containers operations are used
+    assert "apple_containers.container_run(" in operations or "apple_containers.container_create(" in operations
+    assert "apple_containers.container_remove(" in destroy_ops
+    assert "ContainerExists" in assert_ops or "ContainerRunning" in assert_ops

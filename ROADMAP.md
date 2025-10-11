@@ -49,14 +49,14 @@ from clockwork.assertions import HealthcheckAssert, ContainerRunningAssert, Port
 nginx = AppleContainerResource(
     name="nginx-web",
     description="Web server",
-    ports=["80:80", "443:443"],
+    ports=["8080:80", "8443:443"],
     assertions=[
         # Type-safe built-in assertions
-        HealthcheckAssert(url="http://localhost:80/health"),
+        HealthcheckAssert(url="http://localhost:8080/health"),
         ContainerRunningAssert(),
-        PortAccessibleAssert(port=80),
-        PortAccessibleAssert(port=443),
-        ResponseTimeAssert(url="http://localhost:80", max_ms=200),
+        PortAccessibleAssert(port=8080),
+        PortAccessibleAssert(port=8443),
+        ResponseTimeAssert(url="http://localhost:8080", max_ms=200),
     ]
 )
 ```
@@ -66,10 +66,10 @@ nginx = AppleContainerResource(
 cd my-project
 clockwork assert
 # Output: ✓ All assertions passed
-#         ✓ nginx-web: HealthcheckAssert (http://localhost:80/health)
+#         ✓ nginx-web: HealthcheckAssert (http://localhost:8080/health)
 #         ✓ nginx-web: ContainerRunningAssert
-#         ✓ nginx-web: PortAccessibleAssert (port 80)
-#         ✓ nginx-web: PortAccessibleAssert (port 443)
+#         ✓ nginx-web: PortAccessibleAssert (port 8080)
+#         ✓ nginx-web: PortAccessibleAssert (port 8443)
 #         ✓ nginx-web: ResponseTimeAssert (< 200ms)
 ```
 
@@ -316,13 +316,13 @@ import json
 nginx = AppleContainerResource(
     name="nginx-web",
     description="Web server",
-    ports=["80:80"]
+    ports=["8080:80"]
 )
 
 @PythonAssert(resource=nginx)
 def validate_api_response(resource):
     """Check that API returns valid JSON with expected schema."""
-    response = requests.get(f"http://localhost:80/api/health")
+    response = requests.get(f"http://localhost:8080/api/health")
 
     if response.status_code != 200:
         return False, f"Expected status 200, got {response.status_code}"
@@ -427,12 +427,12 @@ postgres = AppleContainerResource(
 nginx = AppleContainerResource(
     name="nginx-web",
     description="Web server",
-    ports=["80:80", "443:443"],
+    ports=["8080:80", "8443:443"],
     assertions=[
-        ResponseTimeAssert(url="http://localhost:80", max_ms=200),
-        SSLCertificateAssert(url="https://localhost:443", min_days_valid=30),
-        HTTPStatusAssert(url="http://localhost:80/health", expected_status=200),
-        NoOpenPortsAssert(except_ports=[80, 443, 22]),
+        ResponseTimeAssert(url="http://localhost:8080", max_ms=200),
+        SSLCertificateAssert(url="https://localhost:8443", min_days_valid=30),
+        HTTPStatusAssert(url="http://localhost:8080/health", expected_status=200),
+        NoOpenPortsAssert(except_ports=[8080, 8443, 22]),
     ]
 )
 ```

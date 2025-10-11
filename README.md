@@ -146,12 +146,12 @@ from clockwork.assertions import (
 
 nginx = AppleContainerResource(
     name="nginx-web",
-    ports=["80:80"],
+    ports=["8080:80"],
     assertions=[
         ContainerRunningAssert(),
-        PortAccessibleAssert(port=80),
-        HealthcheckAssert(url="http://localhost:80"),
-        ResponseTimeAssert(url="http://localhost:80", max_ms=200),
+        PortAccessibleAssert(port=8080),
+        HealthcheckAssert(url="http://localhost:8080"),
+        ResponseTimeAssert(url="http://localhost:8080", max_ms=200),
     ]
 )
 ```
@@ -163,7 +163,7 @@ AI-generated and cached:
 ```python
 nginx = AppleContainerResource(
     name="nginx-web",
-    ports=["80:80"],
+    ports=["8080:80"],
     assertions=[
         "Container uses less than 100MB of memory",
         "Response time is under 200ms",

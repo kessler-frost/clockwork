@@ -63,7 +63,7 @@ def container_run(
         container_run(
             name="nginx-web",
             image="nginx:latest",
-            ports=["80:80"],
+            ports=["8080:80"],
             volumes=["./html:/usr/share/nginx/html"],
             env_vars={"ENV": "production"},
             detach=True,
@@ -331,7 +331,7 @@ def container_create(
         container_create(
             name="nginx-web",
             image="nginx:latest",
-            ports=["80:80"],
+            ports=["8080:80"],
         )
     """
     # Check if container already exists

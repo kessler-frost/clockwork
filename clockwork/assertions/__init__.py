@@ -24,10 +24,10 @@ Example:
     >>> nginx = AppleContainerResource(
     ...     name="nginx",
     ...     description="Web server",
-    ...     ports=["80:80"],
+    ...     ports=["8080:80"],
     ...     assertions=[
     ...         ContainerRunningAssert(),
-    ...         HealthcheckAssert(url="http://localhost:80", expected_status=200),
+    ...         HealthcheckAssert(url="http://localhost:8080", expected_status=200),
     ...         MemoryUsageAssert(max_mb=512, container_name="nginx"),
     ...     ]
     ... )
