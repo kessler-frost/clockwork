@@ -118,6 +118,20 @@ FileResource(
 )
 ```
 
+### TemplateFileResource
+
+Creates files from Jinja2 templates with variable substitution.
+
+```python
+TemplateFileResource(
+    description="Nginx config for static files",
+    template_content="server { listen {{ port }}; }",  # Optional - AI generates if not provided
+    variables={"port": 8080},    # Optional - AI generates if not provided
+    name="nginx.conf",           # Optional - AI picks if not provided
+    directory="/etc/nginx"       # Optional - defaults to current dir
+)
+```
+
 ### DockerResource
 
 Runs Docker containers with optional AI-suggested images. Cross-platform support (Mac, Linux, Windows).
@@ -168,21 +182,6 @@ nginx = AppleContainerResource(
         PortAccessibleAssert(port=8080),
         HealthcheckAssert(url="http://localhost:8080"),
         ResponseTimeAssert(url="http://localhost:8080", max_ms=200),
-    ]
-)
-```
-
-### Natural Language Assertions
-
-AI-generated and cached:
-
-```python
-nginx = AppleContainerResource(
-    name="nginx-web",
-    ports=["8080:80"],
-    assertions=[
-        "Container uses less than 100MB of memory",
-        "Response time is under 200ms",
     ]
 )
 ```

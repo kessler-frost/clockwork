@@ -63,10 +63,48 @@ Both resources provide the same API (description, name, image, ports, volumes, e
 ### Other Resources
 
 - **FileResource** - File generation and management
+- **TemplateFileResource** - File generation from Jinja2 templates with variables
 - **DirectoryResource** - Directory creation with permissions
 - **GitRepoResource** - Git repository cloning
 - **BrewPackageResource** - Homebrew package installation (macOS)
 - **UserResource** - User account management
+
+### TemplateFileResource
+
+**TemplateFileResource** - Create files from Jinja2 templates with variable substitution:
+
+```python
+from clockwork.resources import TemplateFileResource
+
+# Minimal usage - AI completes everything
+nginx_config = TemplateFileResource(
+    description="Nginx config for serving static files on port 8080",
+    template_content="server { listen {{ port }}; }"
+)
+
+# Advanced usage - explicit variables
+nginx_config = TemplateFileResource(
+    description="Nginx config for serving static files",
+    template_content="server { listen {{ port }}; root {{ root_dir }}; }",
+    variables={"port": 8080, "root_dir": "/var/www/html"},
+    name="nginx.conf",
+    directory="/etc/nginx"
+)
+```
+
+**AI Completion:**
+- `template_content` - Jinja2 template (if not provided)
+- `variables` - Template variables (if not provided)
+- `name` - Filename (if not provided)
+- `directory` - Directory location (defaults to current directory)
+- `mode` - File permissions (defaults to "644")
+
+**Features:**
+- Jinja2 template rendering with variable substitution
+- AI generates templates and variables from description
+- Automatic directory creation
+- File ownership support (user/group)
+- Type-safe variable passing
 
 ## Assertions
 
@@ -427,6 +465,7 @@ When resources are connected, the AI receives **connection context** during comp
 - `name` - File name
 - `path` - File path
 - `directory` - Directory location
+- `template_content` - Jinja2 template content (TemplateFile only)
 - `variables` - Template variables (TemplateFile only)
 
 **Other Resources:**
@@ -794,6 +833,7 @@ clockwork service stop
 clockwork service start    # Start monitoring service (port 8765)
 clockwork service stop     # Stop the service
 clockwork service status   # Check if running + show registered projects
+clockwork version          # Show Clockwork version
 ```
 
 ### How It Works
@@ -880,6 +920,9 @@ Service configuration via `.env` file:
 CW_SERVICE_PORT=8765                            # Service port (default: 8765)
 CW_SERVICE_CHECK_INTERVAL_DEFAULT=30            # Default check interval in seconds
 CW_SERVICE_MAX_REMEDIATION_ATTEMPTS=3           # Max retry attempts
+CW_SERVICE_LOG_FILE=.clockwork/service/service.log  # Service log file path
+CW_SERVICE_LOG_MAX_BYTES=10485760               # Max log file size (10MB)
+CW_SERVICE_LOG_BACKUP_COUNT=5                   # Number of backup log files
 
 # AI settings (shared with clockwork commands)
 CW_API_KEY=your-api-key
@@ -1152,7 +1195,10 @@ clockwork/
 │   ├── apple-container-service/   # Apple Container service example (macOS)
 │   ├── tool-integration/          # Tool integration example (web search)
 │   ├── connected-services/        # Resource connections example (full-stack app)
-│   └── monitored-service/         # Monitored service example (health checks + auto-remediation)
+│   ├── monitored-service/         # Monitored service example (health checks + auto-remediation)
+│   ├── dev-environment/           # Complete development environment (all resource types)
+│   ├── brew-packages/             # Homebrew package installation example
+│   └── git-repo/                  # Git repository cloning example
 ├── tests/                  # Test suite
 └── pyproject.toml         # Dependencies
 ```
@@ -1286,6 +1332,12 @@ uv run clockwork apply
 
 # Test connected services (resource connections with full-stack app)
 cd ../connected-services
+uv run clockwork apply
+uv run clockwork assert
+uv run clockwork destroy
+
+# Test complete development environment (all resource types)
+cd ../dev-environment
 uv run clockwork apply
 uv run clockwork assert
 uv run clockwork destroy
