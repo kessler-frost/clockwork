@@ -5,7 +5,6 @@ Loads configuration from environment variables and .env files.
 """
 
 from pathlib import Path
-from typing import Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -33,7 +32,7 @@ class ClockworkSettings(BaseSettings):
     )
 
     # AI Configuration (OpenAI-compatible API)
-    api_key: Optional[str] = Field(
+    api_key: str | None = Field(
         default=None,
         description="API key for AI service (env: CW_API_KEY)"
     )
@@ -60,10 +59,41 @@ class ClockworkSettings(BaseSettings):
         description="Logging level (DEBUG, INFO, WARNING, ERROR) (env: CW_LOG_LEVEL)"
     )
 
+    # Service Configuration
+    service_port: int = Field(
+        default=8765,
+        description="Service port (env: CW_SERVICE_PORT)"
+    )
+
+    service_check_interval_default: int = Field(
+        default=30,
+        description="Default check interval in seconds (env: CW_SERVICE_CHECK_INTERVAL_DEFAULT)"
+    )
+
+    service_max_remediation_attempts: int = Field(
+        default=3,
+        description="Max remediation attempts (env: CW_SERVICE_MAX_REMEDIATION_ATTEMPTS)"
+    )
+
+    service_log_file: str = Field(
+        default=".clockwork/service/service.log",
+        description="Service log file path (env: CW_SERVICE_LOG_FILE)"
+    )
+
+    service_log_max_bytes: int = Field(
+        default=10 * 1024 * 1024,  # 10MB
+        description="Max log file size in bytes before rotation (env: CW_SERVICE_LOG_MAX_BYTES)"
+    )
+
+    service_log_backup_count: int = Field(
+        default=5,
+        description="Number of backup log files to keep (env: CW_SERVICE_LOG_BACKUP_COUNT)"
+    )
+
 
 
 # Global settings instance
-_settings: Optional[ClockworkSettings] = None
+_settings: ClockworkSettings | None = None
 
 
 def get_settings() -> ClockworkSettings:

@@ -15,6 +15,7 @@ from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.profiles.openai import OpenAIModelProfile
 
+from .service.tools import ToolSelector
 from .settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -46,7 +47,9 @@ Your completions should be production-ready, minimal, and follow best practices.
         self,
         api_key: Optional[str] = None,
         model: Optional[str] = None,
-        base_url: Optional[str] = None
+        base_url: Optional[str] = None,
+        tool_selector: Optional[ToolSelector] = None,
+        enable_tool_selection: bool = True
     ):
         """
         Initialize the resource completer.
@@ -55,6 +58,8 @@ Your completions should be production-ready, minimal, and follow best practices.
             api_key: API key for AI service (overrides settings/.env)
             model: Model name to use (overrides settings/.env)
             base_url: Base URL for API endpoint (overrides settings/.env)
+            tool_selector: Optional ToolSelector instance for intelligent tool selection
+            enable_tool_selection: Whether to enable automatic tool selection (default: True)
         """
         settings = get_settings()
 
@@ -67,7 +72,14 @@ Your completions should be production-ready, minimal, and follow best practices.
         self.model = model or settings.model
         self.base_url = base_url or settings.base_url
 
-        logger.info(f"Initialized ResourceCompleter with model: {self.model} at {self.base_url}")
+        # Tool selection setup
+        self.enable_tool_selection = enable_tool_selection
+        self.tool_selector = tool_selector or (ToolSelector() if enable_tool_selection else None)
+
+        logger.info(
+            f"Initialized ResourceCompleter with model: {self.model} at {self.base_url} "
+            f"(tool selection: {enable_tool_selection})"
+        )
 
     async def complete(self, resources: List[Any]) -> List[Any]:
         """
@@ -107,9 +119,20 @@ Your completions should be production-ready, minimal, and follow best practices.
         # Build completion prompt based on resource type
         prompt = self._build_completion_prompt(resource)
 
-        # Get tools from resource (handle None case)
-        tools = resource.tools if resource.tools is not None else []
-        logger.debug(f"Resource {resource.name} tools: {tools}, type: {type(tools)}")
+        # Get tools: prioritize user-provided tools, then use ToolSelector
+        tools = []
+        if resource.tools is not None and len(resource.tools) > 0:
+            # User provided explicit tools - use them
+            tools = resource.tools
+            logger.debug(f"Using {len(tools)} user-provided tools for {resource.name}")
+        elif self.enable_tool_selection and self.tool_selector:
+            # Use ToolSelector to intelligently select tools
+            context = resource.description or ""
+            tools = self.tool_selector.select_tools_for_resource(resource, context)
+            logger.debug(f"ToolSelector chose {len(tools)} tools for {resource.name}")
+        else:
+            # No tools
+            logger.debug(f"No tools for {resource.name}")
 
         # Create OpenAI-compatible model
         # Works with any OpenAI-compatible API (OpenRouter, LM Studio, Ollama, etc.)

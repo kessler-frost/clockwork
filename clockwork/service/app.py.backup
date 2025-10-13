@@ -1,0 +1,149 @@
+"""
+Clockwork Service - FastAPI application for monitoring and remediation.
+
+This module provides the main FastAPI application with health checks,
+startup validation, and proper lifecycle management.
+"""
+
+import logging
+from contextlib import asynccontextmanager
+from typing import Any
+
+from fastapi import FastAPI
+from pydantic import BaseModel
+
+from clockwork.resource_completer import ResourceCompleter
+from clockwork.settings import get_settings
+
+logger = logging.getLogger(__name__)
+
+
+class HealthResponse(BaseModel):
+    """Health check response model."""
+
+    status: str
+    model: str
+    base_url: str
+    ai_connection: str
+
+
+async def validate_ai_connection() -> bool:
+    """
+    Validate AI connection by creating a ResourceCompleter instance.
+
+    Returns:
+        True if connection is successful, False otherwise
+    """
+    try:
+        settings = get_settings()
+        logger.info(
+            f"Validating AI connection to {settings.base_url} "
+            f"with model {settings.model}"
+        )
+
+        # Create ResourceCompleter to validate connection
+        # This will raise ValueError if API key is missing
+        _ = ResourceCompleter(
+            api_key=settings.api_key,
+            model=settings.model,
+            base_url=settings.base_url,
+        )
+
+        logger.info("AI connection validated successfully")
+        return True
+
+    except ValueError as e:
+        logger.error(f"AI connection validation failed: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"Unexpected error during AI validation: {e}")
+        return False
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Lifespan context manager for startup and shutdown events.
+
+    Handles:
+    - Startup: Validate AI connection
+    - Shutdown: Cleanup resources
+
+    Args:
+        app: FastAPI application instance
+    """
+    # Startup
+    logger.info("Starting Clockwork service...")
+
+    # Validate AI connection
+    ai_ok = await validate_ai_connection()
+    if not ai_ok:
+        logger.warning(
+            "AI connection validation failed - "
+            "service will start but AI features may not work"
+        )
+
+    logger.info("Clockwork service started successfully")
+
+    yield
+
+    # Shutdown
+    logger.info("Shutting down Clockwork service...")
+    # Add any cleanup logic here
+    logger.info("Clockwork service shut down successfully")
+
+
+def create_app() -> FastAPI:
+    """
+    Create and configure the FastAPI application.
+
+    Returns:
+        Configured FastAPI application instance
+    """
+    settings = get_settings()
+
+    # Configure logging
+    logging.basicConfig(
+        level=getattr(logging, settings.log_level.upper()),
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+
+    app = FastAPI(
+        title="Clockwork Service",
+        description="Intelligent Infrastructure Monitoring and Remediation",
+        version="0.2.0",
+        lifespan=lifespan,
+    )
+
+    @app.get("/health", response_model=HealthResponse)
+    async def health() -> dict[str, Any]:
+        """
+        Health check endpoint.
+
+        Returns service status and AI connection information.
+
+        Returns:
+            HealthResponse with status, model info, and AI connection status
+        """
+        settings = get_settings()
+
+        # Check AI connection status
+        try:
+            ai_ok = await validate_ai_connection()
+            ai_status = "connected" if ai_ok else "disconnected"
+        except Exception as e:
+            logger.error(f"Error checking AI connection: {e}")
+            ai_status = "error"
+
+        return {
+            "status": "healthy",
+            "model": settings.model,
+            "base_url": settings.base_url,
+            "ai_connection": ai_status,
+        }
+
+    return app
+
+
+# Create default app instance
+app = create_app()

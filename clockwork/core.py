@@ -89,6 +89,19 @@ class ClockworkCore:
         pyinfra_dir = self.pyinfra_compiler.compile(completed_resources)
         logger.info(f"Compiled to PyInfra: {pyinfra_dir}")
 
+        # 5.5. Generate per-resource assert files for health monitoring
+        # These are used by the health checker to monitor individual resources
+        logger.info("Generating per-resource assertion files for health monitoring...")
+        for resource in completed_resources:
+            try:
+                self.pyinfra_compiler.compile_assert_single_resource(resource)
+            except Exception as e:
+                resource_name = resource.name or resource.__class__.__name__
+                logger.warning(
+                    f"Failed to generate per-resource assert file for {resource_name}: {e}"
+                )
+        logger.info(f"Generated per-resource assertion files in: {pyinfra_dir}")
+
         # 6. Execute PyInfra deploy (unless dry run)
         if dry_run:
             logger.info("Dry run - skipping execution")

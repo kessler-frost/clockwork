@@ -207,6 +207,44 @@ from clockwork.pyinfra_operations import apple_containers
 
         return destroy_code
 
+    def compile_assert_single_resource(
+        self,
+        resource: Any
+    ) -> Path:
+        """
+        Compile assertions for a single resource to PyInfra assert file.
+
+        This generates a resource-specific assert file (e.g., assert_redis-monitored.py)
+        that can be executed independently to check only that resource's health.
+        Used by the health checker for per-resource health monitoring.
+
+        Args:
+            resource: Single completed Resource object
+
+        Returns:
+            Path to the generated assert file
+        """
+        resource_name = resource.name or resource.__class__.__name__
+        logger.debug(f"Compiling assertions for single resource: {resource_name}")
+
+        # Create output directory
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Generate inventory file (same as deploy)
+        inventory_path = self.output_dir / "inventory.py"
+        if not inventory_path.exists():
+            inventory_code = self._generate_inventory()
+            inventory_path.write_text(inventory_code)
+
+        # Generate resource-specific assert file
+        assert_filename = f"assert_{resource_name}.py"
+        assert_path = self.output_dir / assert_filename
+        assert_code = self._generate_assert([resource])  # Reuse existing method with single resource
+        assert_path.write_text(assert_code)
+        logger.debug(f"Generated {assert_filename}: {assert_path}")
+
+        return assert_path
+
     def _generate_assert(
         self,
         resources: List[Any]

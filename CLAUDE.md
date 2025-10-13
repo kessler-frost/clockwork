@@ -755,6 +755,371 @@ CW_BASE_URL=https://openrouter.ai/api/v1
 
 **If a model doesn't support tool calls**, choose a different model from the recommendations above. All recommended models (both free and paid) support tool calling.
 
+## Monitoring Service
+
+Clockwork provides a **monitoring service** that continuously checks resource health and automatically remediates failures using AI. The service runs as a FastAPI application on your local machine.
+
+### Overview
+
+The monitoring service:
+- **Continuously monitors** deployed resources with configurable check intervals
+- **Detects failures** through the assertion system
+- **Collects diagnostics** (logs, errors, status)
+- **AI-powered remediation** by updating completion prompts with error context
+- **Re-applies fixes** automatically (up to 3 attempts by default)
+- **Supports multiple projects** concurrently from a single service instance
+
+### Quick Start
+
+```bash
+# 1. Start the monitoring service
+clockwork service start
+
+# 2. Deploy your resources (auto-registers with service)
+clockwork apply
+
+# 3. Resources are now monitored continuously
+# If failures occur, the service automatically remediates them
+
+# 4. Check service status
+clockwork service status
+
+# 5. Stop the service when done
+clockwork service stop
+```
+
+### Service Commands
+
+```bash
+clockwork service start    # Start monitoring service (port 8765)
+clockwork service stop     # Stop the service
+clockwork service status   # Check if running + show registered projects
+```
+
+### How It Works
+
+**1. Service Startup**
+- Validates AI connection (uses same settings as `clockwork apply`)
+- Starts FastAPI server on port 8765 (configurable)
+- Initializes background health checking loop
+
+**2. Project Registration**
+- Automatically happens after `clockwork apply`
+- Service tracks resources, health status, and remediation attempts
+- Stored in-memory (cleared on service restart)
+
+**3. Health Monitoring**
+- Background loop checks resources at configurable intervals
+- Resource-specific intervals:
+  - **FileResource/DirectoryResource**: Check once after deployment, then skip
+  - **DockerResource/AppleContainerResource**: Every 30 seconds
+  - **GitRepoResource**: Every 5 minutes
+- Uses existing assertion pipeline (same as `clockwork assert`)
+
+**4. Failure Detection**
+- Assertion fails → Health check marks resource as unhealthy
+- Triggers remediation engine automatically
+
+**5. Auto-Remediation Flow**
+```
+1. Collect diagnostics
+   - Container logs (last 50 lines)
+   - Container status
+   - Error messages from assertions
+
+2. Enhance AI completion prompt
+   - Add error context to prompt
+   - "Previous deployment failed with: [error details]"
+   - "Logs show: [log excerpt]"
+
+3. Re-complete resource with error context
+   - AI analyzes diagnostics
+   - Generates fixed configuration
+
+4. Re-apply single resource
+   - Deploys the fix using PyInfra
+   - Only affects the failed resource, not the entire project
+
+5. Validate the fix
+   - Runs assertions again
+   - Marks resource as healthy if successful
+
+6. Retry logic
+   - Max 3 attempts by default (configurable)
+   - Gives up after max attempts, logs error
+```
+
+### Service Integration
+
+The monitoring service integrates seamlessly with existing Clockwork commands:
+
+| Command | Service Requirement | Behavior |
+|---------|---------------------|----------|
+| `clockwork service start` | N/A | Starts the service |
+| `clockwork service stop` | N/A | Stops the service |
+| `clockwork service status` | N/A | Shows service status |
+| `clockwork plan` | ✗ Not required | Works independently |
+| `clockwork apply` | ✓ Required | Registers project after deployment |
+| `clockwork assert` | ✓ Required | Validates resources |
+| `clockwork destroy` | ✓ Required | Unregisters project after cleanup |
+
+**Skip Service Check**:
+```bash
+# For development/testing without the service
+clockwork apply --skip-service-check
+clockwork assert --skip-service-check
+clockwork destroy --skip-service-check
+```
+
+### Configuration
+
+Service configuration via `.env` file:
+
+```bash
+# Service settings
+CW_SERVICE_PORT=8765                            # Service port (default: 8765)
+CW_SERVICE_CHECK_INTERVAL_DEFAULT=30            # Default check interval in seconds
+CW_SERVICE_MAX_REMEDIATION_ATTEMPTS=3           # Max retry attempts
+
+# AI settings (shared with clockwork commands)
+CW_API_KEY=your-api-key
+CW_MODEL=meta-llama/llama-4-scout:free
+CW_BASE_URL=https://openrouter.ai/api/v1
+```
+
+### Example: Monitored Service
+
+See `examples/monitored-service/` for a complete example:
+
+```bash
+cd examples/monitored-service
+
+# 1. Start service
+clockwork service start
+
+# 2. Deploy resources
+clockwork apply
+
+# 3. Simulate failure (optional - for testing)
+docker stop nginx-monitored
+
+# 4. Watch the service detect and fix it automatically
+# (Check service logs or wait ~30s for remediation)
+
+# 5. Verify health
+clockwork assert
+
+# 6. Clean up
+clockwork destroy
+clockwork service stop
+```
+
+### Multi-Project Monitoring
+
+One service instance can monitor multiple projects:
+
+```bash
+# Terminal 1: Start service once
+clockwork service start
+
+# Terminal 2: Deploy project 1
+cd examples/monitored-service
+clockwork apply
+
+# Terminal 3: Deploy project 2
+cd examples/docker-service
+clockwork apply
+
+# Check status (shows 2 registered projects)
+clockwork service status
+```
+
+### Remediation Example
+
+**Scenario**: Nginx container fails because it can't connect to Redis.
+
+**1. Failure Detection**
+```
+[HealthChecker] Assertion failed: ContainerRunningAssert for nginx-monitored
+[HealthChecker] Triggering remediation...
+```
+
+**2. Diagnostic Collection**
+```
+[RemediationEngine] Collecting diagnostics...
+Container Status: Exited (1) 2 minutes ago
+Logs: Error: Cannot connect to redis:6379 - connection refused
+```
+
+**3. Enhanced AI Prompt**
+```
+The previous deployment of this resource failed with the following issues:
+
+Error: Container not running (exited with code 1)
+Container Status: Exited (1) 2 minutes ago
+Logs: Error: Cannot connect to redis:6379 - connection refused
+
+Please fix the configuration for: Nginx web server
+
+Consider:
+- Checking connection to dependencies (redis)
+- Validating environment variables
+- Ensuring correct ports/volumes
+- Verifying network configuration
+
+Attempt: 1 of 3
+```
+
+**4. AI-Powered Fix**
+```
+[RemediationEngine] AI suggests: Add shared Docker network with Redis
+[RemediationEngine] Re-completing resource with enhanced prompt...
+[RemediationEngine] Applying fixed configuration...
+```
+
+**5. Validation**
+```
+[RemediationEngine] Running assertions...
+[RemediationEngine] ✓ nginx-monitored is healthy again
+[HealthChecker] Remediation successful (attempt 1)
+```
+
+### REST API
+
+The service exposes a REST API (primarily for internal use):
+
+```
+GET    /health                          - Service health check
+POST   /projects/register               - Register project
+DELETE /projects/{project_id}           - Unregister project
+GET    /projects                        - List all projects
+GET    /projects/{project_id}/status    - Get project health
+POST   /projects/{project_id}/remediate - Manual remediation
+```
+
+**Example**:
+```bash
+# Check service health
+curl http://localhost:8765/health
+
+# List monitored projects
+curl http://localhost:8765/projects
+```
+
+### Service Architecture
+
+```text
+┌─────────────────────────────────────┐
+│   Clockwork Service (Port 8765)     │
+│                                     │
+│  ┌─────────────────────────────┐   │
+│  │   FastAPI App               │   │
+│  │   - REST API endpoints      │   │
+│  │   - AI validation           │   │
+│  └─────────────────────────────┘   │
+│                                     │
+│  ┌─────────────────────────────┐   │
+│  │   ProjectManager            │   │
+│  │   - In-memory state         │   │
+│  │   - Registration tracking   │   │
+│  └─────────────────────────────┘   │
+│                                     │
+│  ┌─────────────────────────────┐   │
+│  │   HealthChecker             │   │
+│  │   - Background monitoring   │   │
+│  │   - Resource-specific checks│   │
+│  └─────────────────────────────┘   │
+│                                     │
+│  ┌─────────────────────────────┐   │
+│  │   RemediationEngine         │   │
+│  │   - Diagnostic collection   │   │
+│  │   - AI-powered fixes        │   │
+│  │   - Re-application          │   │
+│  └─────────────────────────────┘   │
+│                                     │
+│  ┌─────────────────────────────┐   │
+│  │   ToolSelector              │   │
+│  │   - Context-aware tools     │   │
+│  │   - Resource-type tools     │   │
+│  └─────────────────────────────┘   │
+└─────────────────────────────────────┘
+```
+
+### Best Practices
+
+1. **Start service before deployment**
+   ```bash
+   clockwork service start  # Always run this first
+   clockwork apply          # Then deploy
+   ```
+
+2. **One service for all projects**
+   - No need to start multiple service instances
+   - One service handles concurrent monitoring of all projects
+
+3. **Service doesn't persist across reboots**
+   - Service state is in-memory only
+   - Restart service and re-apply projects after system reboot
+
+4. **Check service logs for debugging**
+   - Service runs in foreground by default
+   - Check terminal output for health check results and remediation attempts
+   - Logs show: health checks, failures, diagnostics, remediation attempts
+
+5. **Use assertions for validation**
+   - Add `assertions=[...]` to resources
+   - Service uses these for health monitoring
+   - More assertions = better failure detection
+
+6. **Configure check intervals**
+   - Default: 30 seconds for containers
+   - Adjust via `CW_SERVICE_CHECK_INTERVAL_DEFAULT` in `.env`
+   - Lower values = faster detection, higher CPU usage
+
+### Troubleshooting
+
+**Service won't start**
+```bash
+# Check if already running
+clockwork service status
+
+# Check AI connection
+# Service requires valid AI configuration (same as apply/plan)
+cat .env  # Verify CW_API_KEY, CW_MODEL, CW_BASE_URL
+```
+
+**Commands fail: "service not running"**
+```bash
+# Start the service first
+clockwork service start
+
+# Or skip the check for development
+clockwork apply --skip-service-check
+```
+
+**Remediation not working**
+```bash
+# Check service logs in terminal where service was started
+# Look for:
+#   - Health check failures
+#   - Diagnostic collection
+#   - AI completion errors
+#   - Remediation attempts
+
+# Verify max attempts not exceeded (default: 3)
+# Service gives up after 3 failed remediation attempts
+```
+
+**High CPU usage**
+```bash
+# Increase check interval
+echo "CW_SERVICE_CHECK_INTERVAL_DEFAULT=60" >> .env
+
+# Restart service
+clockwork service stop
+clockwork service start
+```
+
 ## Project Structure
 
 ```text
@@ -765,6 +1130,13 @@ clockwork/
 │   │   ├── file.py            # FileResource
 │   │   ├── docker.py          # DockerResource (cross-platform)
 │   │   └── apple_container.py # AppleContainerResource (macOS)
+│   ├── service/                # Monitoring service
+│   │   ├── app.py             # FastAPI application
+│   │   ├── manager.py         # Project state management
+│   │   ├── health.py          # Background health checking
+│   │   ├── remediation.py     # Auto-remediation engine
+│   │   ├── tools.py           # Tool selector
+│   │   └── models.py          # API models
 │   ├── pyinfra_operations/    # Custom PyInfra operations
 │   │   └── apple_containers.py # Apple Containers CLI operations
 │   ├── pyinfra_facts/         # Custom PyInfra facts
@@ -779,7 +1151,8 @@ clockwork/
 │   ├── docker-service/            # Docker service example (cross-platform)
 │   ├── apple-container-service/   # Apple Container service example (macOS)
 │   ├── tool-integration/          # Tool integration example (web search)
-│   └── connected-services/        # Resource connections example (full-stack app)
+│   ├── connected-services/        # Resource connections example (full-stack app)
+│   └── monitored-service/         # Monitored service example (health checks + auto-remediation)
 ├── tests/                  # Test suite
 └── pyproject.toml         # Dependencies
 ```
