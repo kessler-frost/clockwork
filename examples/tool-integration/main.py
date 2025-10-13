@@ -1,87 +1,70 @@
 """
 Tool Integration Example - PydanticAI Tools with Clockwork.
 
-This example demonstrates the tool integration pattern in Clockwork.
-For actual tool usage, uncomment the tools parameter and provide an API key.
+This example demonstrates two types of tools:
+1. Built-in tools (DuckDuckGo web search)
+2. Custom Python function tools
 
-Note: This example uses pre-written content to avoid AI completion timeouts.
-To enable real web search, uncomment the tools=[duckduckgo_search_tool()] line.
+Tools enable AI to access external data and perform custom operations
+during resource completion.
 """
 
+from datetime import datetime
 from clockwork.resources import FileResource
 from clockwork.assertions import (
     FileExistsAssert,
     FileContentMatchesAssert,
 )
-# Uncomment to enable web search:
-# from pydantic_ai.common_tools.duckduckgo import duckduckgo_search_tool
-
-# Example showing how tools would be used (currently uses static content)
-# To enable AI-powered web search, uncomment the tools parameter below
-tech_guide = FileResource(
-    name="tools_guide.md",
-    description="Guide explaining how to use tools with Clockwork",
-    directory="scratch",
-    # tools=[duckduckgo_search_tool()],  # Uncomment to enable web search
-    content="""# Tool Integration with Clockwork
-
-## Overview
-
-Clockwork supports PydanticAI common tools and MCP servers to extend AI capabilities
-during resource completion. Tools enable AI to access real-time information beyond
-its training data.
-
-## Available Tools
-
-### PydanticAI Common Tools
-
-**DuckDuckGo Search** - Built-in web search (no API key required):
-```python
 from pydantic_ai.common_tools.duckduckgo import duckduckgo_search_tool
 
-resource = FileResource(
-    name="report.md",
-    description="Research latest trends",
-    tools=[duckduckgo_search_tool()],
-)
-```
 
-**Tavily Search** - Alternative search (requires API key):
-```python
-from pydantic_ai.common_tools.tavily import tavily_search_tool
+# Custom tool: Get current system information
+def get_system_info(query_type: str) -> str:
+    """Get current system information.
 
-tools=[tavily_search_tool()]
-```
+    Args:
+        query_type: Type of info to get ('time', 'date', or 'datetime')
 
-### MCP Servers (Advanced)
+    Returns:
+        Requested system information as a string
+    """
+    now = datetime.now()
+    if query_type == 'time':
+        return now.strftime('%H:%M:%S')
+    elif query_type == 'date':
+        return now.strftime('%Y-%m-%d')
+    elif query_type == 'datetime':
+        return now.strftime('%Y-%m-%d %H:%M:%S')
+    else:
+        return f"Unknown query type: {query_type}"
 
-**Filesystem Access**:
-```python
-from pydantic_ai.mcp import MCPServerStdio
 
-filesystem_mcp = MCPServerStdio(
-    'npx',
-    args=['-y', '@modelcontextprotocol/server-filesystem', '/path']
-)
-
-toolsets=[filesystem_mcp]
-```
-
-## Usage Notes
-
-- Tools add latency (multiple LLM round-trips)
-- Local models (LM Studio, Ollama) may timeout with tools
-- Cloud models (OpenRouter, OpenAI) recommended for tool usage
-- Separate parameters: `tools=` for PydanticAI tools, `toolsets=` for MCP
-
-Generated with Clockwork
-""",
-    mode="644",
+# Example 1: Built-in tool - Web search with DuckDuckGo
+web_search_example = FileResource(
+    name="web_search_report.md",
+    description="Write a brief summary of the latest Python 3.13 features released in 2024",
+    directory="scratch",
+    tools=[duckduckgo_search_tool()],  # Built-in web search tool
     assertions=[
-        FileExistsAssert(path="scratch/tools_guide.md"),
+        FileExistsAssert(path="scratch/web_search_report.md"),
         FileContentMatchesAssert(
-            path="scratch/tools_guide.md",
-            pattern="Tool Integration"
+            path="scratch/web_search_report.md",
+            pattern="Python"
+        ),
+    ]
+)
+
+# Example 2: Custom Python function tool
+custom_tool_example = FileResource(
+    name="system_info_report.md",
+    description="Create a system report that includes the current date and time, with a brief greeting message",
+    directory="scratch",
+    tools=[get_system_info],  # Custom Python function as tool
+    assertions=[
+        FileExistsAssert(path="scratch/system_info_report.md"),
+        FileContentMatchesAssert(
+            path="scratch/system_info_report.md",
+            pattern=r"\d{4}-\d{2}-\d{2}"  # Date pattern
         ),
     ]
 )

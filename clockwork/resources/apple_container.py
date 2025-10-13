@@ -41,28 +41,25 @@ class AppleContainerResource(Resource):
     name: Optional[str] = None
     image: Optional[str] = None
     ports: Optional[List[str]] = None
-    volumes: Optional[List[str]] = None
-    env_vars: Optional[Dict[str, str]] = None
-    networks: Optional[List[str]] = None
+    volumes: List[str] = []  # Optional - defaults to empty
+    env_vars: Dict[str, str] = {}  # Optional - defaults to empty
+    networks: List[str] = []  # Optional - defaults to empty
     present: bool = True
     start: bool = True
 
     def needs_completion(self) -> bool:
-        """Returns True if any field needs AI completion.
+        """Returns True if any critical field needs AI completion.
 
-        When any of the key fields are None, the AI will analyze the description
-        and intelligently suggest appropriate values for all missing fields.
+        Only critical fields (name, image, ports) trigger AI completion.
+        Optional fields (volumes, env_vars, networks) default to empty.
 
         Returns:
-            bool: True if any field needs completion, False otherwise
+            bool: True if any critical field needs completion, False otherwise
         """
         return (
             self.name is None or
             self.image is None or
-            self.ports is None or
-            self.volumes is None or
-            self.env_vars is None or
-            self.networks is None
+            self.ports is None
         )
 
     def to_pyinfra_operations(self) -> str:

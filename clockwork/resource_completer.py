@@ -25,16 +25,22 @@ class ResourceCompleter:
 
     # System prompt for AI completion
     SYSTEM_PROMPT = """You are a helpful assistant that completes partial infrastructure resource definitions.
-Given a partial resource with some fields specified and others missing (None), you should intelligently
-complete ALL missing fields based on the description and resource type.
+
+IMPORTANT: You will see a list of missing fields, but you should ONLY complete fields that are actually REQUIRED.
+Many fields are optional and should be left as None/empty unless there is a specific need for them.
+
+Guidelines:
+- REQUIRED fields: Must always be completed (e.g., name, image, content)
+- OPTIONAL fields: Only complete if actually needed for the specific use case
+- Leave optional fields as None/empty if not required (e.g., volumes, env_vars, networks, user, group)
 
 Always prefer:
 - Official, well-maintained images for containers
 - Standard, commonly-used packages for brew resources
 - Well-known official repositories for git resources
-- Appropriate default values for infrastructure resources
+- Minimal configurations that include only what's necessary
 
-Your completions should be production-ready and follow best practices."""
+Your completions should be production-ready, minimal, and follow best practices."""
 
     def __init__(
         self,
@@ -201,14 +207,19 @@ Your completions should be production-ready and follow best practices."""
 Provided fields:
 {self._format_dict(provided_fields)}
 
-Missing fields (you MUST complete ALL of these):
+Missing fields (but ONLY complete REQUIRED ones):
 {', '.join(missing_fields)}
+
+IMPORTANT: Only complete fields that are actually REQUIRED for this specific use case.
+Leave optional fields as None unless explicitly needed.
 
 """
 
         # Add resource-specific completion instructions
         if resource_type == "FileResource":
             prompt += self._build_file_completion_instructions(resource)
+        elif resource_type == "TemplateFileResource":
+            prompt += self._build_template_file_completion_instructions(resource)
         elif resource_type == "AppleContainerResource":
             prompt += self._build_container_completion_instructions(resource)
         elif resource_type == "DockerResource":
@@ -222,8 +233,8 @@ Missing fields (you MUST complete ALL of these):
         else:
             # Generic instructions
             prompt += f"""
-Please complete ALL missing fields with appropriate values based on the description
-and resource type. Return a COMPLETE {resource_type} object with all fields filled.
+Please complete ONLY the REQUIRED fields based on the description and resource type.
+Leave optional fields as None unless explicitly needed.
 """
 
         return prompt
@@ -244,33 +255,41 @@ Return a complete FileResource object.
     def _build_container_completion_instructions(self, resource: Any) -> str:
         """Build completion instructions for AppleContainerResource."""
         return """
-For AppleContainerResource, please complete:
-- name: container service name (e.g., "nginx-web", "postgres-db", "redis-cache")
-- image: best Docker image with version tag (e.g., "nginx:alpine", "postgres:16-alpine", "redis:7-alpine")
-  * Prefer official images with alpine variants for smaller size
-  * Include version tags (not :latest) for reproducibility
-- ports: standard port mappings (e.g., ["8080:80"] for web servers, ["5432:5432"] for postgres)
-- env_vars: required environment variables as dict (e.g., {"POSTGRES_PASSWORD": "secret"})
-- volumes: data persistence volumes (e.g., ["postgres_data:/var/lib/postgresql/data"])
-- networks: container networks (optional, can be None or empty list)
+For AppleContainerResource, complete these fields:
 
-Return a complete AppleContainerResource object with production-ready defaults.
-"""
-
-    def _build_docker_completion_instructions(self, resource: Any) -> str:
-        """Build completion instructions for DockerResource."""
-        return """
-For DockerResource, please complete:
+REQUIRED fields (must be completed):
 - name: container service name (e.g., "nginx-web", "postgres-db", "redis-cache")
 - image: Docker image with version tag (e.g., "nginx:alpine", "postgres:16-alpine", "redis:7-alpine")
   * Prefer official images with alpine variants for smaller size
   * Include version tags (not :latest) for reproducibility
 - ports: standard port mappings (e.g., ["8080:80"] for web servers, ["5432:5432"] for postgres)
-- env_vars: required environment variables as dict (e.g., {"POSTGRES_PASSWORD": "secret"})
-- volumes: data persistence volumes (e.g., ["postgres_data:/var/lib/postgresql/data"])
-- networks: container networks (optional, can be None or empty list)
 
-Return a complete DockerResource object with production-ready defaults.
+OPTIONAL fields (leave as None/empty unless actually needed):
+- env_vars: environment variables - ONLY if required by the image (e.g., {"POSTGRES_PASSWORD": "secret"})
+- volumes: data persistence - ONLY if data needs to persist (e.g., ["postgres_data:/var/lib/postgresql/data"])
+- networks: container networks - leave as empty list unless specific networking is needed
+
+Return a complete AppleContainerResource object with minimal necessary configuration.
+"""
+
+    def _build_docker_completion_instructions(self, resource: Any) -> str:
+        """Build completion instructions for DockerResource."""
+        return """
+For DockerResource, complete these fields:
+
+REQUIRED fields (must be completed):
+- name: container service name (e.g., "nginx-web", "postgres-db", "redis-cache")
+- image: Docker image with version tag (e.g., "nginx:alpine", "postgres:16-alpine", "redis:7-alpine")
+  * Prefer official images with alpine variants for smaller size
+  * Include version tags (not :latest) for reproducibility
+- ports: standard port mappings (e.g., ["8080:80"] for web servers, ["5432:5432"] for postgres)
+
+OPTIONAL fields (leave as None/empty unless actually needed):
+- env_vars: environment variables - ONLY if required by the image (e.g., {"POSTGRES_PASSWORD": "secret"})
+- volumes: data persistence - ONLY if data needs to persist (e.g., ["postgres_data:/var/lib/postgresql/data"])
+- networks: container networks - leave as empty list unless specific networking is needed
+
+Return a complete DockerResource object with minimal necessary configuration.
 """
 
     def _build_brew_completion_instructions(self, resource: Any) -> str:
@@ -307,6 +326,29 @@ For DirectoryResource, please complete:
 - group: group name (optional, can be None)
 
 Return a complete DirectoryResource object.
+"""
+
+    def _build_template_file_completion_instructions(self, resource: Any) -> str:
+        """Build completion instructions for TemplateFileResource."""
+        return """
+For TemplateFileResource, complete these fields:
+
+REQUIRED fields (must be completed):
+- name: appropriate filename with extension (e.g., "config.conf", "settings.yaml")
+- template_content: Jinja2 template string with variables in {{ variable_name }} format
+- variables: Dictionary of variable names and their values for template rendering
+- directory: where to create the file (use None for current directory, or specify subdirectory like "scratch")
+- mode: file permissions (default: "644" for regular files)
+
+OPTIONAL fields (leave as None unless actually needed):
+- user: owner username - leave as None unless specific ownership required
+- group: group name - leave as None unless specific group required
+- path: full file path - leave as None (will be constructed from directory + name)
+
+The template_content should use Jinja2 syntax with {{ variable_name }} for variable interpolation.
+All variables referenced in the template should be provided in the variables dictionary.
+
+Return a complete TemplateFileResource object with minimal necessary configuration.
 """
 
     def _format_dict(self, data: Dict[str, Any]) -> str:
