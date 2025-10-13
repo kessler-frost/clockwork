@@ -62,25 +62,29 @@ class FileResource(Resource):
                 - directory: Absolute path to directory (if specified), None otherwise
         """
         from pathlib import Path
-        cwd = Path.cwd()
 
         # Ensure we have a name (should be set after AI completion)
         if not self.name:
             raise ValueError("FileResource.name must be set before resolving path")
 
+        cwd = Path.cwd()
+
+        # Case 1: Explicit path provided (highest priority)
         if self.path:
             file_path = Path(self.path)
-            file_path = file_path if file_path.is_absolute() else cwd / file_path
+            if not file_path.is_absolute():
+                file_path = cwd / file_path
             return (str(file_path), None)
-        elif self.directory:
-            abs_directory = Path(self.directory)
-            abs_directory = abs_directory if abs_directory.is_absolute() else cwd / abs_directory
-            file_path = abs_directory / self.name
-            return (str(file_path), str(abs_directory))
-        else:
-            # Default to current directory
-            file_path = cwd / self.name
-            return (str(file_path), None)
+
+        # Case 2: Directory provided (combine with name)
+        if self.directory:
+            directory = Path(self.directory)
+            if not directory.is_absolute():
+                directory = cwd / directory
+            return (str(directory / self.name), str(directory))
+
+        # Case 3: Default to current directory
+        return (str(cwd / self.name), None)
 
     def to_pyinfra_operations(self) -> str:
         """Generate PyInfra files.file operation.

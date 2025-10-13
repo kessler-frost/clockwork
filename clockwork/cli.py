@@ -109,6 +109,37 @@ def _handle_command_error(e: Exception, command_type: str) -> None:
     raise typer.Exit(code=1)
 
 
+def _run_command(
+    command_name: str,
+    panel_title: str,
+    panel_color: str,
+    core_method: str,
+    success_handler,
+    api_key: str = None,
+    model: str = None,
+):
+    """Execute a Clockwork command with common setup and error handling.
+
+    Args:
+        command_name: Command name for error messages (e.g., "apply", "plan")
+        panel_title: Title for the command panel (e.g., "Clockwork Apply")
+        panel_color: Border color for the panel (e.g., "blue", "cyan")
+        core_method: Name of the ClockworkCore method to call (e.g., "apply")
+        success_handler: Callable that takes result dict and prints success output
+        api_key: Optional API key override
+        model: Optional model override
+    """
+    main_file = _get_main_file()
+    console.print(_create_command_panel(panel_title, panel_color))
+
+    try:
+        core = _initialize_core(api_key, model)
+        result = getattr(core, core_method)(main_file)
+        success_handler(result)
+    except Exception as e:
+        _handle_command_error(e, command_name)
+
+
 @app.command()
 def apply(
     api_key: str = typer.Option(
@@ -123,20 +154,21 @@ def apply(
     ),
 ):
     """Apply infrastructure: complete resources + compile + deploy."""
-    main_file = _get_main_file()
-    console.print(_create_command_panel("Clockwork Apply", "blue"))
-
-    try:
-        core = _initialize_core(api_key, model)
-        result = core.apply(main_file)
-
+    def _handle_success(result):
         console.print("\n[bold green]✓ Deployment successful![/bold green]")
         if result.get("stdout"):
             console.print("\n[dim]PyInfra output:[/dim]")
             console.print(result["stdout"])
 
-    except Exception as e:
-        _handle_command_error(e, "deployment")
+    _run_command(
+        command_name="deployment",
+        panel_title="Clockwork Apply",
+        panel_color="blue",
+        core_method="apply",
+        success_handler=_handle_success,
+        api_key=api_key,
+        model=model,
+    )
 
 
 @app.command()
@@ -153,21 +185,22 @@ def plan(
     ),
 ):
     """Complete resources and compile without deploying."""
-    main_file = _get_main_file()
-    console.print(_create_command_panel("Clockwork Plan", "cyan"))
-
-    try:
-        core = _initialize_core(api_key, model)
-        result = core.plan(main_file)
-
+    def _handle_success(result):
         console.print(f"\n[bold]Plan Summary:[/bold]")
         console.print(f"  Resources: {result['resources']}")
         console.print(f"  Completed resources: {result['completed_resources']}")
         console.print(f"  PyInfra directory: {result['pyinfra_dir']}")
         console.print("\n[dim]Run 'clockwork apply' to deploy these resources.[/dim]")
 
-    except Exception as e:
-        _handle_command_error(e, "plan")
+    _run_command(
+        command_name="plan",
+        panel_title="Clockwork Plan",
+        panel_color="cyan",
+        core_method="plan",
+        success_handler=_handle_success,
+        api_key=api_key,
+        model=model,
+    )
 
 
 @app.command()
@@ -189,13 +222,7 @@ def destroy(
     ),
 ):
     """Destroy infrastructure: remove all deployed resources."""
-    main_file = _get_main_file()
-    console.print(_create_command_panel("Clockwork Destroy", "red"))
-
-    try:
-        core = _initialize_core(api_key, model)
-        result = core.destroy(main_file)
-
+    def _handle_success(result):
         console.print("\n[bold green]✓ Resources destroyed successfully![/bold green]")
         if result.get("stdout"):
             console.print("\n[dim]PyInfra output:[/dim]")
@@ -205,6 +232,7 @@ def destroy(
         if not keep_files:
             settings = get_settings()
             # Get the .clockwork directory (parent of pyinfra output dir)
+            main_file = Path.cwd() / "main.py"
             pyinfra_dir = main_file.parent / settings.pyinfra_output_dir
             clockwork_dir = pyinfra_dir.parent
 
@@ -215,8 +243,15 @@ def destroy(
         else:
             console.print(f"\n[dim]ℹ Kept .clockwork directory (--keep-files flag set)[/dim]")
 
-    except Exception as e:
-        _handle_command_error(e, "destroy")
+    _run_command(
+        command_name="destroy",
+        panel_title="Clockwork Destroy",
+        panel_color="red",
+        core_method="destroy",
+        success_handler=_handle_success,
+        api_key=api_key,
+        model=model,
+    )
 
 
 @app.command(name="assert")
@@ -233,20 +268,21 @@ def assert_cmd(
     ),
 ):
     """Run assertions to validate deployed resources."""
-    main_file = _get_main_file()
-    console.print(_create_command_panel("Clockwork Assert", "blue"))
-
-    try:
-        core = _initialize_core(api_key, model)
-        result = core.assert_resources(main_file)
-
+    def _handle_success(result):
         console.print("\n[bold green]✓ All assertions passed![/bold green]")
         if result.get("stdout"):
             console.print("\n[dim]PyInfra output:[/dim]")
             console.print(result["stdout"])
 
-    except Exception as e:
-        _handle_command_error(e, "assert")
+    _run_command(
+        command_name="assert",
+        panel_title="Clockwork Assert",
+        panel_color="blue",
+        core_method="assert_resources",
+        success_handler=_handle_success,
+        api_key=api_key,
+        model=model,
+    )
 
 
 @app.command()

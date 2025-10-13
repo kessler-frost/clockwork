@@ -1,7 +1,7 @@
 """Base resource classes for Clockwork."""
 
 from typing import Dict, Any, Optional, List, TYPE_CHECKING, Union
-from pydantic import BaseModel, Field, field_validator, PrivateAttr, model_validator
+from pydantic import BaseModel, Field, field_validator, PrivateAttr
 from pydantic_core import core_schema
 
 if TYPE_CHECKING:
@@ -75,6 +75,9 @@ class Resource(BaseModel):
         This allows users to pass Resource objects, but stores them as plain
         dictionaries to avoid circular references during serialization.
 
+        The original Resource objects are preserved in __init__ via the
+        _connection_resources private attribute before this validator runs.
+
         Args:
             v: List of Resource objects or connection context dicts
             handler: The default validator
@@ -83,45 +86,23 @@ class Resource(BaseModel):
         Returns:
             List of connection context dictionaries
         """
-        # Get the raw value before validation
         if not v:
             return []
 
         result = []
-        connection_resources = []
-
         for item in v:
             if isinstance(item, dict):
                 # Already a dict, use as-is
                 result.append(item)
             elif hasattr(item, 'get_connection_context'):
-                # It's a Resource, convert to context and store the resource
+                # It's a Resource, convert to context
                 result.append(item.get_connection_context())
-                connection_resources.append(item)
             else:
                 # Unknown type, skip with warning
                 import logging
                 logging.warning(f"Unknown connection type: {type(item)}, skipping")
 
-        # Store the resource objects in the instance's _connection_resources
-        # We can access the instance through info.context if it's a model_validator
-        # But for field_validator, we need to store it temporarily and set it in model_validator
-        if hasattr(info, 'context') and info.context and '_temp_connection_resources' in info.context:
-            info.context['_temp_connection_resources'] = connection_resources
-
         return result
-
-    @model_validator(mode='after')
-    def store_connection_resources(self) -> 'Resource':
-        """Store connection resources after validation.
-
-        This runs after all fields are validated, allowing us to properly
-        store the _connection_resources private attribute.
-        """
-        # The connections have already been converted to dicts by the field validator
-        # We need to extract the original Resource objects from somewhere...
-        # This approach won't work because we've lost the original objects by this point
-        return self
 
     def needs_completion(self) -> bool:
         """Check if this resource needs AI completion for any fields.
