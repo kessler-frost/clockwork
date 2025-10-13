@@ -430,3 +430,38 @@ fi
 ''')
 
         return "\n".join(operations)
+
+    def get_connection_context(self) -> Dict[str, Any]:
+        """Get connection context for this User resource.
+
+        Returns shareable fields that other resources can use when connected.
+        This includes username, home directory, shell, and group information.
+
+        Returns:
+            Dict[str, Any]: Connection context with the following keys:
+                - name: Username (always present)
+                - type: Resource type name (always present)
+                - home: Home directory path (if available)
+                - shell: User's shell (if available)
+                - group: Primary group (if available)
+                - system: Whether this is a system user (always present)
+        """
+        context = {
+            "name": self.name,
+            "type": self.__class__.__name__,
+            "system": self.system,
+        }
+
+        # Add home directory if specified
+        if self.home:
+            context["home"] = self.home
+
+        # Add shell if specified
+        if self.shell:
+            context["shell"] = self.shell
+
+        # Add group if specified
+        if self.group:
+            context["group"] = self.group
+
+        return context

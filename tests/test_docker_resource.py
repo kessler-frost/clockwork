@@ -15,9 +15,9 @@ def test_docker_resource_basic():
     assert container.description == "Test container"
     assert container.image is None
     assert container.ports is None
-    assert container.volumes is None
-    assert container.env_vars is None
-    assert container.networks is None
+    assert container.volumes == []  # Defaults to empty list
+    assert container.env_vars == {}  # Defaults to empty dict
+    assert container.networks == []  # Defaults to empty list
     assert container.present is True
     assert container.start is True
 
@@ -356,11 +356,8 @@ def test_to_pyinfra_assert_operations_default():
 
     operations = container.to_pyinfra_assert_operations()
 
-    # Check for default assertions using PyInfra docker facts
-    assert 'DockerContainer' in operations
-    assert 'containers.get("nginx")' in operations
-    assert 'Container nginx does not exist' in operations
-    assert 'Container nginx is not running' in operations
+    # No default assertions generated - users must explicitly add assertion objects
+    assert operations == ""
 
 
 def test_to_pyinfra_assert_operations_present_only():
@@ -374,12 +371,8 @@ def test_to_pyinfra_assert_operations_present_only():
 
     operations = container.to_pyinfra_assert_operations()
 
-    # Should check existence but not running status
-    assert 'DockerContainer' in operations
-    assert 'containers.get("stopped")' in operations
-    assert 'Container stopped does not exist' in operations
-    # Should not check for running status since start=False
-    assert 'is not running' not in operations
+    # No default assertions generated - users must explicitly add assertion objects
+    assert operations == ""
 
 
 def test_pydantic_validation():
@@ -410,5 +403,5 @@ def test_docker_operations_use_docker_not_apple():
     assert "apple_containers" not in destroy_ops.lower()
     assert "apple_containers" not in assert_ops.lower()
 
-    # Verify PyInfra docker facts are used for assertions
-    assert "DockerContainer" in assert_ops
+    # No default assertions generated
+    assert assert_ops == ""

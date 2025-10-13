@@ -33,12 +33,13 @@ uv run clockwork apply
 
 Clockwork provides **intelligent infrastructure orchestration** using a simple **Python + PyInfra** architecture:
 
-1. **Declare** (Pydantic models): Define infrastructure in pure Python
-2. **Complete** (AI): Intelligent resource completion with missing fields
-3. **Compile** (Templates): Convert resources to PyInfra operations
-4. **Deploy** (PyInfra): Execute infrastructure deployment
+1. **Declare** (Pydantic models): Define infrastructure in pure Python with optional resource connections
+2. **Resolve** (Dependency ordering): Detect cycles and sort resources topologically
+3. **Complete** (AI): Intelligent resource completion with connection context
+4. **Compile** (Templates): Convert resources to PyInfra operations
+5. **Deploy** (PyInfra): Execute infrastructure deployment in correct order
 
-The orchestration flow: Python definitions → AI intelligence → PyInfra automation → Deployed infrastructure.
+The orchestration flow: Python definitions → Dependency resolution → AI intelligence → PyInfra automation → Deployed infrastructure.
 
 ## Resource Types
 
@@ -370,6 +371,278 @@ uv run clockwork apply
 - **Permissions** - Filesystem MCP requires explicit directory permissions
 - **Performance** - Tools add latency but provide real-time/external data access
 
+## Resource Connections
+
+Clockwork provides a **powerful connection system** that allows resources to declare dependencies on other resources. This enables:
+
+1. **AI-powered completion with context** - AI sees connected resources and makes intelligent configuration decisions
+2. **Automatic dependency ordering** - Resources are deployed in the correct order (dependencies first)
+3. **Cross-resource configuration sharing** - Resources can access connection details from their dependencies
+4. **Cycle detection** - Prevents circular dependencies before deployment
+
+### Basic Usage
+
+Declare connections by passing a list of Resource objects to the `connections` field:
+
+```python
+from clockwork.resources import DockerResource
+
+# Define dependencies
+postgres = DockerResource(
+    name="postgres-db",
+    image="postgres:15-alpine",
+    ports=["5432:5432"],
+    env_vars={"POSTGRES_PASSWORD": "secret", "POSTGRES_DB": "myapp"}
+)
+
+redis = DockerResource(
+    name="redis-cache",
+    image="redis:7-alpine",
+    ports=["6379:6379"]
+)
+
+# Connect API to postgres + redis
+api = DockerResource(
+    description="FastAPI backend with database and cache",
+    ports=["8000:8000"],
+    connections=[postgres, redis]  # AI sees these during completion
+)
+
+# Deployment order: postgres → redis → api
+# AI generates: DATABASE_URL, REDIS_URL env vars automatically
+```
+
+### Connection Context
+
+When resources are connected, the AI receives **connection context** during completion. Each resource type exposes relevant fields through the `get_connection_context()` method:
+
+**Container Resources (Docker, AppleContainer):**
+- `name` - Container name
+- `image` - Container image
+- `ports` - Port mappings
+- `env_vars` - Environment variables
+- `networks` - Container networks
+
+**File Resources (File, TemplateFile):**
+- `name` - File name
+- `path` - File path
+- `directory` - Directory location
+- `variables` - Template variables (TemplateFile only)
+
+**Other Resources:**
+- `GitRepoResource` - name, repo_url, branch, dest
+- `BrewPackageResource` - name, packages, cask
+- `DirectoryResource` - name, path, mode
+- `UserResource` - name, system, home, shell, group
+
+### AI-Powered Completion with Connections
+
+The AI uses connection context to make intelligent decisions about configuration:
+
+```python
+# Without connections - AI guesses
+api = DockerResource(
+    description="FastAPI backend",
+    ports=["8000:8000"]
+)
+# AI might generate: Generic image, no connection env vars
+
+# With connections - AI knows exactly what to configure
+api = DockerResource(
+    description="FastAPI backend with database and cache",
+    ports=["8000:8000"],
+    connections=[postgres, redis]
+)
+# AI generates:
+# - image: "tiangolo/uvicorn-gunicorn-fastapi:python3.11-slim"
+# - env_vars:
+#     DATABASE_URL: "postgresql://postgres:secret@postgres-db:5432/myapp"
+#     REDIS_URL: "redis://redis-cache:6379"
+# - networks: ["app-network"]  # Shared network for inter-container communication
+```
+
+### Automatic Dependency Ordering
+
+Clockwork automatically orders resource deployment based on connections using **topological sorting**:
+
+```python
+# Definition order doesn't matter
+a = DockerResource(name="a", connections=[b])
+c = DockerResource(name="c", connections=[a])
+b = DockerResource(name="b", connections=[])
+
+# Deployment order: b → a → c
+# (Dependencies are always deployed before dependents)
+```
+
+**Complex dependency graphs** are handled correctly:
+
+```python
+# Diamond dependency pattern
+#     A
+#    / \
+#   B   C
+#    \ /
+#     D
+
+d = DockerResource(name="d")
+b = DockerResource(name="b", connections=[d])
+c = DockerResource(name="c", connections=[d])
+a = DockerResource(name="a", connections=[b, c])
+
+# Deployment order: d → b → c → a
+# OR: d → c → b → a (both valid topological sorts)
+```
+
+### Cycle Detection
+
+Clockwork detects circular dependencies **before deployment** and provides clear error messages:
+
+```python
+# Circular dependency
+a = DockerResource(name="a", connections=[b])
+b = DockerResource(name="b", connections=[c])
+c = DockerResource(name="c", connections=[a])  # Creates cycle: a → b → c → a
+
+# Error: Dependency cycle detected: a → b → c → a
+```
+
+The cycle detection algorithm uses **Depth-First Search (DFS)** and runs in O(V+E) time, where V is the number of resources and E is the number of connections.
+
+### Real-World Example: Full-Stack Application
+
+```python
+from clockwork.resources import DockerResource
+
+# Layer 1: Data stores (no dependencies)
+postgres = DockerResource(
+    name="postgres-db",
+    image="postgres:15-alpine",
+    ports=["5432:5432"],
+    env_vars={
+        "POSTGRES_DB": "appdb",
+        "POSTGRES_USER": "admin",
+        "POSTGRES_PASSWORD": "secret123"
+    },
+    volumes=["postgres_data:/var/lib/postgresql/data"]
+)
+
+redis = DockerResource(
+    name="redis-cache",
+    image="redis:7-alpine",
+    ports=["6379:6379"],
+    volumes=["redis_data:/data"]
+)
+
+# Layer 2: Backend services (depend on data stores)
+api = DockerResource(
+    description="FastAPI backend server with database and cache support",
+    ports=["8000:8000"],
+    connections=[postgres, redis]
+)
+
+worker = DockerResource(
+    description="Background worker processing jobs from Redis queue",
+    connections=[redis]
+)
+
+# Deployment order: postgres, redis → api, worker
+```
+
+See the full example in `examples/connected-services/`.
+
+### Connection Patterns
+
+**1. Database Connection Pattern**
+```python
+db = DockerResource(name="db", image="postgres:15")
+app = DockerResource(
+    description="App that needs database",
+    connections=[db]
+)
+# AI generates: DATABASE_URL env var with correct connection string
+```
+
+**2. Cache Pattern**
+```python
+cache = DockerResource(name="cache", image="redis:7-alpine")
+app = DockerResource(
+    description="App that needs caching",
+    connections=[cache]
+)
+# AI generates: REDIS_URL or CACHE_URL env var
+```
+
+**3. Queue/Worker Pattern**
+```python
+queue = DockerResource(name="queue", image="redis:7-alpine")
+worker1 = DockerResource(description="Worker 1", connections=[queue])
+worker2 = DockerResource(description="Worker 2", connections=[queue])
+api = DockerResource(description="API that enqueues jobs", connections=[queue])
+# All get QUEUE_URL/REDIS_URL env vars, shared network
+```
+
+**4. Microservices Pattern**
+```python
+service_a = DockerResource(name="service-a", image="my-service-a")
+service_b = DockerResource(
+    description="Service B that calls Service A",
+    connections=[service_a]
+)
+# AI configures service_b to connect to service_a on shared network
+```
+
+### Best Practices
+
+1. **Declare connections explicitly** - Even if the AI could infer relationships, explicit connections ensure correct ordering and context
+
+2. **Use descriptive resource descriptions** - Mention what the resource needs to connect to:
+   ```python
+   # Good
+   api = DockerResource(
+       description="FastAPI app that needs PostgreSQL database and Redis cache",
+       connections=[postgres, redis]
+   )
+
+   # Less effective
+   api = DockerResource(
+       description="Web API",
+       connections=[postgres, redis]
+   )
+   ```
+
+3. **Keep dependency graphs shallow** - Deeply nested dependencies (>5 levels) can be harder to understand and debug
+
+4. **Avoid circular dependencies** - Design your architecture to have clear dependency layers
+
+5. **Use connection context** - Override `get_connection_context()` in custom resource types to expose relevant fields:
+   ```python
+   class MyDatabaseResource(Resource):
+       host: str
+       port: int
+
+       def get_connection_context(self) -> Dict[str, Any]:
+           context = super().get_connection_context()
+           context.update({
+               "host": self.host,
+               "port": self.port,
+               "connection_string": f"{self.host}:{self.port}"
+           })
+           return context
+   ```
+
+### Connection Examples
+
+See complete working examples in the `examples/` directory:
+- `examples/connected-services/` - Full-stack application with PostgreSQL, Redis, API, and Worker
+
+```bash
+cd examples/connected-services
+uv run clockwork apply    # Deploy in correct order
+uv run clockwork assert   # Verify connections
+uv run clockwork destroy  # Clean up
+```
+
 ## Configuration
 
 Clockwork uses **Pydantic Settings** for configuration management via `.env` files.
@@ -505,7 +778,8 @@ clockwork/
 │   ├── file-generation/           # File generation example
 │   ├── docker-service/            # Docker service example (cross-platform)
 │   ├── apple-container-service/   # Apple Container service example (macOS)
-│   └── tool-integration/           # Tool integration example (web search)
+│   ├── tool-integration/          # Tool integration example (web search)
+│   └── connected-services/        # Resource connections example (full-stack app)
 ├── tests/                  # Test suite
 └── pyproject.toml         # Dependencies
 ```
@@ -636,6 +910,12 @@ uv run clockwork destroy
 # Test tool integration (web search - no setup required)
 cd ../tool-integration
 uv run clockwork apply
+
+# Test connected services (resource connections with full-stack app)
+cd ../connected-services
+uv run clockwork apply
+uv run clockwork assert
+uv run clockwork destroy
 ```
 
 ## Code Guidelines
@@ -651,6 +931,11 @@ Key conventions:
 - **Settings**: Always use `get_settings()`, never `os.getenv()` or hardcoded defaults
 - **Error handling**: Use specific exceptions with meaningful messages
 - **API Documentation**: Always use Context7 MCP server first for library documentation via `mcp__context7__resolve-library-id` and `mcp__context7__get-library-docs` tools. Fall back to WebFetch/WebSearch only if Context7 doesn't have the needed docs.
+- **PyInfra First**: Always use PyInfra's native operations and methods. Avoid `server.shell()` unless absolutely necessary. Prefer:
+  - `docker.container()` over `server.shell(commands=["docker run"])`
+  - `files.file()` over `server.shell(commands=["echo > file"])`
+  - `git.repo()` over `server.shell(commands=["git clone"])`
+  - PyInfra facts over shell commands for assertions
 
 ## Important Notes
 

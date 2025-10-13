@@ -202,6 +202,53 @@ apple_containers.container_remove(
 )
 '''
 
+    def get_connection_context(self) -> Dict[str, Any]:
+        """Get connection context for this Apple Container resource.
+
+        Returns shareable fields that other resources can use when connected.
+        This includes container name, image, exposed ports, environment variables,
+        and networks. Only non-None/non-empty fields are included.
+
+        Returns:
+            Dict with shareable fields:
+                - name: Container name
+                - type: Resource class name (AppleContainerResource)
+                - image: Container image (if set)
+                - ports: Port mappings (if set)
+                - env_vars: Environment variables (if set)
+                - networks: Container networks (if set)
+
+        Example:
+            >>> container = AppleContainerResource(
+            ...     name="postgres",
+            ...     image="postgres:15",
+            ...     ports=["5432:5432"],
+            ...     env_vars={"POSTGRES_PASSWORD": "secret"}
+            ... )
+            >>> container.get_connection_context()
+            {
+                'name': 'postgres',
+                'type': 'AppleContainerResource',
+                'image': 'postgres:15',
+                'ports': ['5432:5432'],
+                'env_vars': {'POSTGRES_PASSWORD': 'secret'}
+            }
+        """
+        context = {
+            "name": self.name,
+            "type": self.__class__.__name__,
+            "image": self.image,
+        }
+
+        if self.ports:
+            context["ports"] = self.ports
+        if self.env_vars:
+            context["env_vars"] = self.env_vars
+        if self.networks:
+            context["networks"] = self.networks
+
+        return context
+
     def to_pyinfra_assert_operations(self) -> str:
         """Generate PyInfra operations code for Apple Container assertions.
 

@@ -159,6 +159,39 @@ files.directory(
 
         return operations
 
+    def get_connection_context(self) -> Dict[str, Any]:
+        """Get connection context for this File resource.
+
+        Returns shareable fields that other resources can use when connected.
+        This includes file name, path, and directory information for resources
+        that need to reference or interact with this file.
+
+        Returns:
+            Dict[str, Any]: Connection context with the following keys:
+                - name: File name (always present)
+                - type: Resource type name (always present)
+                - path: Full file path (if available after resolution)
+                - directory: Directory path (if specified)
+        """
+        context = {
+            "name": self.name,
+            "type": self.__class__.__name__,
+        }
+
+        # Add path if it can be resolved
+        if self.path:
+            context["path"] = self.path
+        elif self.name and self.directory:
+            # Can construct a relative path if both are available
+            from pathlib import Path
+            context["path"] = str(Path(self.directory) / self.name)
+
+        # Add directory if specified
+        if self.directory:
+            context["directory"] = self.directory
+
+        return context
+
     def to_pyinfra_assert_operations(self) -> str:
         """Generate PyInfra operations code for file assertions.
 

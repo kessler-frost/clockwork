@@ -158,6 +158,32 @@ files.directory(
 )
 '''
 
+    def get_connection_context(self) -> Dict[str, Any]:
+        """Get connection context for this Directory resource.
+
+        Returns shareable fields that other resources can use when connected.
+        This includes directory path and permissions for resources that need to
+        reference or interact with this directory.
+
+        Returns:
+            Dict[str, Any]: Connection context with the following keys:
+                - name: Directory name (always present)
+                - type: Resource type name (always present)
+                - path: Full directory path (always present)
+                - mode: Directory permissions (if specified)
+        """
+        context = {
+            "name": self.name,
+            "type": self.__class__.__name__,
+            "path": self.path,
+        }
+
+        # Add mode if specified
+        if self.mode:
+            context["mode"] = self.mode
+
+        return context
+
     def to_pyinfra_assert_operations(self) -> str:
         """Generate PyInfra operations code for directory assertions.
 

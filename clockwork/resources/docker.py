@@ -23,6 +23,11 @@ class DockerResource(Resource):
         present: Whether the container should exist (True) or be removed (False)
         start: Whether the container should be running (True) or stopped (False)
 
+    Note:
+        Images must have a proper CMD or ENTRYPOINT. Use images like nginx, postgres,
+        redis, or build custom images beforehand. Base images like python:3.11-slim
+        without CMD will exit immediately.
+
     Examples:
         # Minimal - AI completes everything:
         >>> web = DockerResource(
@@ -166,58 +171,64 @@ docker.container(
 )
 '''
 
+    def get_connection_context(self) -> Dict[str, Any]:
+        """Get connection context for this Docker resource.
+
+        Returns shareable fields that other resources can use when connected.
+        This includes container name, image, exposed ports, environment variables,
+        and networks. Only non-None/non-empty fields are included.
+
+        Returns:
+            Dict with shareable fields:
+                - name: Container name
+                - type: Resource class name (DockerResource)
+                - image: Container image (if set)
+                - ports: Port mappings (if set)
+                - env_vars: Environment variables (if set)
+                - networks: Container networks (if set)
+
+        Example:
+            >>> container = DockerResource(
+            ...     name="postgres",
+            ...     image="postgres:15",
+            ...     ports=["5432:5432"],
+            ...     env_vars={"POSTGRES_PASSWORD": "secret"}
+            ... )
+            >>> container.get_connection_context()
+            {
+                'name': 'postgres',
+                'type': 'DockerResource',
+                'image': 'postgres:15',
+                'ports': ['5432:5432'],
+                'env_vars': {'POSTGRES_PASSWORD': 'secret'}
+            }
+        """
+        context = {
+            "name": self.name,
+            "type": self.__class__.__name__,
+            "image": self.image,
+        }
+
+        if self.ports:
+            context["ports"] = self.ports
+        if self.env_vars:
+            context["env_vars"] = self.env_vars
+        if self.networks:
+            context["networks"] = self.networks
+
+        return context
+
     def to_pyinfra_assert_operations(self) -> str:
         """Generate PyInfra operations code for Docker container assertions.
 
-        Provides default assertions for DockerResource using PyInfra facts:
-        - Container exists (if present=True)
-        - Container is running (if start=True)
-
-        These can be overridden by specifying custom assertions.
+        Uses the base implementation which processes assertion objects.
+        If no assertions are defined, returns empty string (no default assertions).
 
         Returns:
             str: PyInfra assertion operation code
-
-        Example generated code:
-            ```python
-            # Default assertions for Docker container: nginx-server
-            from pyinfra.facts.docker import DockerContainer
-
-            containers = host.get_fact(DockerContainer)
-            container = containers.get("nginx-server")
-            assert container is not None, "Container nginx-server does not exist"
-            assert container.get("running"), "Container nginx-server is not running"
-            ```
         """
         if self.name is None:
             raise ValueError("Resource name not completed")
 
-        # If custom assertions are defined, use the base implementation
-        if self.assertions:
-            return super().to_pyinfra_assert_operations()
-
-        operations = []
-        operations.append(f"\n# Default assertions for Docker container: {self.name}")
-
-        # Check if container should be present
-        if self.present:
-            operations.append(f'''
-# Assert: Container exists
-from pyinfra.api import host
-from pyinfra.facts.docker import DockerContainer
-
-containers = host.get_fact(DockerContainer)
-container = containers.get("{self.name}")
-if container is None:
-    raise Exception("Container {self.name} does not exist")
-''')
-
-            # Check if container should be running
-            if self.start:
-                operations.append(f'''
-# Assert: Container is running
-if not container.get("running"):
-    raise Exception("Container {self.name} is not running")
-''')
-
-        return "\n".join(operations)
+        # Use the base implementation (processes assertion objects only)
+        return super().to_pyinfra_assert_operations()

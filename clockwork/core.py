@@ -74,18 +74,22 @@ class ClockworkCore:
         resources = self._load_resources(main_file)
         logger.info(f"Loaded {len(resources)} resources")
 
-        # 2. Complete resources (AI stage)
+        # 2. Resolve dependency order (checks for cycles and sorts topologically)
+        resources = self._resolve_dependency_order(resources)
+        logger.info(f"Resolved resource dependencies in deployment order")
+
+        # 3. Complete resources (AI stage)
         completed_resources = self._complete_resources_safe(resources)
 
-        # 3. Set compiler output directory relative to main.py location
+        # 4. Set compiler output directory relative to main.py location
         settings = get_settings()
         self.pyinfra_compiler.output_dir = main_file.parent / settings.pyinfra_output_dir
 
-        # 4. Compile to PyInfra (template stage)
+        # 5. Compile to PyInfra (template stage)
         pyinfra_dir = self.pyinfra_compiler.compile(completed_resources)
         logger.info(f"Compiled to PyInfra: {pyinfra_dir}")
 
-        # 5. Execute PyInfra deploy (unless dry run)
+        # 6. Execute PyInfra deploy (unless dry run)
         if dry_run:
             logger.info("Dry run - skipping execution")
             return {
@@ -168,6 +172,103 @@ class ClockworkCore:
             logger.error(f"Traceback: {traceback.format_exc()}")
             raise RuntimeError(f"Resource completion failed: {e}") from e
 
+    def _resolve_dependency_order(self, resources: List[Any]) -> List[Any]:
+        """Resolve resource dependencies and return them in correct deployment order.
+
+        This method performs two critical operations:
+        1. Cycle Detection: Uses DFS to detect circular dependencies
+        2. Topological Sort: Orders resources so dependencies are deployed first
+
+        Args:
+            resources: List of Resource objects (may have connections)
+
+        Returns:
+            List of Resource objects in dependency order (dependencies first)
+
+        Raises:
+            ValueError: If a dependency cycle is detected
+
+        Example:
+            # Given: A depends on B, B depends on C
+            # Returns: [C, B, A]  (C deployed first, then B, then A)
+        """
+        if not resources:
+            return resources
+
+        # First, detect cycles using DFS
+        visited = set()
+        rec_stack = set()
+
+        def detect_cycle_dfs(resource: Any, path: List[str]) -> None:
+            """DFS to detect cycles in resource dependencies.
+
+            Args:
+                resource: Current resource being visited
+                path: Current path of resource names (for error reporting)
+
+            Raises:
+                ValueError: If a cycle is detected
+            """
+            visited.add(id(resource))
+            rec_stack.add(id(resource))
+            resource_name = resource.name or resource.__class__.__name__
+            path.append(resource_name)
+
+            # Use _connection_resources for actual Resource objects
+            for connected in resource._connection_resources:
+                connected_id = id(connected)
+                if connected_id not in visited:
+                    detect_cycle_dfs(connected, path)
+                elif connected_id in rec_stack:
+                    # Cycle detected
+                    connected_name = connected.name or connected.__class__.__name__
+                    cycle_path = path + [connected_name]
+                    raise ValueError(
+                        f"Dependency cycle detected: {' → '.join(cycle_path)}"
+                    )
+
+            rec_stack.remove(id(resource))
+            path.pop()
+
+        # Check for cycles in all resources
+        for resource in resources:
+            if id(resource) not in visited:
+                detect_cycle_dfs(resource, [])
+
+        logger.debug("No dependency cycles detected")
+
+        # Now perform topological sort using DFS
+        visited_topo = set()
+        result = []
+
+        def topological_dfs(resource: Any) -> None:
+            """DFS to perform topological sort.
+
+            Args:
+                resource: Current resource being visited
+            """
+            resource_id = id(resource)
+            visited_topo.add(resource_id)
+
+            # Visit all dependencies first (use _connection_resources for actual Resource objects)
+            for connected in resource._connection_resources:
+                if id(connected) not in visited_topo:
+                    topological_dfs(connected)
+
+            # Add current resource after its dependencies
+            result.append(resource)
+
+        # Process all resources
+        for resource in resources:
+            if id(resource) not in visited_topo:
+                topological_dfs(resource)
+
+        logger.debug(
+            f"Topological sort complete: {[r.name or r.__class__.__name__ for r in result]}"
+        )
+
+        return result
+
     def destroy(self, main_file: Path, dry_run: bool = False) -> Dict[str, Any]:
         """
         Destroy pipeline: execute pre-generated destroy.py.
@@ -228,18 +329,22 @@ class ClockworkCore:
         resources = self._load_resources(main_file)
         logger.info(f"Loaded {len(resources)} resources")
 
-        # 2. Complete resources if needed (AI stage)
+        # 2. Resolve dependency order (checks for cycles and sorts topologically)
+        resources = self._resolve_dependency_order(resources)
+        logger.info(f"Resolved resource dependencies in deployment order")
+
+        # 3. Complete resources if needed (AI stage)
         completed_resources = self._complete_resources_safe(resources)
 
-        # 3. Set compiler output directory relative to main.py location
+        # 4. Set compiler output directory relative to main.py location
         settings = get_settings()
         self.pyinfra_compiler.output_dir = main_file.parent / settings.pyinfra_output_dir
 
-        # 4. Compile to PyInfra using compile_assert()
+        # 5. Compile to PyInfra using compile_assert()
         pyinfra_dir = self.pyinfra_compiler.compile_assert(completed_resources)
         logger.info(f"Compiled assertions to PyInfra: {pyinfra_dir}")
 
-        # 5. Execute PyInfra assert.py (unless dry run)
+        # 6. Execute PyInfra assert.py (unless dry run)
         if dry_run:
             logger.info("Dry run - skipping execution")
             return {

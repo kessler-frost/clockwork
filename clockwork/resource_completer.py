@@ -180,8 +180,40 @@ Your completions should be production-ready, minimal, and follow best practices.
             else:
                 merged_data[field_name] = None
 
+        # Preserve connections from user resource (not part of AI completion)
+        # Connections are already converted to dicts by the field validator
+        if hasattr(user_resource, 'connections') and user_resource.connections:
+            merged_data['connections'] = user_resource.connections
+
         # Create new resource instance with merged data
         return user_resource.__class__(**merged_data)
+
+    def _format_connection_context(self, connections: List[Dict[str, Any]]) -> str:
+        """Format connection context for AI prompt.
+
+        Args:
+            connections: List of connection context dictionaries
+
+        Returns:
+            Formatted string with connection information
+        """
+        if not connections:
+            return ""
+
+        lines = ["Connected Resources:"]
+        for context in connections:
+            type_name = context.get("type", "Unknown")
+            name = context.get("name", "unnamed")
+
+            # Format the connection info
+            conn_info = f"- {name} ({type_name}):"
+            for key, value in context.items():
+                if key not in ["type", "name"]:
+                    conn_info += f"\n  * {key}: {value}"
+
+            lines.append(conn_info)
+
+        return "\n".join(lines)
 
     def _build_completion_prompt(self, resource: Any) -> str:
         """Build completion prompt based on resource type and partial values.
@@ -212,6 +244,16 @@ Missing fields (but ONLY complete REQUIRED ones):
 
 IMPORTANT: Only complete fields that are actually REQUIRED for this specific use case.
 Leave optional fields as None unless explicitly needed.
+
+"""
+
+        # Add connection context if available
+        if hasattr(resource, 'connections') and resource.connections:
+            connection_context = self._format_connection_context(resource.connections)
+            prompt += f"""
+{connection_context}
+
+Use the connected resources to configure appropriate connection strings, URLs, ports, and environment variables.
 
 """
 
@@ -266,8 +308,11 @@ REQUIRED fields (must be completed):
 
 OPTIONAL fields (leave as None/empty unless actually needed):
 - env_vars: environment variables - ONLY if required by the image (e.g., {"POSTGRES_PASSWORD": "secret"})
+  * If connected resources are provided, generate appropriate environment variables for connecting to them
+  * Examples: DATABASE_URL=postgresql://user:pass@postgres-db:5432/mydb, REDIS_URL=redis://redis-cache:6379
 - volumes: data persistence - ONLY if data needs to persist (e.g., ["postgres_data:/var/lib/postgresql/data"])
 - networks: container networks - leave as empty list unless specific networking is needed
+  * If connected to other containers, consider adding them to the same network for inter-container communication
 
 Return a complete AppleContainerResource object with minimal necessary configuration.
 """
@@ -286,8 +331,11 @@ REQUIRED fields (must be completed):
 
 OPTIONAL fields (leave as None/empty unless actually needed):
 - env_vars: environment variables - ONLY if required by the image (e.g., {"POSTGRES_PASSWORD": "secret"})
+  * If connected resources are provided, generate appropriate environment variables for connecting to them
+  * Examples: DATABASE_URL=postgresql://user:pass@postgres-db:5432/mydb, REDIS_URL=redis://redis-cache:6379
 - volumes: data persistence - ONLY if data needs to persist (e.g., ["postgres_data:/var/lib/postgresql/data"])
 - networks: container networks - leave as empty list unless specific networking is needed
+  * If connected to other containers, consider adding them to the same network for inter-container communication
 
 Return a complete DockerResource object with minimal necessary configuration.
 """

@@ -15,9 +15,9 @@ def test_apple_container_resource_basic():
     assert container.description == "Test container"
     assert container.image is None
     assert container.ports is None
-    assert container.volumes is None
-    assert container.env_vars is None
-    assert container.networks is None
+    assert container.volumes == []  # Defaults to empty list
+    assert container.env_vars == {}  # Defaults to empty dict
+    assert container.networks == []  # Defaults to empty list
     assert container.present is True
     assert container.start is True
 

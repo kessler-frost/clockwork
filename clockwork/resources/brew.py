@@ -181,3 +181,31 @@ server.shell(
 ''')
 
         return "\n".join(operations)
+
+    def get_connection_context(self) -> Dict[str, Any]:
+        """Get connection context for this Brew package resource.
+
+        Returns shareable fields that other resources can use when connected.
+        This includes package names and whether they are casks or regular packages.
+
+        Returns:
+            Dict[str, Any]: Connection context with the following keys:
+                - name: Resource identifier (always present)
+                - type: Resource type name (always present)
+                - packages: List of installed packages/casks (if available)
+                - cask: Whether packages are GUI casks (if available)
+        """
+        context = {
+            "name": self.name,
+            "type": self.__class__.__name__,
+        }
+
+        # Add packages list if specified
+        if self.packages:
+            context["packages"] = self.packages
+
+        # Add cask flag if specified
+        if self.cask is not None:
+            context["cask"] = self.cask
+
+        return context

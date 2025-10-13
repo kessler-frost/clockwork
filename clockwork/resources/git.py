@@ -185,3 +185,36 @@ server.shell(
 ''')
 
         return "\n".join(operations)
+
+    def get_connection_context(self) -> Dict[str, Any]:
+        """Get connection context for this Git repository resource.
+
+        Returns shareable fields that other resources can use when connected.
+        This includes repository name, URL, branch, and destination path.
+
+        Returns:
+            Dict[str, Any]: Connection context with the following keys:
+                - name: Repository identifier (always present)
+                - type: Resource type name (always present)
+                - repo_url: Git repository URL (if available)
+                - branch: Git branch name (if available)
+                - dest: Destination path for cloned repository (if available)
+        """
+        context = {
+            "name": self.name,
+            "type": self.__class__.__name__,
+        }
+
+        # Add repo_url if specified
+        if self.repo_url:
+            context["repo_url"] = self.repo_url
+
+        # Add branch if specified
+        if self.branch:
+            context["branch"] = self.branch
+
+        # Add destination path if specified
+        if self.dest:
+            context["dest"] = self.dest
+
+        return context
