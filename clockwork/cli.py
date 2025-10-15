@@ -9,7 +9,6 @@ import shutil
 import signal
 import subprocess
 import time
-import urllib.parse
 from pathlib import Path
 
 import httpx
@@ -82,49 +81,6 @@ def _read_service_pid() -> int | None:
         return int(pid_file.read_text().strip())
     except (ValueError, OSError):
         return None
-
-
-def _register_project_with_service(main_file: Path) -> bool:
-    """Register project with monitoring service.
-
-    Args:
-        main_file: Path to main.py file
-
-    Returns:
-        True if registration succeeded, False otherwise.
-    """
-    settings = get_settings()
-    try:
-        response = httpx.post(
-            f"http://localhost:{settings.service_port}/projects/register",
-            json={"main_file": str(main_file.absolute())},
-            timeout=5.0
-        )
-        return response.status_code == 201
-    except Exception:
-        return False
-
-
-def _unregister_project_from_service(main_file: Path) -> bool:
-    """Unregister project from monitoring service.
-
-    Args:
-        main_file: Path to main.py file
-
-    Returns:
-        True if unregistration succeeded, False otherwise.
-    """
-    settings = get_settings()
-    try:
-        # URL-encode the main_file path for use as project_id
-        project_id = urllib.parse.quote(str(main_file.absolute()), safe='')
-        response = httpx.delete(
-            f"http://localhost:{settings.service_port}/projects/{project_id}",
-            timeout=5.0
-        )
-        return response.status_code == 204
-    except Exception:
-        return False
 
 
 # Helper functions to reduce duplication across commands
@@ -251,23 +207,8 @@ def apply(
         "--model",
         help="Model name (overrides .env)"
     ),
-    skip_service_check: bool = typer.Option(
-        False,
-        "--skip-service-check",
-        help="Skip service health check"
-    ),
 ):
     """Apply infrastructure: complete resources + compile + deploy."""
-    # Check service health (unless skipped)
-    if not skip_service_check:
-        if not check_service_running():
-            console.print("[bold red]✗ Clockwork service not running[/bold red]")
-            console.print("[dim]Start the service first:[/dim]")
-            console.print("  [cyan]clockwork service start[/cyan]")
-            raise typer.Exit(code=1)
-
-    main_file = _get_main_file()
-
     def _handle_success(result):
         if result.get("success"):
             console.print("\n[bold green]✓ Deployment successful![/bold green]")
@@ -291,13 +232,6 @@ def apply(
                     console.print(f"  {key}: {value}")
         else:
             console.print(f"\n[bold red]✗ Deployment failed:[/bold red] {result.get('error', 'Unknown error')}")
-
-        # Register project with service
-        if not skip_service_check and result.get("success"):
-            if _register_project_with_service(main_file):
-                console.print("[dim]✓ Project registered with monitoring service[/dim]")
-            else:
-                console.print("[yellow]⚠ Could not register with service[/yellow]")
 
     _run_command(
         command_name="deployment",
@@ -368,23 +302,8 @@ def destroy(
         "--model",
         help="Model name (overrides .env)"
     ),
-    skip_service_check: bool = typer.Option(
-        False,
-        "--skip-service-check",
-        help="Skip service health check"
-    ),
 ):
     """Destroy infrastructure: remove all deployed resources."""
-    # Check service health (unless skipped)
-    if not skip_service_check:
-        if not check_service_running():
-            console.print("[bold red]✗ Clockwork service not running[/bold red]")
-            console.print("[dim]Start the service first:[/dim]")
-            console.print("  [cyan]clockwork service start[/cyan]")
-            raise typer.Exit(code=1)
-
-    main_file = _get_main_file()
-
     def _handle_success(result):
         if result.get("success"):
             console.print("\n[bold green]✓ Resources destroyed successfully![/bold green]")
@@ -398,13 +317,6 @@ def destroy(
                     console.print(f"[dim]Duration: {summary['duration']}s[/dim]")
         else:
             console.print(f"\n[bold red]✗ Destroy failed:[/bold red] {result.get('error', 'Unknown error')}")
-
-        # Unregister project from service
-        if not skip_service_check and result.get("success"):
-            if _unregister_project_from_service(main_file):
-                console.print("[dim]✓ Project unregistered from monitoring service[/dim]")
-            else:
-                console.print("[yellow]⚠ Could not unregister from service[/yellow]")
 
     _run_command(
         command_name="destroy",
@@ -429,21 +341,8 @@ def assert_cmd(
         "--model",
         help="Model name (overrides .env)"
     ),
-    skip_service_check: bool = typer.Option(
-        False,
-        "--skip-service-check",
-        help="Skip service health check"
-    ),
 ):
     """Run assertions to validate deployed resources."""
-    # Check service health (unless skipped)
-    if not skip_service_check:
-        if not check_service_running():
-            console.print("[bold red]✗ Clockwork service not running[/bold red]")
-            console.print("[dim]Start the service first:[/dim]")
-            console.print("  [cyan]clockwork service start[/cyan]")
-            raise typer.Exit(code=1)
-
     def _handle_success(result):
         if result.get("success"):
             console.print("\n[bold green]✓ All assertions passed![/bold green]")
@@ -488,7 +387,7 @@ app.add_typer(service_app, name="service")
 
 @service_app.command("start")
 def service_start():
-    """Start Clockwork monitoring service."""
+    """Start Clockwork service."""
     settings = get_settings()
 
     # Check if already running
@@ -501,9 +400,7 @@ def service_start():
     pid_file = _get_service_pid_file()
     pid_file.parent.mkdir(parents=True, exist_ok=True)
 
-    # Start uvicorn in background
-    # Redirect uvicorn's stdout/stderr to /dev/null to suppress its access logs
-    # The service itself logs to both console and file via configured handlers
+    # Start uvicorn in background with autoreload
     try:
         process = subprocess.Popen(
             [
@@ -511,11 +408,11 @@ def service_start():
                 'clockwork.service.app:app',
                 '--host', '0.0.0.0',
                 '--port', str(settings.service_port),
-                '--log-level', 'warning',  # Only show warnings/errors from uvicorn
-                '--reload',  # Enable auto-reload when code changes
+                '--log-level', 'warning',
+                '--reload',
             ],
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,  # Keep stderr to see uvicorn errors
+            stderr=subprocess.PIPE,
         )
 
         # Save PID
@@ -528,7 +425,6 @@ def service_start():
             console.print(f"[dim]PID: {process.pid}[/dim]")
         else:
             console.print("[red]✗ Service failed to start[/red]")
-            console.print("[dim]Check that clockwork.service.app module exists[/dim]")
             raise typer.Exit(code=1)
 
     except FileNotFoundError:
@@ -542,15 +438,13 @@ def service_start():
 
 @service_app.command("stop")
 def service_stop():
-    """Stop Clockwork monitoring service."""
+    """Stop Clockwork service."""
     pid = _read_service_pid()
 
     if pid is None:
         console.print("[yellow]Service PID file not found[/yellow]")
-        console.print("[dim]Service may not be running[/dim]")
         return
 
-    # Try to stop the process
     try:
         os.kill(pid, signal.SIGTERM)
         console.print(f"[green]✓ Service stopped (PID: {pid})[/green]")
@@ -576,81 +470,12 @@ def service_stop():
 
 @service_app.command("restart")
 def service_restart():
-    """Restart Clockwork monitoring service."""
-    settings = get_settings()
-
-    # Check if service is running
-    is_running = check_service_running()
-
-    if is_running:
-        # Stop the service
-        pid = _read_service_pid()
-
-        if pid is not None:
-            try:
-                os.kill(pid, signal.SIGTERM)
-                console.print(f"[dim]Stopping service (PID: {pid})[/dim]")
-
-                # Clean up PID file
-                pid_file = _get_service_pid_file()
-                if pid_file.exists():
-                    pid_file.unlink()
-
-                # Wait for service to stop
-                time.sleep(2)
-
-            except ProcessLookupError:
-                console.print("[yellow]Process not found (already stopped?)[/yellow]")
-                pid_file = _get_service_pid_file()
-                if pid_file.exists():
-                    pid_file.unlink()
-            except PermissionError:
-                console.print(f"[red]✗ Permission denied (PID: {pid})[/red]")
-                raise typer.Exit(code=1)
-            except Exception as e:
-                console.print(f"[red]✗ Failed to stop service: {e}[/red]")
-                raise typer.Exit(code=1)
-    else:
-        console.print("[dim]Service not running, starting...[/dim]")
-
-    # Start the service
-    pid_file = _get_service_pid_file()
-    pid_file.parent.mkdir(parents=True, exist_ok=True)
-
-    try:
-        process = subprocess.Popen(
-            [
-                'uvicorn',
-                'clockwork.service.app:app',
-                '--host', '0.0.0.0',
-                '--port', str(settings.service_port),
-                '--log-level', 'warning',
-                '--reload',
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
-        )
-
-        # Save PID
-        pid_file.write_text(str(process.pid))
-
-        # Wait and verify service started
-        time.sleep(2)
-        if check_service_running():
-            console.print(f"[green]✓ Service restarted on port {settings.service_port}[/green]")
-            console.print(f"[dim]PID: {process.pid}[/dim]")
-        else:
-            console.print("[red]✗ Service failed to start[/red]")
-            console.print("[dim]Check that clockwork.service.app module exists[/dim]")
-            raise typer.Exit(code=1)
-
-    except FileNotFoundError:
-        console.print("[red]✗ uvicorn not found[/red]")
-        console.print("[dim]Install with: uv pip install uvicorn[/dim]")
-        raise typer.Exit(code=1)
-    except Exception as e:
-        console.print(f"[red]✗ Failed to start service: {e}[/red]")
-        raise typer.Exit(code=1)
+    """Restart Clockwork service."""
+    console.print("[dim]Stopping service...[/dim]")
+    service_stop()
+    time.sleep(1)
+    console.print("[dim]Starting service...[/dim]")
+    service_start()
 
 
 @service_app.command("status")
@@ -663,33 +488,19 @@ def service_status():
         console.print("[dim]Start with: clockwork service start[/dim]")
         raise typer.Exit(code=1)
 
-    # Get service info
+    console.print("[green]✓ Service running[/green]")
+    console.print(f"[dim]Port: {settings.service_port}[/dim]")
+
+    # Try to get health info
     try:
         response = httpx.get(
             f"http://localhost:{settings.service_port}/health",
             timeout=5.0
         )
         health_data = response.json()
-
-        console.print("[green]✓ Service running[/green]")
-        console.print(f"[dim]Port: {settings.service_port}[/dim]")
         console.print(f"[dim]Status: {health_data.get('status', 'unknown')}[/dim]")
-
-        # Try to get projects count
-        try:
-            projects_response = httpx.get(
-                f"http://localhost:{settings.service_port}/projects",
-                timeout=5.0
-            )
-            if projects_response.status_code == 200:
-                projects = projects_response.json()
-                console.print(f"[dim]Registered projects: {len(projects)}[/dim]")
-        except Exception:
-            pass
-
-    except Exception as e:
-        console.print("[yellow]⚠ Service running but unable to get details[/yellow]")
-        console.print(f"[dim]{e}[/dim]")
+    except Exception:
+        pass
 
 
 @app.command()

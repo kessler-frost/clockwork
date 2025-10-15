@@ -79,22 +79,28 @@ clockwork assert
 
 ### 1. Reconciliation Service
 
-Background daemon that continuously monitors and maintains desired state.
+A full-featured background daemon that will continuously monitor and maintain desired state.
 
-**Purpose:**
+**Current State:**
+
+The monitoring service currently exists as a simple FastAPI health check endpoint on port 8765 (`clockwork service start/stop/status`). It provides basic project registration but does not yet perform continuous monitoring, drift detection, or automatic remediation. The full reconciliation features described below will be built from scratch in a future release.
+
+**Planned Purpose:**
 
 - Periodically runs `assert` to detect drift
 - Automatically corrects configuration drift
 - Enforces time-based policies (e.g., "run for 2 hours only")
 - Sends alerts on failures or drift detection
 
-**Features:**
+**Planned Features:**
 
 - Configurable evaluation intervals
-- Automatic remediation
+- Automatic remediation with AI-powered diagnostics
 - Duration limits for resources
 - Alerting and notifications (Slack, email, webhooks)
 - Graceful degradation on failures
+- Multi-project support with health tracking
+- Diagnostic collection (logs, errors) for remediation
 
 **Use Cases:**
 
@@ -103,7 +109,7 @@ Background daemon that continuously monitors and maintains desired state.
 - Temporary resource management (dev environments)
 - Cost control via time-limited resources
 
-**Example Configuration:**
+**Planned Configuration Example:**
 
 ```python
 from clockwork.resources import AppleContainerResource
@@ -111,11 +117,11 @@ from clockwork.resources import AppleContainerResource
 nginx = AppleContainerResource(
     name="nginx",
     description="Web server",
-    reconcile=True,              # Enable reconciliation
-    check_interval=60,           # Check every 60 seconds
-    max_duration="2h",           # Auto-destroy after 2 hours
-    on_drift="auto_correct",     # Auto-fix drift
-    alert_on=["drift", "failure"]  # Send alerts
+    reconcile=True,              # Enable reconciliation (future)
+    check_interval=60,           # Check every 60 seconds (future)
+    max_duration="2h",           # Auto-destroy after 2 hours (future)
+    on_drift="auto_correct",     # Auto-fix drift (future)
+    alert_on=["drift", "failure"]  # Send alerts (future)
 )
 ```
 

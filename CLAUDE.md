@@ -117,31 +117,12 @@ CW_BASE_URL=https://openrouter.ai/api/v1
 
 **Output**: `.clockwork/state/` (Pulumi state files)
 
-## Monitoring Service
-
-Auto-remediation with AI (FastAPI on port 8765):
-
-```bash
-clockwork service start   # Start
-clockwork apply          # Auto-registers
-clockwork service status # Check status
-clockwork service stop   # Stop
-```
-
-**Features**: Health checks (30s containers, 5m git), diagnostic collection (logs/errors), AI-powered fixes (max 3 attempts), multi-project support
-
-**Flow**: Monitor → Detect failure → Collect diagnostics → AI fixes config → Re-apply → Validate
-
-**Config**: `CW_SERVICE_PORT`, `CW_SERVICE_CHECK_INTERVAL_DEFAULT`, `CW_SERVICE_MAX_REMEDIATION_ATTEMPTS`
-
-See `examples/monitored-service/`
-
 ## Project Structure
 
 ```text
 clockwork/
-├── clockwork/          # Core (resources, service, completer, compiler, cli, settings)
-├── examples/          # file-generation, docker-service, tool-integration, connected-services, monitored-service, etc.
+├── clockwork/          # Core (resources, completer, compiler, cli, settings)
+├── examples/          # file-generation, docker-service, tool-integration, connected-services, etc.
 ├── tests/
 └── pyproject.toml
 ```
