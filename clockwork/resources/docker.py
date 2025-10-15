@@ -46,9 +46,9 @@ class DockerResource(Resource):
     """
 
     description: str
-    name: Optional[str] = None
-    image: Optional[str] = None
-    ports: Optional[List[str]] = None
+    name: str | None = None
+    image: str | None = None
+    ports: List[str] | None = None
     volumes: List[str] = []  # Optional - defaults to empty
     env_vars: Dict[str, str] = {}  # Optional - defaults to empty
     networks: List[str] = []  # Optional - defaults to empty
@@ -56,7 +56,7 @@ class DockerResource(Resource):
     start: bool = True
 
     # Store Pulumi resource for dependency tracking
-    _pulumi_resource: Optional[pulumi.Resource] = None
+    _pulumi_resource: pulumi.Resource | None = None
 
     def needs_completion(self) -> bool:
         """Returns True if any critical field needs AI completion.

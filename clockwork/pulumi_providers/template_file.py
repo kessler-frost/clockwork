@@ -237,7 +237,7 @@ class TemplateFile(pulumi.dynamic.Resource):
         template_content: Input[str],
         variables: Input[dict[str, Any]],
         mode: Input[str] = "644",
-        opts: Optional[pulumi.ResourceOptions] = None,
+        opts: pulumi.ResourceOptions | None = None,
     ):
         """
         Initialize TemplateFile resource.

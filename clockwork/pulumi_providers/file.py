@@ -198,7 +198,7 @@ class File(pulumi.dynamic.Resource):
         path: Input[str],
         content: Input[str],
         mode: Input[str] = "644",
-        opts: Optional[pulumi.ResourceOptions] = None,
+        opts: pulumi.ResourceOptions | None = None,
     ):
         """
         Initialize File resource.

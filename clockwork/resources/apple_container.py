@@ -39,9 +39,9 @@ class AppleContainerResource(Resource):
     """
 
     description: str
-    name: Optional[str] = None
-    image: Optional[str] = None
-    ports: Optional[List[str]] = None
+    name: str | None = None
+    image: str | None = None
+    ports: List[str] | None = None
     volumes: List[str] = []  # Optional - defaults to empty
     env_vars: Dict[str, str] = {}  # Optional - defaults to empty
     networks: List[str] = []  # Optional - defaults to empty

@@ -4,7 +4,7 @@ This module provides a Pulumi dynamic provider for managing containers using
 the Apple Containers CLI (container command) available on macOS.
 """
 
-import subprocess
+import asyncio
 import json
 from typing import Any, Dict, List, Optional
 
@@ -35,15 +35,15 @@ class AppleContainerInputs:
         self,
         image: str,
         container_name: str,
-        ports: Optional[List[str]] = None,
-        volumes: Optional[List[str]] = None,
-        env_vars: Optional[Dict[str, str]] = None,
-        networks: Optional[List[str]] = None,
-        memory: Optional[str] = None,
-        cpus: Optional[str] = None,
-        user: Optional[str] = None,
-        workdir: Optional[str] = None,
-        labels: Optional[Dict[str, str]] = None,
+        ports: List[str] | None = None,
+        volumes: List[str] | None = None,
+        env_vars: Dict[str, str] | None = None,
+        networks: List[str] | None = None,
+        memory: str | None = None,
+        cpus: str | None = None,
+        user: str | None = None,
+        workdir: str | None = None,
+        labels: Dict[str, str] | None = None,
         present: bool = True,
         start: bool = True,
     ):
@@ -90,7 +90,7 @@ class AppleContainerProvider(ResourceProvider):
     operations.
     """
 
-    def _run_command(self, cmd: List[str]) -> Dict[str, Any]:
+    async def _run_command(self, cmd: List[str]) -> Dict[str, Any]:
         """Run a container CLI command and return the result.
 
         Args:
@@ -103,21 +103,22 @@ class AppleContainerProvider(ResourceProvider):
             Exception: If command fails
         """
         try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                check=False,
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
             )
+            stdout_bytes, stderr_bytes = await process.communicate()
+
             return {
-                "returncode": result.returncode,
-                "stdout": result.stdout.strip(),
-                "stderr": result.stderr.strip(),
+                "returncode": process.returncode,
+                "stdout": stdout_bytes.decode().strip(),
+                "stderr": stderr_bytes.decode().strip(),
             }
         except Exception as e:
             raise Exception(f"Failed to run command {' '.join(cmd)}: {str(e)}")
 
-    def _find_container_by_label(self, container_name: str) -> Optional[str]:
+    async def _find_container_by_label(self, container_name: str) -> str | None:
         """Find container ID by clockwork.name label.
 
         Args:
@@ -126,7 +127,7 @@ class AppleContainerProvider(ResourceProvider):
         Returns:
             Container ID if found, None otherwise
         """
-        result = self._run_command(["container", "ls", "--all", "--format", "json"])
+        result = await self._run_command(["container", "ls", "--all", "--format", "json"])
         if result["returncode"] != 0:
             return None
 
@@ -141,6 +142,51 @@ class AppleContainerProvider(ResourceProvider):
 
         return None
 
+    def _build_common_options(self, props: Dict[str, Any]) -> List[str]:
+        """Build common container options from properties.
+
+        Args:
+            props: Container properties
+
+        Returns:
+            Command options as list
+        """
+        options = []
+
+        # Add resource limits
+        if props.get("memory"):
+            options.extend(["--memory", props["memory"]])
+        if props.get("cpus"):
+            options.extend(["--cpus", props["cpus"]])
+
+        # Add user and workdir
+        if props.get("user"):
+            options.extend(["--user", props["user"]])
+        if props.get("workdir"):
+            options.extend(["--workdir", props["workdir"]])
+
+        # Add port mappings
+        for port in props.get("ports", []):
+            options.extend(["-p", port])
+
+        # Add volume mounts
+        for volume in props.get("volumes", []):
+            options.extend(["-v", volume])
+
+        # Add environment variables
+        for key, value in props.get("env_vars", {}).items():
+            options.extend(["-e", f"{key}={value}"])
+
+        # Add networks
+        for network in props.get("networks", []):
+            options.extend(["--network", network])
+
+        # Add labels
+        for key, value in props.get("labels", {}).items():
+            options.extend(["-l", f"{key}={value}"])
+
+        return options
+
     def _build_run_command(self, props: Dict[str, Any]) -> List[str]:
         """Build container run command from properties.
 
@@ -151,46 +197,12 @@ class AppleContainerProvider(ResourceProvider):
             Command parts as list
         """
         cmd = ["container", "run", "-d"]  # Always detached
-
-        # Add resource limits
-        if props.get("memory"):
-            cmd.extend(["--memory", props["memory"]])
-        if props.get("cpus"):
-            cmd.extend(["--cpus", props["cpus"]])
-
-        # Add user and workdir
-        if props.get("user"):
-            cmd.extend(["--user", props["user"]])
-        if props.get("workdir"):
-            cmd.extend(["--workdir", props["workdir"]])
-
-        # Add port mappings
-        for port in props.get("ports", []):
-            cmd.extend(["-p", port])
-
-        # Add volume mounts
-        for volume in props.get("volumes", []):
-            cmd.extend(["-v", volume])
-
-        # Add environment variables
-        for key, value in props.get("env_vars", {}).items():
-            cmd.extend(["-e", f"{key}={value}"])
-
-        # Add networks
-        for network in props.get("networks", []):
-            cmd.extend(["--network", network])
-
-        # Add labels
-        for key, value in props.get("labels", {}).items():
-            cmd.extend(["-l", f"{key}={value}"])
-
-        # Add image
+        cmd.extend(self._build_common_options(props))
         cmd.append(props["image"])
-
         return cmd
 
-    def create(self, props: Dict[str, Any]) -> CreateResult:
-        """Create a new container.
+    async def _create_async(self, props: Dict[str, Any]) -> CreateResult:
+        """Async implementation of create.
 
         Args:
             props: Container properties
@@ -204,10 +216,10 @@ class AppleContainerProvider(ResourceProvider):
         container_name = props["container_name"]
 
         # Check if container already exists
-        existing_id = self._find_container_by_label(container_name)
+        existing_id = await self._find_container_by_label(container_name)
         if existing_id:
             # Check if it's running
-            inspect_result = self._run_command(["container", "inspect", existing_id])
+            inspect_result = await self._run_command(["container", "inspect", existing_id])
             if inspect_result["returncode"] == 0:
                 try:
                     data = json.loads(inspect_result["stdout"])
@@ -223,7 +235,7 @@ class AppleContainerProvider(ResourceProvider):
                     pass
 
             # Remove existing container
-            self._run_command(["container", "rm", "-f", existing_id])
+            await self._run_command(["container", "rm", "-f", existing_id])
 
         if not props.get("present", True):
             # Container should not exist, we're done
@@ -232,7 +244,7 @@ class AppleContainerProvider(ResourceProvider):
         if props.get("start", True):
             # Create and start the container
             cmd = self._build_run_command(props)
-            result = self._run_command(cmd)
+            result = await self._run_command(cmd)
 
             if result["returncode"] != 0:
                 raise Exception(f"Failed to create container: {result['stderr']}")
@@ -243,37 +255,54 @@ class AppleContainerProvider(ResourceProvider):
         else:
             # Create but don't start (use container create)
             cmd = ["container", "create"]
-
-            # Add same options as run (except -d which is run-only)
-            if props.get("memory"):
-                cmd.extend(["--memory", props["memory"]])
-            if props.get("cpus"):
-                cmd.extend(["--cpus", props["cpus"]])
-            if props.get("user"):
-                cmd.extend(["--user", props["user"]])
-            if props.get("workdir"):
-                cmd.extend(["--workdir", props["workdir"]])
-
-            for port in props.get("ports", []):
-                cmd.extend(["-p", port])
-            for volume in props.get("volumes", []):
-                cmd.extend(["-v", volume])
-            for key, value in props.get("env_vars", {}).items():
-                cmd.extend(["-e", f"{key}={value}"])
-            for network in props.get("networks", []):
-                cmd.extend(["--network", network])
-            for key, value in props.get("labels", {}).items():
-                cmd.extend(["-l", f"{key}={value}"])
-
+            cmd.extend(self._build_common_options(props))
             cmd.append(props["image"])
 
-            result = self._run_command(cmd)
+            result = await self._run_command(cmd)
 
             if result["returncode"] != 0:
                 raise Exception(f"Failed to create container: {result['stderr']}")
 
             container_id = result["stdout"].strip()
             return CreateResult(id_=container_id, outs=props)
+
+    def create(self, props: Dict[str, Any]) -> CreateResult:
+        """Create a new container.
+
+        Args:
+            props: Container properties
+
+        Returns:
+            CreateResult with container ID
+
+        Raises:
+            Exception: If creation fails
+        """
+        return asyncio.run(self._create_async(props))
+
+    async def _update_async(
+        self,
+        id: str,
+        old_props: Dict[str, Any],
+        new_props: Dict[str, Any]
+    ) -> UpdateResult:
+        """Async implementation of update.
+
+        Args:
+            id: Container ID
+            old_props: Old properties
+            new_props: New properties
+
+        Returns:
+            UpdateResult with new properties
+        """
+        # Delete the old container
+        await self._delete_async(id, old_props)
+
+        # Create new container
+        create_result = await self._create_async(new_props)
+
+        return UpdateResult(outs=create_result.outs)
 
     def update(
         self,
@@ -291,16 +320,10 @@ class AppleContainerProvider(ResourceProvider):
         Returns:
             UpdateResult with new properties
         """
-        # Delete the old container
-        self.delete(id, old_props)
+        return asyncio.run(self._update_async(id, old_props, new_props))
 
-        # Create new container
-        create_result = self.create(new_props)
-
-        return UpdateResult(outs=create_result.outs)
-
-    def delete(self, id: str, props: Dict[str, Any]) -> None:
-        """Delete a container.
+    async def _delete_async(self, id: str, props: Dict[str, Any]) -> None:
+        """Async implementation of delete.
 
         Args:
             id: Container ID
@@ -311,21 +334,30 @@ class AppleContainerProvider(ResourceProvider):
         # Try to find container by label first
         actual_id = id
         if container_name:
-            found_id = self._find_container_by_label(container_name)
+            found_id = await self._find_container_by_label(container_name)
             if found_id:
                 actual_id = found_id
 
         # Check if container exists
-        inspect_result = self._run_command(["container", "inspect", actual_id])
+        inspect_result = await self._run_command(["container", "inspect", actual_id])
         if inspect_result["returncode"] != 0:
             # Container doesn't exist, nothing to do
             return
 
         # Remove container (force to stop if running)
-        result = self._run_command(["container", "rm", "-f", actual_id])
+        result = await self._run_command(["container", "rm", "-f", actual_id])
 
         if result["returncode"] != 0:
             raise Exception(f"Failed to delete container: {result['stderr']}")
+
+    def delete(self, id: str, props: Dict[str, Any]) -> None:
+        """Delete a container.
+
+        Args:
+            id: Container ID
+            props: Container properties
+        """
+        asyncio.run(self._delete_async(id, props))
 
     def diff(
         self,
@@ -397,7 +429,7 @@ class AppleContainer(pulumi.dynamic.Resource):
         self,
         resource_name: str,
         inputs: AppleContainerInputs,
-        opts: Optional[pulumi.ResourceOptions] = None,
+        opts: pulumi.ResourceOptions | None = None,
     ):
         """Initialize AppleContainer resource.
 

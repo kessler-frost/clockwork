@@ -6,6 +6,8 @@ paradigm. Instead of generating text artifacts, the AI directly completes missin
 in Pydantic resource models.
 """
 
+import hashlib
+import json
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -23,6 +25,9 @@ logger = logging.getLogger(__name__)
 
 class ResourceCompleter:
     """Completes partial resources using AI via PydanticAI structured outputs."""
+
+    # Class-level cache for completed resources
+    _completion_cache: Dict[str, Any] = {}
 
     # System prompt for AI completion
     SYSTEM_PROMPT = """You are a helpful assistant that completes partial infrastructure resource definitions.
@@ -45,10 +50,10 @@ Your completions should be production-ready, minimal, and follow best practices.
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        model: Optional[str] = None,
-        base_url: Optional[str] = None,
-        tool_selector: Optional[ToolSelector] = None,
+        api_key: str | None = None,
+        model: str | None = None,
+        base_url: str | None = None,
+        tool_selector: ToolSelector | None = None,
         enable_tool_selection: bool = True
     ):
         """
@@ -81,6 +86,44 @@ Your completions should be production-ready, minimal, and follow best practices.
             f"(tool selection: {enable_tool_selection})"
         )
 
+    def _get_cache_key(self, resource: Any) -> str:
+        """
+        Generate a cache key from resource state.
+
+        Creates a hash from:
+        - Resource class name
+        - Description
+        - All non-None field values (excluding tools, assertions, connections)
+
+        Args:
+            resource: Resource object to generate cache key for
+
+        Returns:
+            SHA256 hash string suitable for cache lookup
+        """
+        # Get resource data as dict
+        data = resource.model_dump(exclude_unset=False)
+
+        # Fields to exclude from cache key (may have side effects or user-specific values)
+        excluded_fields = {'assertions', 'connections', 'tools'}
+
+        # Build cache key components
+        cache_data = {
+            'class': resource.__class__.__name__,
+            'fields': {
+                k: v for k, v in data.items()
+                if v is not None and k not in excluded_fields
+            }
+        }
+
+        # Create stable JSON representation (sorted keys for consistency)
+        json_str = json.dumps(cache_data, sort_keys=True)
+
+        # Generate SHA256 hash
+        cache_key = hashlib.sha256(json_str.encode()).hexdigest()
+
+        return cache_key
+
     async def complete(self, resources: List[Any]) -> List[Any]:
         """
         Complete partial resources using AI (async version).
@@ -95,10 +138,36 @@ Your completions should be production-ready, minimal, and follow best practices.
 
         for resource in resources:
             if resource.needs_completion():
-                logger.info(f"Completing resource: {resource.name}")
-                completed = await self._complete_resource(resource)
-                completed_resources.append(completed)
-                logger.info(f"Completed resource: {completed.name}")
+                # Check if resource has tools - skip caching if it does (may have side effects)
+                has_tools = resource.tools is not None and len(resource.tools) > 0
+
+                if has_tools:
+                    logger.debug(f"Skipping cache for {resource.name} (has tools with potential side effects)")
+                    completed = await self._complete_resource(resource)
+                    completed_resources.append(completed)
+                    logger.info(f"Completed resource: {completed.name}")
+                    continue
+
+                # Generate cache key
+                cache_key = self._get_cache_key(resource)
+
+                # Check cache first
+                if cache_key in self._completion_cache:
+                    logger.debug(f"Cache HIT for {resource.name} (key: {cache_key[:16]}...)")
+                    cached_resource = self._completion_cache[cache_key]
+                    completed_resources.append(cached_resource)
+                    logger.info(f"Retrieved resource from cache: {cached_resource.name}")
+                else:
+                    logger.debug(f"Cache MISS for {resource.name} (key: {cache_key[:16]}...)")
+                    logger.info(f"Completing resource: {resource.name}")
+                    completed = await self._complete_resource(resource)
+
+                    # Store in cache
+                    self._completion_cache[cache_key] = completed
+                    logger.debug(f"Cached completed resource: {completed.name}")
+
+                    completed_resources.append(completed)
+                    logger.info(f"Completed resource: {completed.name}")
             else:
                 # Resource is already complete, use as-is
                 logger.info(f"Resource already complete: {resource.name}")

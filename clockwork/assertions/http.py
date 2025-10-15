@@ -6,6 +6,31 @@ from typing import Any, Literal
 from .base import BaseAssertion
 
 
+# Module-level shared HTTP client for connection pooling
+_http_client: httpx.AsyncClient | None = None
+
+
+def get_http_client() -> httpx.AsyncClient:
+    """Get or create the shared HTTP client with connection pooling.
+
+    This client is reused across all HTTP assertions for better performance
+    through connection pooling and keep-alive connections.
+
+    Returns:
+        Shared httpx.AsyncClient instance configured with:
+        - 30s timeout
+        - Max 10 concurrent connections
+        - Max 5 keep-alive connections
+    """
+    global _http_client
+    if _http_client is None:
+        _http_client = httpx.AsyncClient(
+            timeout=30.0,
+            limits=httpx.Limits(max_connections=10, max_keepalive_connections=5)
+        )
+    return _http_client
+
+
 class HealthcheckAssert(BaseAssertion):
     """Assert that an HTTP endpoint returns expected status code.
 
@@ -39,9 +64,9 @@ class HealthcheckAssert(BaseAssertion):
             True if endpoint returns expected status, False otherwise
         """
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(self.url, timeout=self.timeout_seconds)
-                return response.status_code == self.expected_status
+            client = get_http_client()
+            response = await client.get(self.url, timeout=self.timeout_seconds)
+            return response.status_code == self.expected_status
         except Exception:
             return False
 

@@ -86,8 +86,8 @@ class FileContentMatchesAssert(BaseAssertion):
     """
 
     path: str
-    pattern: Optional[str] = None
-    sha256: Optional[str] = None
+    pattern: str | None = None
+    sha256: str | None = None
     timeout_seconds: int = 10
 
     async def check(self, resource) -> bool:

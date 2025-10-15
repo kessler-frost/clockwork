@@ -20,7 +20,7 @@ class ContainerRunningAssert(BaseAssertion):
         >>> ContainerRunningAssert(container_name="my-container")
     """
 
-    container_name: Optional[str] = None
+    container_name: str | None = None
     timeout_seconds: int = 5
 
     async def check(self, resource: "Resource") -> bool:

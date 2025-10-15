@@ -25,14 +25,14 @@ class TemplateFileResource(Resource):
     """
 
     description: str  # what the file should contain (required)
-    template_content: Optional[str] = None  # Jinja2 template - AI generates if not provided
-    variables: Optional[Dict[str, Any]] = None  # template variables - AI generates if not provided
-    name: Optional[str] = None  # filename - AI generates if not provided
-    directory: Optional[str] = None  # directory - AI picks best location (default: ".")
-    mode: Optional[str] = None  # file permissions - AI picks (default: "644")
-    path: Optional[str] = None  # full path (overrides directory + name if provided)
-    user: Optional[str] = None  # file owner (optional)
-    group: Optional[str] = None  # file group (optional)
+    template_content: str | None = None  # Jinja2 template - AI generates if not provided
+    variables: Dict[str, Any] | None = None  # template variables - AI generates if not provided
+    name: str | None = None  # filename - AI generates if not provided
+    directory: str | None = None  # directory - AI picks best location (default: ".")
+    mode: str | None = None  # file permissions - AI picks (default: "644")
+    path: str | None = None  # full path (overrides directory + name if provided)
+    user: str | None = None  # file owner (optional)
+    group: str | None = None  # file group (optional)
 
     @model_validator(mode='after')
     def validate_description(self):
@@ -56,7 +56,7 @@ class TemplateFileResource(Resource):
             self.mode is None
         )
 
-    def _resolve_file_path(self) -> tuple[str, Optional[str]]:
+    def _resolve_file_path(self) -> tuple[str, str | None]:
         """Resolve file path and directory from resource configuration.
 
         Handles three cases:
@@ -65,7 +65,7 @@ class TemplateFileResource(Resource):
         3. Default → current directory (./)
 
         Returns:
-            tuple[str, Optional[str]]: (file_path, directory) where:
+            tuple[str, str | None]: (file_path, directory) where:
                 - file_path: Absolute path to the file
                 - directory: Absolute path to directory (if specified), None otherwise
         """

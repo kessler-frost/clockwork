@@ -1,8 +1,7 @@
 """Base resource classes for Clockwork."""
 
 from typing import Dict, Any, Optional, List, TYPE_CHECKING, Union
-from pydantic import BaseModel, Field, field_validator, PrivateAttr
-from pydantic_core import core_schema
+from pydantic import BaseModel, Field, field_validator, model_validator, PrivateAttr
 
 if TYPE_CHECKING:
     from clockwork.assertions.base import BaseAssertion
@@ -29,80 +28,112 @@ class Resource(BaseModel):
     - Automatic dependency ordering for deployment
     - Cross-resource configuration sharing
 
+    Connection Storage Pattern:
+    - Users pass Resource objects in the connections parameter
+    - Pydantic stores connection context dicts in the connections field (serializable)
+    - Original Resource objects are preserved in _connection_resources (for graph traversal)
+    - This dual storage enables both AI completion and dependency resolution
+
     Attributes:
         name: Optional unique identifier (can be AI-completed if None)
         description: Optional human-readable description (used as context for AI)
         assertions: Optional list of type-safe assertion objects for validation
         tools: Optional list of PydanticAI tools (duckduckgo_search_tool(), MCPServerStdio, etc.)
                for AI-powered completion operations
-        connections: Optional list of Resource objects this resource depends on
+        connections: List of connection context dicts (auto-converted from Resource objects)
+        _connection_resources: Private list of actual Resource objects for dependency graphs
     """
 
-    name: Optional[str] = None
-    description: Optional[str] = None
-    assertions: Optional[List["BaseAssertion"]] = None
+    name: str | None = None
+    description: str | None = None
+    assertions: List["BaseAssertion"] | None = None
     connections: List[Dict[str, Any]] = Field(
         default_factory=list,
-        description="Connection context from connected resources (auto-converted from Resource objects)"
+        description="Connection context dicts (Resource objects auto-converted via validator)"
     )
     _connection_resources: List["Resource"] = PrivateAttr(default_factory=list)
 
     # AI and integration capabilities
-    tools: Optional[List[Any]] = None  # PydanticAI tools (duckduckgo_search_tool(), MCPServerStdio, etc.)
+    tools: List[Any] | None = None  # PydanticAI tools (duckduckgo_search_tool(), MCPServerStdio, etc.)
 
     def __init__(self, **data):
-        """Custom init to preserve original Resource objects before validation."""
-        # Extract and store original Resource objects before Pydantic converts them
-        connection_resources = []
-        if 'connections' in data:
-            original_connections = data['connections']
-            if original_connections:
-                for item in original_connections:
-                    if hasattr(item, 'get_connection_context'):
-                        connection_resources.append(item)
+        """Initialize Resource and capture connection Resource objects.
 
-        # Call super().__init__ first to initialize the Pydantic model
+        This custom __init__ is necessary to preserve Resource objects before Pydantic
+        processes them. Pydantic validation can cause Resource objects to lose their
+        private attributes, so we extract them early.
+        """
+        # Extract Resource objects before Pydantic processes the connections field
+        connection_resources = []
+        if 'connections' in data and data['connections']:
+            for item in data['connections']:
+                if hasattr(item, 'get_connection_context'):
+                    connection_resources.append(item)
+
+        # Initialize Pydantic model (triggers validators)
         super().__init__(**data)
 
-        # Now set the private attribute after initialization
+        # Store captured Resource objects in private attribute
         self._connection_resources = connection_resources
 
-    @field_validator('connections', mode='wrap')
+    @field_validator('connections', mode='before')
     @classmethod
-    def convert_resources_to_context(cls, v: Any, handler, info) -> List[Dict[str, Any]]:
-        """Convert Resource objects to connection context dictionaries.
+    def convert_resources_before_validation(cls, value):
+        """Convert Resource objects to dicts before field validation.
 
-        This allows users to pass Resource objects, but stores them as plain
-        dictionaries to avoid circular references during serialization.
-
-        The original Resource objects are preserved in __init__ via the
-        _connection_resources private attribute before this validator runs.
+        This runs before type validation, allowing users to pass Resource objects
+        while the field type remains List[Dict] (avoiding circular schema references).
 
         Args:
-            v: List of Resource objects or connection context dicts
-            handler: The default validator
-            info: Validation context
+            value: List that may contain Resource objects or dicts
 
         Returns:
-            List of connection context dictionaries
+            List of dicts only
         """
-        if not v:
+        if not value:
             return []
 
         result = []
-        for item in v:
-            if isinstance(item, dict):
-                # Already a dict, use as-is
-                result.append(item)
-            elif hasattr(item, 'get_connection_context'):
-                # It's a Resource, convert to context
+        for item in value:
+            if hasattr(item, 'get_connection_context'):
+                # Convert Resource to dict
                 result.append(item.get_connection_context())
             else:
-                # Unknown type, skip with warning
+                # Already a dict
+                result.append(item)
+        return result
+
+    @model_validator(mode='after')
+    def convert_connections_to_dicts(self) -> 'Resource':
+        """Convert Resource objects in connections field to serializable dicts.
+
+        This validator runs after __init__ and converts any remaining Resource objects
+        in the connections field to context dictionaries. This ensures the connections
+        field only contains serializable data.
+
+        Note: The original Resource objects are already stored in _connection_resources
+        by __init__, so this validator only handles the public connections field.
+
+        Returns:
+            Self with connections converted to context dicts
+        """
+        connection_contexts = []
+
+        for item in self.connections:
+            if hasattr(item, 'get_connection_context'):
+                # Convert Resource to context dict
+                connection_contexts.append(item.get_connection_context())
+            elif isinstance(item, dict):
+                # Already a context dict
+                connection_contexts.append(item)
+            else:
                 import logging
                 logging.warning(f"Unknown connection type: {type(item)}, skipping")
 
-        return result
+        # Replace connections with context dicts only
+        self.connections = connection_contexts
+
+        return self
 
     def needs_completion(self) -> bool:
         """Check if this resource needs AI completion for any fields.
@@ -115,7 +146,7 @@ class Resource(BaseModel):
 
         Example:
             class MyResource(Resource):
-                content: Optional[str] = None
+                content: str | None = None
 
                 def needs_completion(self) -> bool:
                     return self.name is None or self.content is None
@@ -139,8 +170,8 @@ class Resource(BaseModel):
 
         Example:
             class DatabaseResource(Resource):
-                port: Optional[int] = None
-                host: Optional[str] = None
+                port: int | None = None
+                host: str | None = None
 
                 def get_connection_context(self) -> Dict[str, Any]:
                     context = super().get_connection_context()

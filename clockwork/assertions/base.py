@@ -19,7 +19,7 @@ class BaseAssertion(BaseModel):
         ...     timeout_seconds: int = 5
     """
 
-    description: Optional[str] = None
+    description: str | None = None
     timeout_seconds: int = 30
 
     async def check(self, resource: "Resource") -> bool:

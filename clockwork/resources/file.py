@@ -20,11 +20,11 @@ class FileResource(Resource):
     """
 
     description: str  # what the file should contain (required)
-    name: Optional[str] = None  # filename - AI generates if not provided
-    content: Optional[str] = None  # content - AI generates if not provided
-    directory: Optional[str] = None  # directory - AI picks best location (default: ".")
-    mode: Optional[str] = None  # file permissions - AI picks (default: "644")
-    path: Optional[str] = None  # full path (overrides directory + name if provided)
+    name: str | None = None  # filename - AI generates if not provided
+    content: str | None = None  # content - AI generates if not provided
+    directory: str | None = None  # directory - AI picks best location (default: ".")
+    mode: str | None = None  # file permissions - AI picks (default: "644")
+    path: str | None = None  # full path (overrides directory + name if provided)
 
     @model_validator(mode='after')
     def validate_description(self):
@@ -48,7 +48,7 @@ class FileResource(Resource):
             self.mode is None
         )
 
-    def _resolve_file_path(self) -> tuple[str, Optional[str]]:
+    def _resolve_file_path(self) -> tuple[str, str | None]:
         """Resolve file path and directory from resource configuration.
 
         Handles three cases:
@@ -57,7 +57,7 @@ class FileResource(Resource):
         3. Default → current directory (./)
 
         Returns:
-            tuple[str, Optional[str]]: (file_path, directory) where:
+            tuple[str, str | None]: (file_path, directory) where:
                 - file_path: Absolute path to the file
                 - directory: Absolute path to directory (if specified), None otherwise
         """

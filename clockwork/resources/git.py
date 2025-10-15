@@ -33,15 +33,15 @@ class GitRepoResource(Resource):
     """
 
     description: str
-    name: Optional[str] = None
-    repo_url: Optional[str] = None
-    dest: Optional[str] = None
-    branch: Optional[str] = None
+    name: str | None = None
+    repo_url: str | None = None
+    dest: str | None = None
+    branch: str | None = None
     pull: bool = True
     present: bool = True
 
     # Store Pulumi resource for dependency tracking
-    _pulumi_resource: Optional[pulumi.Resource] = None
+    _pulumi_resource: pulumi.Resource | None = None
 
     def needs_completion(self) -> bool:
         """Returns True if any field needs AI completion.

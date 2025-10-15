@@ -39,11 +39,9 @@ class ToolSelector:
     """
 
     # Tool registry - lazy loaded on first use
-    _tool_registry: Dict[str, Optional[Any]] = {
+    _tool_registry: Dict[str, Any | None] = {
         "duckduckgo_search": None,  # Lazy load
         "filesystem_mcp": None,     # Lazy load
-        "postgres_mcp": None,       # Lazy load
-        "sqlite_mcp": None,         # Lazy load
     }
 
     def __init__(self, enable_mcp: bool = False):
@@ -196,16 +194,9 @@ class ToolSelector:
                 if fs_mcp:
                     tools.append(fs_mcp)
 
-        # Future: Add diagnostic tools for error/remediation contexts
-        # diagnostic_keywords = ["failed", "error", "remediation", "fix", "debug"]
-        # if any(keyword in context_lower for keyword in diagnostic_keywords):
-        #     diagnostic_tool = self._get_tool("diagnostic")
-        #     if diagnostic_tool:
-        #         tools.append(diagnostic_tool)
-
         return tools
 
-    def _get_tool(self, tool_name: str) -> Optional[Any]:
+    def _get_tool(self, tool_name: str) -> Any | None:
         """Get a tool from the registry, lazy loading if necessary.
 
         Implements lazy loading pattern - tools are only imported and initialized
@@ -228,10 +219,6 @@ class ToolSelector:
             tool = self._load_duckduckgo_search_tool()
         elif tool_name == "filesystem_mcp":
             tool = self._load_filesystem_mcp()
-        elif tool_name == "postgres_mcp":
-            tool = self._load_postgres_mcp()
-        elif tool_name == "sqlite_mcp":
-            tool = self._load_sqlite_mcp()
         else:
             logger.warning(f"Unknown tool requested: {tool_name}")
             return None
@@ -240,7 +227,7 @@ class ToolSelector:
         self._tool_registry[tool_name] = tool
         return tool
 
-    def _load_duckduckgo_search_tool(self) -> Optional[Any]:
+    def _load_duckduckgo_search_tool(self) -> Any | None:
         """Load DuckDuckGo search tool.
 
         Returns:
@@ -254,7 +241,7 @@ class ToolSelector:
             logger.warning(f"Failed to load duckduckgo_search_tool: {e}")
             return None
 
-    def _load_filesystem_mcp(self) -> Optional[Any]:
+    def _load_filesystem_mcp(self) -> Any | None:
         """Load filesystem MCP server.
 
         Requires:
@@ -290,40 +277,6 @@ class ToolSelector:
             logger.warning(f"Failed to load filesystem MCP: {e}")
             return None
 
-    def _load_postgres_mcp(self) -> Optional[Any]:
-        """Load PostgreSQL MCP server.
-
-        Note: This is a placeholder. In production, you'd need to:
-        - Configure database connection URL
-        - Check if npx and @modelcontextprotocol/server-postgres are available
-
-        Returns:
-            PostgreSQL MCP server instance, or None if unavailable
-        """
-        if not self._enable_mcp:
-            return None
-
-        # TODO: Implement PostgreSQL MCP loading with configuration
-        logger.debug("PostgreSQL MCP not implemented yet")
-        return None
-
-    def _load_sqlite_mcp(self) -> Optional[Any]:
-        """Load SQLite MCP server.
-
-        Note: This is a placeholder. In production, you'd need to:
-        - Configure database file path
-        - Check if npx and @modelcontextprotocol/server-sqlite are available
-
-        Returns:
-            SQLite MCP server instance, or None if unavailable
-        """
-        if not self._enable_mcp:
-            return None
-
-        # TODO: Implement SQLite MCP loading with configuration
-        logger.debug("SQLite MCP not implemented yet")
-        return None
-
     def register_tool(self, name: str, tool: Any) -> None:
         """Register a custom tool in the tool registry.
 
@@ -352,6 +305,6 @@ class ToolSelector:
             >>> selector = ToolSelector()
             >>> tools = selector.get_available_tools()
             >>> print(tools.keys())
-            dict_keys(['duckduckgo_search', 'filesystem_mcp', 'postgres_mcp', 'sqlite_mcp'])
+            dict_keys(['duckduckgo_search', 'filesystem_mcp'])
         """
         return self._tool_registry.copy()
