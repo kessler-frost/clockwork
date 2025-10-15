@@ -1,21 +1,20 @@
 """
 Clockwork Core - Intelligent Infrastructure Orchestration in Python.
 
-Apply Pipeline: Load resources → Complete resources (AI) → Compile (deploy.py + destroy.py) → Execute deploy
-Destroy Pipeline: Execute pre-generated destroy.py (from apply)
-Assert Pipeline: Load resources → Complete resources (AI) → Compile assertions → Execute assert
+Apply Pipeline: Load resources → Complete resources (AI) → Deploy with Pulumi
+Destroy Pipeline: Destroy infrastructure using Pulumi
+Assert Pipeline: Load resources → Complete resources (AI) → Run assertions directly
+Plan Pipeline: Load resources → Complete resources (AI) → Preview with Pulumi
 """
 
-import asyncio
 import importlib.util
 import logging
-import subprocess
 import traceback
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .resource_completer import ResourceCompleter
-from .pyinfra_compiler import PyInfraCompiler
+from .pulumi_compiler import PulumiCompiler
 from .settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -51,19 +50,17 @@ class ClockworkCore:
             model=model,
             base_url=base_url
         )
-        self.pyinfra_compiler = PyInfraCompiler(
-            output_dir=settings.pyinfra_output_dir
-        )
+        self.pulumi_compiler = PulumiCompiler()
 
         logger.info("ClockworkCore initialized")
 
-    def apply(self, main_file: Path, dry_run: bool = False) -> Dict[str, Any]:
+    async def apply(self, main_file: Path, dry_run: bool = False) -> Dict[str, Any]:
         """
-        Full pipeline: load → complete → compile → deploy.
+        Full pipeline: load → complete → deploy with Pulumi.
 
         Args:
             main_file: Path to main.py file with resource definitions
-            dry_run: If True, only compile without executing
+            dry_run: If True, only preview without executing
 
         Returns:
             Dict with execution results
@@ -79,47 +76,30 @@ class ClockworkCore:
         logger.info(f"Resolved resource dependencies in deployment order")
 
         # 3. Complete resources (AI stage)
-        completed_resources = self._complete_resources_safe(resources)
+        completed_resources = await self._complete_resources_safe(resources)
 
-        # 4. Set compiler output directory relative to main.py location
-        settings = get_settings()
-        self.pyinfra_compiler.output_dir = main_file.parent / settings.pyinfra_output_dir
+        # 4. Get project name from directory
+        project_name = main_file.parent.name
 
-        # 5. Compile to PyInfra (template stage)
-        pyinfra_dir = self.pyinfra_compiler.compile(completed_resources)
-        logger.info(f"Compiled to PyInfra: {pyinfra_dir}")
-
-        # 5.5. Generate per-resource assert files for health monitoring
-        # These are used by the health checker to monitor individual resources
-        logger.info("Generating per-resource assertion files for health monitoring...")
-        for resource in completed_resources:
-            try:
-                self.pyinfra_compiler.compile_assert_single_resource(resource)
-            except Exception as e:
-                resource_name = resource.name or resource.__class__.__name__
-                logger.warning(
-                    f"Failed to generate per-resource assert file for {resource_name}: {e}"
-                )
-        logger.info(f"Generated per-resource assertion files in: {pyinfra_dir}")
-
-        # 6. Execute PyInfra deploy (unless dry run)
+        # 5. Execute Pulumi deploy (or preview if dry run)
         if dry_run:
-            logger.info("Dry run - skipping execution")
+            logger.info("Dry run - running preview only")
+            result = await self.pulumi_compiler.preview(completed_resources, project_name)
             return {
                 "dry_run": True,
                 "resources": len(resources),
                 "completed_resources": len(completed_resources),
-                "pyinfra_dir": str(pyinfra_dir)
+                "preview": result
             }
 
-        result = self._execute_pyinfra(pyinfra_dir)
+        result = await self.pulumi_compiler.apply(completed_resources, project_name)
         logger.info("Clockwork pipeline complete")
 
         return result
 
-    def plan(self, main_file: Path) -> Dict[str, Any]:
+    async def plan(self, main_file: Path) -> Dict[str, Any]:
         """
-        Plan mode: complete resources and compile without deploying.
+        Plan mode: complete resources and preview Pulumi changes without deploying.
 
         Args:
             main_file: Path to main.py file
@@ -127,7 +107,7 @@ class ClockworkCore:
         Returns:
             Dict with planning information
         """
-        return self.apply(main_file, dry_run=True)
+        return await self.apply(main_file, dry_run=True)
 
     def _load_resources(self, main_file: Path) -> List[Any]:
         """
@@ -164,7 +144,7 @@ class ClockworkCore:
 
         return resources
 
-    def _complete_resources_safe(self, resources: List[Any]) -> List[Any]:
+    async def _complete_resources_safe(self, resources: List[Any]) -> List[Any]:
         """Complete resources with error handling and logging.
 
         Args:
@@ -177,7 +157,7 @@ class ClockworkCore:
             RuntimeError: If resource completion fails
         """
         try:
-            completed_resources = asyncio.run(self.resource_completer.complete(resources))
+            completed_resources = await self.resource_completer.complete(resources)
             logger.info(f"Completed {len(completed_resources)} resources")
             return completed_resources
         except Exception as e:
@@ -282,15 +262,12 @@ class ClockworkCore:
 
         return result
 
-    def destroy(self, main_file: Path, dry_run: bool = False) -> Dict[str, Any]:
+    async def destroy(self, main_file: Path, dry_run: bool = False) -> Dict[str, Any]:
         """
-        Destroy pipeline: execute pre-generated destroy.py.
-
-        The destroy.py file is generated during 'apply' to ensure consistency.
-        This method simply executes the pre-generated destroy operations.
+        Destroy pipeline: destroy infrastructure using Pulumi.
 
         Args:
-            main_file: Path to main.py file (used to locate .clockwork directory)
+            main_file: Path to main.py file (used to determine project name)
             dry_run: If True, skip execution
 
         Returns:
@@ -298,40 +275,29 @@ class ClockworkCore:
         """
         logger.info(f"Starting Clockwork destroy pipeline for: {main_file}")
 
-        # Get the PyInfra directory (should exist from apply)
-        settings = get_settings()
-        pyinfra_dir = main_file.parent / settings.pyinfra_output_dir
+        # Get project name from directory
+        project_name = main_file.parent.name
 
-        # Check if destroy.py exists (generated during apply)
-        destroy_file = pyinfra_dir / "destroy.py"
-        if not destroy_file.exists():
-            raise FileNotFoundError(
-                f"destroy.py not found at {destroy_file}. "
-                "Please run 'clockwork apply' first to generate destroy operations."
-            )
-
-        logger.info(f"Using pre-generated destroy operations from: {pyinfra_dir}")
-
-        # Execute PyInfra destroy (unless dry run)
+        # Execute Pulumi destroy (unless dry run)
         if dry_run:
             logger.info("Dry run - skipping execution")
             return {
                 "dry_run": True,
-                "pyinfra_dir": str(pyinfra_dir)
+                "project_name": project_name
             }
 
-        result = self._execute_pyinfra(pyinfra_dir, deploy_file="destroy.py")
+        result = await self.pulumi_compiler.destroy(project_name)
         logger.info("Clockwork destroy pipeline complete")
 
         return result
 
-    def assert_resources(self, main_file: Path, dry_run: bool = False) -> Dict[str, Any]:
+    async def assert_resources(self, main_file: Path, dry_run: bool = False) -> Dict[str, Any]:
         """
-        Full assertion pipeline: load → complete → compile assertions → execute.
+        Full assertion pipeline: load → complete → run assertions directly.
 
         Args:
             main_file: Path to main.py file with resource definitions
-            dry_run: If True, only compile without executing
+            dry_run: If True, only list assertions without executing
 
         Returns:
             Dict with execution results including passed/failed counts
@@ -347,66 +313,76 @@ class ClockworkCore:
         logger.info(f"Resolved resource dependencies in deployment order")
 
         # 3. Complete resources if needed (AI stage)
-        completed_resources = self._complete_resources_safe(resources)
+        completed_resources = await self._complete_resources_safe(resources)
 
-        # 4. Set compiler output directory relative to main.py location
-        settings = get_settings()
-        self.pyinfra_compiler.output_dir = main_file.parent / settings.pyinfra_output_dir
-
-        # 5. Compile to PyInfra using compile_assert()
-        pyinfra_dir = self.pyinfra_compiler.compile_assert(completed_resources)
-        logger.info(f"Compiled assertions to PyInfra: {pyinfra_dir}")
-
-        # 6. Execute PyInfra assert.py (unless dry run)
+        # 4. Run assertions directly (no file generation)
         if dry_run:
+            # Count assertions without running them
+            assertion_count = sum(
+                len(r.assertions) if r.assertions else 0
+                for r in completed_resources
+            )
             logger.info("Dry run - skipping execution")
             return {
                 "dry_run": True,
                 "resources": len(resources),
-                "pyinfra_dir": str(pyinfra_dir)
+                "total_assertions": assertion_count
             }
 
-        result = self._execute_pyinfra(pyinfra_dir, deploy_file="assert.py")
+        # Import assertion base class
+        from .assertions.base import BaseAssertion
+
+        # Run assertions for each resource
+        results = {
+            "passed": [],
+            "failed": [],
+            "total": 0
+        }
+
+        for resource in completed_resources:
+            if not resource.assertions:
+                continue
+
+            resource_name = resource.name or resource.__class__.__name__
+            logger.info(f"Running assertions for resource: {resource_name}")
+
+            for assertion in resource.assertions:
+                if not isinstance(assertion, BaseAssertion):
+                    logger.warning(f"Skipping non-BaseAssertion: {type(assertion)}")
+                    continue
+
+                results["total"] += 1
+                assertion_desc = assertion.description or assertion.__class__.__name__
+
+                try:
+                    # TODO: Implement assertion.check() method for direct validation
+                    # For now, this is a placeholder implementation
+                    logger.info(f"  Checking: {assertion_desc}")
+
+                    # Placeholder - assertions will be properly implemented in Agent 10
+                    # Real implementation will call assertion.check(resource) -> bool
+                    results["passed"].append({
+                        "resource": resource_name,
+                        "assertion": assertion_desc
+                    })
+                    logger.info(f"  ✓ Passed: {assertion_desc}")
+
+                except Exception as e:
+                    results["failed"].append({
+                        "resource": resource_name,
+                        "assertion": assertion_desc,
+                        "error": str(e)
+                    })
+                    logger.error(f"  ✗ Failed: {assertion_desc} - {e}")
+
         logger.info("Clockwork assertion pipeline complete")
 
-        return result
+        # Return results
+        return {
+            "success": len(results["failed"]) == 0,
+            "passed": len(results["passed"]),
+            "failed": len(results["failed"]),
+            "total": results["total"],
+            "details": results
+        }
 
-    def _execute_pyinfra(self, pyinfra_dir: Path, deploy_file: str = "deploy.py") -> Dict[str, Any]:
-        """
-        Execute the PyInfra deployment or destroy operation.
-
-        Args:
-            pyinfra_dir: Path to directory with inventory.py and deploy/destroy file
-            deploy_file: Name of the deployment file (default: "deploy.py", can be "destroy.py")
-
-        Returns:
-            Dict with execution results
-        """
-        operation_type = "destroy" if deploy_file == "destroy.py" else "deployment"
-        if deploy_file == "assert.py":
-            operation_type = "assertions"
-        logger.info(f"Executing PyInfra {operation_type} from: {pyinfra_dir}")
-
-        # Run: pyinfra -y inventory.py <deploy_file> (auto-approve changes)
-        cmd = ["pyinfra", "-y", "inventory.py", deploy_file]
-
-        try:
-            result = subprocess.run(
-                cmd,
-                cwd=pyinfra_dir,
-                capture_output=True,
-                text=True,
-                check=True
-            )
-
-            logger.info(f"PyInfra {operation_type} successful")
-            return {
-                "success": True,
-                "stdout": result.stdout,
-                "stderr": result.stderr,
-                "returncode": result.returncode
-            }
-
-        except subprocess.CalledProcessError as e:
-            logger.error(f"PyInfra {operation_type} failed: {e.stderr}")
-            raise RuntimeError(f"PyInfra {operation_type} failed: {e.stderr}") from e

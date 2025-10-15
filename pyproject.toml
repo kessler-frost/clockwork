@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "clockwork"
-version = "0.2.0"
+version = "0.3.0"
 description = "Intelligent Infrastructure Orchestration in Python"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -15,11 +15,14 @@ dependencies = [
     "rich>=13.0.0",
     "pydantic-ai-slim[mcp,duckduckgo]>=0.0.49",
     "openai>=1.99.9",
-    "pyinfra>=3.0",
+    "pulumi>=3.0.0",
+    "pulumi-docker>=4.0.0",
+    "pulumi-command>=1.0.0",
     "mcp>=1.0.0",
     "httpx>=0.27.0",
     "fastapi>=0.115.0",
     "uvicorn>=0.30.0",
+    "jinja2>=3.0.0",
 ]
 
 [project.scripts]
@@ -36,6 +39,7 @@ package = true
 dev = [
     "detect-secrets>=1.5.0",
     "pytest>=8.4.1",
+    "pytest-asyncio>=0.24.0",
     "pre-commit>=4.0.0",
     "ruff>=0.8.0",
 ]

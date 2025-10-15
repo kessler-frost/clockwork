@@ -15,13 +15,13 @@ cd examples/file-generation && uv run clockwork apply  # Run example
 
 ## Architecture
 
-**Flow**: Declare (Pydantic) → Resolve (dependencies) → Complete (AI) → Compile (templates) → Deploy (PyInfra)
+**Flow**: Declare (Pydantic) → Resolve (dependencies) → Complete (AI) → Compile (Pulumi) → Deploy (Automation API)
 
 ## Resource Types
 
 **Containers**: DockerResource (cross-platform), AppleContainerResource (macOS)
-**Files**: FileResource, TemplateFileResource (Jinja2), DirectoryResource
-**Other**: GitRepoResource, BrewPackageResource (macOS), UserResource
+**Files**: FileResource, TemplateFileResource (Jinja2)
+**Other**: GitRepoResource
 
 All support AI completion with `description` field.
 
@@ -115,7 +115,7 @@ CW_BASE_URL=https://openrouter.ai/api/v1
 **Models**: LM Studio (local), OpenRouter free/paid (cloud). Must support tool calls.
 **Recommended**: `meta-llama/llama-4-scout:free`, `openai/gpt-4o-mini`
 
-**Output**: `.clockwork/pyinfra/` (inventory.py, deploy.py, destroy.py, assert.py)
+**Output**: `.clockwork/state/` (Pulumi state files)
 
 ## Monitoring Service
 
@@ -150,12 +150,12 @@ clockwork/
 
 ### Adding Resources
 
-1. Create class in `clockwork/resources/` with `needs_completion()`, `to_pyinfra_operations()`, `to_pyinfra_destroy_operations()`
+1. Create class in `clockwork/resources/` with `needs_completion()` and `to_pulumi()`
 2. Export in `__init__.py`
 3. Add tests in `tests/`
 4. Create example in `examples/`
 
-**Note**: Uses PydanticAI Tool Output mode for structured data generation
+**Note**: Uses PydanticAI Tool Output mode for structured data generation. Resources return Pulumi Resource objects from `to_pulumi()` method.
 
 ### Testing
 
@@ -170,7 +170,7 @@ uv run pytest tests/test_resources.py -v  # Specific file
 **Key**: Imports (stdlib→third-party→local), naming (`snake_case`, `CapWords`), type hints, docstrings (Args/Returns/Raises)
 **Settings**: Use `get_settings()`, never `os.getenv()` or hardcoded values
 **API Docs**: Context7 MCP server first, then WebFetch/WebSearch
-**PyInfra First**: Use native operations (`docker.container()`, `files.file()`, `git.repo()`) over `server.shell()`
+**Pulumi Patterns**: Use native providers (pulumi-docker, pulumi-command) and custom dynamic providers for special cases
 
 ## Cleanup
 

@@ -27,28 +27,6 @@ class ProcessRunningAssert(BaseAssertion):
     min_count: int = 1
     timeout_seconds: int = 5
 
-    def to_pyinfra_operation(self, resource: Any) -> str:
-        """Generate PyInfra operation to check process is running.
-
-        Args:
-            resource: Parent resource (could be any resource type)
-
-        Returns:
-            PyInfra server.shell operation that uses pgrep to count processes
-        """
-        desc = self.description or f"Process '{self.name}' running (min {self.min_count} instance(s))"
-
-        return f'''
-# Assert: {desc}
-server.shell(
-    name="Assert: {desc}",
-    commands=[
-        "COUNT=$(pgrep -c '{self.name}' 2>/dev/null || echo 0); "
-        "[ $COUNT -ge {self.min_count} ] || exit 1"
-    ],
-)
-'''
-
 
 class ProcessNotRunningAssert(BaseAssertion):
     """Assert that a process is NOT running.
@@ -67,24 +45,3 @@ class ProcessNotRunningAssert(BaseAssertion):
 
     name: str
     timeout_seconds: int = 5
-
-    def to_pyinfra_operation(self, resource: Any) -> str:
-        """Generate PyInfra operation to check process is NOT running.
-
-        Args:
-            resource: Parent resource (could be any resource type)
-
-        Returns:
-            PyInfra server.shell operation that verifies no matching processes exist
-        """
-        desc = self.description or f"Process '{self.name}' is not running"
-
-        return f'''
-# Assert: {desc}
-server.shell(
-    name="Assert: {desc}",
-    commands=[
-        "! pgrep '{self.name}' >/dev/null 2>&1 || exit 1"
-    ],
-)
-'''

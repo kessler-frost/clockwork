@@ -10,13 +10,12 @@ This module provides automatic remediation for failed resource deployments by:
 """
 
 import logging
-import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from ..resources.base import Resource
 from ..resource_completer import ResourceCompleter
-from ..pyinfra_compiler import PyInfraCompiler
+from ..pulumi_compiler import PulumiCompiler
 from ..settings import get_settings
 from .models import ProjectState
 
@@ -84,7 +83,8 @@ class RemediationEngine:
         self,
         api_key: Optional[str] = None,
         model: Optional[str] = None,
-        base_url: Optional[str] = None
+        base_url: Optional[str] = None,
+        project_dir: Optional[Path] = None
     ):
         """Initialize the remediation engine.
 
@@ -92,6 +92,7 @@ class RemediationEngine:
             api_key: API key for AI service (overrides settings/.env)
             model: Model to use for resource completion (overrides settings/.env)
             base_url: Base URL for API endpoint (overrides settings/.env)
+            project_dir: Base directory for the project (defaults to current directory)
         """
         settings = get_settings()
 
@@ -101,8 +102,8 @@ class RemediationEngine:
             base_url=base_url or settings.base_url
         )
 
-        self.pyinfra_compiler = PyInfraCompiler(
-            output_dir=settings.pyinfra_output_dir
+        self.pulumi_compiler = PulumiCompiler(
+            project_dir=project_dir
         )
 
         logger.info("RemediationEngine initialized")
@@ -486,7 +487,10 @@ class RemediationEngine:
             return False
 
     async def apply_single_resource(self, resource: Resource, project_state: ProjectState) -> bool:
-        """Apply a single resource without affecting other resources.
+        """Apply a single resource using Pulumi Automation API.
+
+        Creates an inline Pulumi program that deploys only this resource,
+        allowing surgical remediation without affecting other resources.
 
         Args:
             resource: The resource to apply
@@ -496,121 +500,172 @@ class RemediationEngine:
             True if application succeeded, False otherwise
         """
         try:
-            # Generate PyInfra code for this resource only
-            logger.info(f"Compiling single resource: {resource.name}")
+            logger.info(f"Applying single resource with Pulumi: {resource.name}")
 
-            # Use a temporary directory for single-resource deployment
-            import tempfile
-            with tempfile.TemporaryDirectory() as temp_dir:
-                temp_path = Path(temp_dir)
+            # Import Pulumi Automation API
+            from pulumi import automation as auto
 
-                # Set temporary output directory
-                original_output_dir = self.pyinfra_compiler.output_dir
-                self.pyinfra_compiler.output_dir = temp_path
+            # Create inline program for single resource
+            def single_resource_program():
+                """Pulumi program that deploys only the remediated resource."""
+                try:
+                    if hasattr(resource, "to_pulumi"):
+                        resource.to_pulumi()
+                        logger.debug(f"Created Pulumi resource: {resource.name}")
+                    else:
+                        logger.error(
+                            f"Resource {resource.name} does not implement to_pulumi()"
+                        )
+                        raise ValueError(f"Resource {resource.name} missing to_pulumi() method")
+                except Exception as e:
+                    logger.error(f"Failed to create Pulumi resource {resource.name}: {e}")
+                    raise
 
-                # Compile single resource
-                pyinfra_dir = self.pyinfra_compiler.compile([resource])
+            # Create or select stack
+            project_name = "clockwork"
+            stack_name = "dev"
 
-                # Execute PyInfra
-                result = self._execute_pyinfra(pyinfra_dir)
+            stack = auto.create_or_select_stack(
+                stack_name=stack_name,
+                project_name=project_name,
+                program=single_resource_program,
+            )
+            logger.info(f"Using stack: {stack_name} for single resource deployment")
 
-                # Restore original output directory
-                self.pyinfra_compiler.output_dir = original_output_dir
+            # Perform up operation
+            logger.info(f"Running Pulumi up for {resource.name}...")
+            up_result = stack.up(on_output=lambda msg: logger.debug(msg))
 
-                return result["success"]
+            # Check result
+            success = up_result.summary.result == "succeeded"
+
+            if success:
+                logger.info(
+                    f"Successfully applied resource {resource.name} "
+                    f"(changes: +{up_result.summary.resource_changes.get('create', 0)} "
+                    f"~{up_result.summary.resource_changes.get('update', 0)})"
+                )
+            else:
+                logger.error(f"Failed to apply resource {resource.name}: {up_result.summary.result}")
+
+            return success
 
         except Exception as e:
             logger.error(f"Failed to apply single resource {resource.name}: {e}")
             return False
 
     async def _validate_resource(self, resource: Resource, project_state: ProjectState) -> bool:
-        """Validate a resource by running its assertions.
+        """Validate a resource by querying Pulumi state and running assertions.
+
+        First checks if the resource exists in Pulumi state, then runs any
+        defined assertions as additional validation.
 
         Args:
             resource: The resource to validate
             project_state: Current project state
 
         Returns:
-            True if all assertions passed, False otherwise
+            True if resource is valid and all assertions passed, False otherwise
         """
         try:
-            # Generate PyInfra assertion code for this resource only
             logger.info(f"Validating resource: {resource.name}")
 
-            # Use a temporary directory for assertions
-            import tempfile
-            with tempfile.TemporaryDirectory() as temp_dir:
-                temp_path = Path(temp_dir)
+            # Import Pulumi Automation API
+            from pulumi import automation as auto
 
-                # Set temporary output directory
-                original_output_dir = self.pyinfra_compiler.output_dir
-                self.pyinfra_compiler.output_dir = temp_path
+            # Query Pulumi state to verify resource exists
+            project_name = "clockwork"
+            stack_name = "dev"
 
-                # Compile assertions
-                pyinfra_dir = self.pyinfra_compiler.compile_assert([resource])
+            try:
+                # Create empty program for state query
+                def empty_program():
+                    pass
 
-                # Execute PyInfra assertions
-                result = self._execute_pyinfra(pyinfra_dir, deploy_file="assert.py")
+                # Select existing stack
+                stack = auto.select_stack(
+                    stack_name=stack_name,
+                    project_name=project_name,
+                    program=empty_program,
+                )
 
-                # Restore original output directory
-                self.pyinfra_compiler.output_dir = original_output_dir
+                # Export stack state
+                state = stack.export_stack()
 
-                return result["success"]
+                # Find resource in state
+                resource_state = self._find_resource_in_state(state, resource.name)
+
+                if not resource_state:
+                    logger.warning(
+                        f"Resource {resource.name} not found in Pulumi state after remediation"
+                    )
+                    return False
+
+                logger.debug(f"Found resource {resource.name} in Pulumi state")
+
+            except Exception as e:
+                logger.error(f"Failed to query Pulumi state for {resource.name}: {e}")
+                return False
+
+            # If resource has assertions, run them as additional validation
+            if hasattr(resource, 'assertions') and resource.assertions:
+                logger.debug(f"Running assertions for {resource.name}")
+                try:
+                    # Import assertion runner
+                    from clockwork.core import ClockworkCore
+                    core = ClockworkCore()
+                    assertion_results = await core.assert_resources([resource])
+
+                    # Check if all assertions passed
+                    if not assertion_results.get('success', False):
+                        logger.warning(f"Assertions failed for {resource.name}")
+                        return False
+
+                    logger.debug(f"All assertions passed for {resource.name}")
+
+                except Exception as e:
+                    logger.error(f"Failed to run assertions for {resource.name}: {e}")
+                    return False
+
+            return True
 
         except Exception as e:
             logger.error(f"Failed to validate resource {resource.name}: {e}")
             return False
 
-    def _execute_pyinfra(self, pyinfra_dir: Path, deploy_file: str = "deploy.py") -> Dict[str, Any]:
-        """Execute PyInfra deployment or assertion operation.
+    def _find_resource_in_state(self, state: Dict[str, Any], resource_name: str) -> Optional[Dict[str, Any]]:
+        """Find a resource in Pulumi stack state by name.
+
+        Searches the exported stack state for a resource matching the given name.
+        The Pulumi state structure contains a 'deployment' key with 'resources' array.
 
         Args:
-            pyinfra_dir: Path to directory with inventory.py and deploy file
-            deploy_file: Name of the deployment file (default: "deploy.py")
+            state: Exported Pulumi stack state (from stack.export_stack())
+            resource_name: Name of the resource to find
 
         Returns:
-            Dict with execution results
+            Resource state dict if found, None otherwise
         """
-        operation_type = "destroy" if deploy_file == "destroy.py" else "deployment"
-        if deploy_file == "assert.py":
-            operation_type = "assertions"
-
-        logger.debug(f"Executing PyInfra {operation_type} from: {pyinfra_dir}")
-
-        # Run: pyinfra -y inventory.py <deploy_file> (auto-approve changes)
-        cmd = ["pyinfra", "-y", "inventory.py", deploy_file]
-
         try:
-            result = subprocess.run(
-                cmd,
-                cwd=pyinfra_dir,
-                capture_output=True,
-                text=True,
-                check=True,
-                timeout=300  # 5 minute timeout
-            )
+            # Pulumi state structure: state['deployment']['resources']
+            deployment = state.get('deployment', {})
+            resources = deployment.get('resources', [])
 
-            logger.debug(f"PyInfra {operation_type} successful")
-            return {
-                "success": True,
-                "stdout": result.stdout,
-                "stderr": result.stderr,
-                "returncode": result.returncode
-            }
+            # Search for resource by URN or name
+            for res in resources:
+                # Check URN for resource name
+                urn = res.get('urn', '')
+                if resource_name in urn:
+                    return res
 
-        except subprocess.CalledProcessError as e:
-            logger.error(f"PyInfra {operation_type} failed: {e.stderr}")
-            return {
-                "success": False,
-                "stdout": e.stdout,
-                "stderr": e.stderr,
-                "returncode": e.returncode
-            }
-        except subprocess.TimeoutExpired as e:
-            logger.error(f"PyInfra {operation_type} timed out")
-            return {
-                "success": False,
-                "stdout": "",
-                "stderr": "Operation timed out after 5 minutes",
-                "returncode": -1
-            }
+                # Also check the 'id' field which may contain the resource name
+                res_id = res.get('id', '')
+                if resource_name in res_id:
+                    return res
+
+            return None
+
+        except Exception as e:
+            logger.warning(f"Error searching Pulumi state for {resource_name}: {e}")
+            return None
+

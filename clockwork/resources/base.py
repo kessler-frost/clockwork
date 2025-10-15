@@ -20,7 +20,7 @@ class Resource(BaseModel):
     1. User creates resource with some fields set to None (e.g., name=None, image=None)
     2. needs_completion() checks if any completable fields are None
     3. AI fills in the missing fields by creating a new completed resource instance
-    4. PyInfra operations use self.* fields directly (no artifacts dict needed)
+    4. to_pulumi() method converts completed resource to Pulumi resources
 
     Resource Connections:
     Resources can declare dependencies on other resources via the connections field.
@@ -165,74 +165,24 @@ class Resource(BaseModel):
             "description": self.description,
         }
 
-    def to_pyinfra_operations(self) -> str:
-        """Generate PyInfra operations code (template-based).
+    def to_pulumi(self):
+        """Create Pulumi resource(s) for this Clockwork resource.
 
         This method is called after AI completion, so all required fields should
-        be populated. Access fields directly via self.* instead of using an
-        artifacts dict.
+        be populated. It should create and return one or more Pulumi resources
+        using the Pulumi SDK.
 
         Returns:
-            String of PyInfra operation code
+            Pulumi Resource object(s)
 
         Example:
-            def to_pyinfra_operations(self) -> str:
-                return f'''
-files.file(
-    name="Create {self.name}",
-    path="/tmp/{self.name}",
-    content="{self.content}"
-)
-'''
+            import pulumi_docker as docker
+
+            def to_pulumi(self):
+                return docker.Container(
+                    self.name,
+                    image=self.image,
+                    ports=[docker.ContainerPortArgs(internal=80, external=8080)]
+                )
         """
-        raise NotImplementedError(f"{self.__class__.__name__} must implement to_pyinfra_operations()")
-
-    def to_pyinfra_destroy_operations(self) -> str:
-        """Generate PyInfra operations code to destroy/remove this resource.
-
-        Access resource fields directly via self.* to generate cleanup operations.
-
-        Returns:
-            String of PyInfra operation code to destroy the resource
-
-        Example:
-            def to_pyinfra_destroy_operations(self) -> str:
-                return f'''
-files.file(
-    name="Remove {self.name}",
-    path="/tmp/{self.name}",
-    present=False
-)
-'''
-        """
-        raise NotImplementedError(f"{self.__class__.__name__} must implement to_pyinfra_destroy_operations()")
-
-    def to_pyinfra_assert_operations(self) -> str:
-        """Generate PyInfra operations code for assertions.
-
-        Only processes BaseAssertion objects (type-safe assertions).
-        Access resource fields directly via self.* when generating assertions.
-
-        Returns:
-            String of PyInfra assertion operation code
-        """
-        if not self.assertions:
-            return ""
-
-        # Import here to avoid circular imports
-        from clockwork.assertions.base import BaseAssertion
-
-        operations = []
-        has_object_assertions = any(isinstance(a, BaseAssertion) for a in self.assertions)
-
-        if not has_object_assertions:
-            return ""
-
-        operations.append(f"\n# Assertions for resource: {self.name}")
-
-        for assertion in self.assertions:
-            # Only handle BaseAssertion objects
-            if isinstance(assertion, BaseAssertion):
-                operations.append(assertion.to_pyinfra_operation(self))
-
-        return "\n".join(operations)
+        raise NotImplementedError(f"{self.__class__.__name__} must implement to_pulumi()")

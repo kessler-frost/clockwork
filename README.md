@@ -2,21 +2,21 @@
 
 **Intelligent Infrastructure Orchestration in Python.**
 
-Define infrastructure as pure Python code with AI-powered intelligence and PyInfra deployment.
+Define infrastructure as pure Python code with AI-powered intelligence and Pulumi deployment.
 
-[![Version](https://img.shields.io/badge/version-0.2.0-blue)](./pyproject.toml)
+[![Version](https://img.shields.io/badge/version-0.3.0-blue)](./pyproject.toml)
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue)](./pyproject.toml)
-[![Deploy](https://img.shields.io/badge/deploy-PyInfra-orange)](https://pyinfra.com)
+[![Deploy](https://img.shields.io/badge/deploy-Pulumi-blueviolet)](https://pulumi.com)
 
 ## Overview
 
 Clockwork orchestrates infrastructure intelligently using **pure Python**. You define what you want using Pydantic models, then Clockwork:
 
 1. **AI completes** missing fields and configurations
-2. **Compiles** to PyInfra operations
+2. **Compiles** to Pulumi resources
 3. **Deploys** your infrastructure
 
-**The approach**: Declarative Python resources → Intelligent AI processing → Automated PyInfra deployment.
+**The approach**: Declarative Python resources → Intelligent AI processing → Automated Pulumi deployment.
 
 No custom DSL. No YAML files. Just Python with AI assistance.
 
@@ -145,7 +145,7 @@ DockerResource(
 ```
 
 **AI-Powered**: When `image` is not specified, AI suggests appropriate container images (e.g., nginx:alpine).
-**Cross-Platform**: Uses PyInfra's native docker.container operation for universal Docker support.
+**Cross-Platform**: Uses Pulumi Docker provider for universal Docker support.
 
 ### AppleContainerResource
 
@@ -217,7 +217,7 @@ CW_LOG_LEVEL=INFO
 | `CW_API_KEY` | None | API key (required for cloud models) |
 | `CW_MODEL` | `meta-llama/llama-4-scout:free` | Model for AI completion |
 | `CW_BASE_URL` | `https://openrouter.ai/api/v1` | API endpoint (OpenRouter, LM Studio, etc.) |
-| `CW_PYINFRA_OUTPUT_DIR` | `.clockwork/pyinfra` | PyInfra output directory |
+| `CW_PULUMI_STATE_DIR` | `.clockwork/state` | Pulumi state directory |
 | `CW_LOG_LEVEL` | `INFO` | Logging level |
 
 Override via CLI:

@@ -135,7 +135,7 @@ CW_SERVICE_MAX_REMEDIATION_ATTEMPTS=3             # Max retry attempts
 ### Check Intervals
 
 - **Containers** (DockerResource, AppleContainerResource): Every 30 seconds
-- **Files** (FileResource, DirectoryResource): Once after deployment, then skipped
+- **Files** (FileResource): Once after deployment, then skipped
 - **Git Repos** (GitRepoResource): Every 5 minutes
 
 ### Remediation Flow

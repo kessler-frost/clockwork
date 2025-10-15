@@ -31,8 +31,8 @@ clockwork destroy
 
 1. **Load**: Clockwork loads resources from `main.py` in current directory
 2. **Generate**: AI generates content for resources with `content=None`
-3. **Compile**: Resources compile to PyInfra operations (`files.put`)
-4. **Deploy**: PyInfra executes the deployment locally
+3. **Compile**: Resources compile to Pulumi resources (custom dynamic providers)
+4. **Deploy**: Pulumi executes the deployment via Automation API
 5. **`.clockwork/`** directory created in current directory
 
 ## Customization

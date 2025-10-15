@@ -90,12 +90,17 @@ class TemplateFileResource(Resource):
             file_path = cwd / self.name
             return (str(file_path), None)
 
-    def to_pyinfra_operations(self) -> str:
-        """Generate PyInfra files.template operation.
+    def to_pulumi(self):
+        """Create Pulumi TemplateFile resource using custom dynamic provider.
 
         Returns:
-            PyInfra operation code as string
+            Pulumi TemplateFile resource
         """
+        from clockwork.pulumi_providers import TemplateFile
+
+        # Resolve file path and directory
+        file_path, directory = self._resolve_file_path()
+
         # Use template_content (should be set after AI completion)
         template_content = self.template_content or ""
 
@@ -105,91 +110,14 @@ class TemplateFileResource(Resource):
         # Ensure mode is set (should be set after AI completion)
         mode = self.mode or "644"
 
-        # Resolve file path and directory
-        file_path, directory = self._resolve_file_path()
-
-        # Escape template content for Python triple-quoted string
-        escaped_template = template_content.replace('\\', '\\\\').replace('"""', r'\"""')
-
-        # Generate directory creation if needed
-        dir_operation = ""
-        if directory:
-            dir_operation = f'''
-# Create directory: {directory}
-files.directory(
-    name="Create directory {directory}",
-    path="{directory}",
-    present=True,
-)
-
-'''
-
-        # Build variable assignments
-        var_assignments = ""
-        var_kwargs = ""
-        if variables:
-            for var_name, var_value in variables.items():
-                # Escape string values
-                if isinstance(var_value, str):
-                    escaped_value = var_value.replace('\\', '\\\\').replace('"', '\\"')
-                    var_assignments += f'{var_name} = "{escaped_value}"\n'
-                else:
-                    var_assignments += f'{var_name} = {repr(var_value)}\n'
-                var_kwargs += f"    {var_name}={var_name},\n"
-
-        # Build user/group parameters
-        ownership_params = ""
-        if self.user:
-            ownership_params += f'    user="{self.user}",\n'
-        if self.group:
-            ownership_params += f'    group="{self.group}",\n'
-
-        return f'''
-{dir_operation}# Create template file: {self.name}
-with open("_temp_{self.name}.j2", "w") as f:
-    f.write("""{escaped_template}""")
-
-{var_assignments}
-files.template(
-    name="Create {self.name} from template",
-    src="_temp_{self.name}.j2",
-    dest="{file_path}",
-    mode="{mode}",
-{ownership_params}{var_kwargs})
-'''
-
-    def to_pyinfra_destroy_operations(self) -> str:
-        """Generate PyInfra operations code to destroy/remove the file.
-
-        Returns:
-            PyInfra operation code to remove the file and its directory if specified
-        """
-        # Resolve file path and directory
-        file_path, directory = self._resolve_file_path()
-
-        # Remove file first, then directory if specified
-        operations = f'''
-# Remove file: {self.name}
-files.file(
-    name="Remove {self.name}",
-    path="{file_path}",
-    present=False,
-)
-'''
-
-        # If directory was specified, also remove it
-        # Note: This will only succeed if directory is empty after all files are removed
-        if directory:
-            operations += f'''
-# Remove directory if empty: {directory}
-files.directory(
-    name="Remove directory {directory}",
-    path="{directory}",
-    present=False,
-)
-'''
-
-        return operations
+        # Create TemplateFile resource using dynamic provider
+        return TemplateFile(
+            self.name,
+            path=file_path,
+            template_content=template_content,
+            variables=variables,
+            mode=mode,
+        )
 
     def get_connection_context(self) -> Dict[str, Any]:
         """Get connection context for this TemplateFile resource.
@@ -228,46 +156,3 @@ files.directory(
             context["variables"] = self.variables
 
         return context
-
-    def to_pyinfra_assert_operations(self) -> str:
-        """Generate PyInfra operations code for file assertions.
-
-        Provides default assertions for TemplateFileResource:
-        - File exists at the expected path
-        - File has correct permissions (mode)
-
-        These can be overridden by specifying custom assertions.
-
-        Returns:
-            String of PyInfra assertion operation code
-        """
-        # If custom assertions are defined, use the base implementation
-        if self.assertions:
-            return super().to_pyinfra_assert_operations()
-
-        # Resolve file path (ignore directory for assertions)
-        file_path, _ = self._resolve_file_path()
-
-        # Ensure mode is set
-        mode = self.mode or "644"
-
-        # Default assertions for TemplateFileResource
-        return f'''
-# Default assertions for template file: {self.name}
-
-# Assert: File exists
-server.shell(
-    name="Assert: File {file_path} exists",
-    commands=[
-        "test -f {file_path} || exit 1"
-    ],
-)
-
-# Assert: File has correct permissions
-server.shell(
-    name="Assert: File {file_path} has mode {mode}",
-    commands=[
-        "[ \\"$(stat -c '%a' {file_path} 2>/dev/null || stat -f '%A' {file_path})\\" = \\"{mode}\\" ] || exit 1"
-    ],
-)
-'''

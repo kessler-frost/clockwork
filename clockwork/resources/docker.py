@@ -1,6 +1,8 @@
-"""Docker resource for running containers using PyInfra's native docker.container operation."""
+"""Docker resource for running containers using Pulumi Docker provider."""
 
 from typing import Optional, Dict, Any, List
+import pulumi
+import pulumi_docker as docker
 from .base import Resource
 
 
@@ -9,8 +11,8 @@ class DockerResource(Resource):
 
     This resource allows you to define Docker containers with just a description.
     The AI will intelligently complete all missing fields including name, image,
-    ports, volumes, environment variables, and networks. Uses PyInfra's native
-    docker.container operation for cross-platform Docker support.
+    ports, volumes, environment variables, and networks. Uses Pulumi Docker provider
+    for cross-platform Docker support.
 
     Attributes:
         description: What the service does - AI uses this to complete all fields (required)
@@ -53,6 +55,9 @@ class DockerResource(Resource):
     present: bool = True
     start: bool = True
 
+    # Store Pulumi resource for dependency tracking
+    _pulumi_resource: Optional[pulumi.Resource] = None
+
     def needs_completion(self) -> bool:
         """Returns True if any critical field needs AI completion.
 
@@ -68,108 +73,108 @@ class DockerResource(Resource):
             self.ports is None
         )
 
-    def to_pyinfra_operations(self) -> str:
-        """Generate PyInfra operations for Docker containers.
+    def to_pulumi(self) -> pulumi.Resource:
+        """Convert to Pulumi Docker Container resource.
 
-        Creates PyInfra operations that deploy the Docker container with the
-        specified configuration using PyInfra's native docker.container operation.
-        All fields should be populated by AI completion before this is called.
+        Creates a Pulumi Docker Container resource with all configured parameters.
+        All required fields should be populated by AI completion before this is called.
 
         Returns:
-            str: PyInfra operation code as a string
+            pulumi.Resource: Pulumi Docker Container resource
 
-        Example generated code:
-            ```python
-            docker.container(
-                name="Deploy nginx-server",
-                container="nginx-server",
-                image="nginx:alpine",
-                ports=["80:80"],
-                present=True,
-                start=True,
-                force=True,
-            )
-            ```
+        Raises:
+            ValueError: If required fields (name, image) are not completed
+
+        Example:
+            >>> container = DockerResource(
+            ...     name="nginx",
+            ...     image="nginx:alpine",
+            ...     ports=["8080:80"],
+            ...     volumes=["data:/data"],
+            ...     env_vars={"DEBUG": "1"}
+            ... )
+            >>> pulumi_container = container.to_pulumi()
         """
-        # All fields should be populated by AI completion
+        # Validate required fields
         if self.name is None or self.image is None:
-            raise ValueError(f"Resource fields not completed. name={self.name}, image={self.image}")
+            raise ValueError(f"Resource not completed: name={self.name}, image={self.image}")
 
-        if not self.present:
-            # Container should not be present
-            return f'''
-# Ensure Docker container is removed: {self.name}
-docker.container(
-    name="Remove {self.name}",
-    container="{self.name}",
-    present=False,
-)
-'''
-
-        # Build parameters list
-        params = [
-            f'    name="Deploy {self.name}"',
-            f'    container="{self.name}"',
-            f'    image="{self.image}"',
-            f'    present={self.present}',
-            f'    start={self.start}',
-            '    force=True',  # Remove existing container with same name
-        ]
-
+        # Parse port mappings: ["8080:80"] -> ContainerPortArgs
+        ports = []
         if self.ports:
-            ports_str = ', '.join([f'"{p}"' for p in self.ports])
-            params.append(f'    ports=[{ports_str}]')
+            for port_mapping in self.ports:
+                # Format: "external:internal" or "internal"
+                parts = port_mapping.split(":")
+                if len(parts) == 2:
+                    external, internal = parts
+                    ports.append(docker.ContainerPortArgs(
+                        internal=int(internal),
+                        external=int(external),
+                        protocol="tcp"
+                    ))
+                elif len(parts) == 1:
+                    # Just internal port, let Docker assign external
+                    ports.append(docker.ContainerPortArgs(
+                        internal=int(parts[0]),
+                        protocol="tcp"
+                    ))
 
+        # Parse volume mappings: ["host:/container"] -> ContainerVolumeArgs
+        volumes = []
         if self.volumes:
-            volumes_str = ', '.join([f'"{v}"' for v in self.volumes])
-            params.append(f'    volumes=[{volumes_str}]')
+            for volume_mapping in self.volumes:
+                # Format: "host_path:container_path" or "host_path:container_path:ro"
+                parts = volume_mapping.split(":")
+                if len(parts) >= 2:
+                    host_path = parts[0]
+                    container_path = parts[1]
+                    read_only = len(parts) == 3 and parts[2] == "ro"
+                    volumes.append(docker.ContainerVolumeArgs(
+                        host_path=host_path,
+                        container_path=container_path,
+                        read_only=read_only
+                    ))
 
-        if self.env_vars:
-            # PyInfra docker.container expects env_vars as list of "KEY=VALUE" strings
-            env_list = [f'"{k}={v}"' for k, v in self.env_vars.items()]
-            env_str = ', '.join(env_list)
-            params.append(f'    env_vars=[{env_str}]')
+        # Convert env_vars dict to list of "KEY=VALUE" strings
+        envs = [f"{k}={v}" for k, v in self.env_vars.items()] if self.env_vars else []
 
+        # Convert networks to ContainerNetworksAdvancedArgs
+        networks_advanced = []
         if self.networks:
-            networks_str = ', '.join([f'"{n}"' for n in self.networks])
-            params.append(f'    networks=[{networks_str}]')
+            for network_name in self.networks:
+                networks_advanced.append(docker.ContainerNetworksAdvancedArgs(
+                    name=network_name
+                ))
 
-        return f'''
-# Deploy Docker container: {self.name}
-docker.container(
-{',\n'.join(params)},
-)
-'''
+        # Build resource options for dependencies
+        opts = None
+        if self._connection_resources:
+            # Get Pulumi resources from connected resources for dependency tracking
+            depends_on = []
+            for conn in self._connection_resources:
+                if hasattr(conn, '_pulumi_resource') and conn._pulumi_resource is not None:
+                    depends_on.append(conn._pulumi_resource)
+            if depends_on:
+                opts = pulumi.ResourceOptions(depends_on=depends_on)
 
-    def to_pyinfra_destroy_operations(self) -> str:
-        """Generate PyInfra operations code to destroy/remove the container.
+        # Create Pulumi Docker Container resource
+        container = docker.Container(
+            self.name,
+            image=self.image,
+            name=self.name,
+            ports=ports if ports else None,
+            volumes=volumes if volumes else None,
+            envs=envs if envs else None,
+            networks_advanced=networks_advanced if networks_advanced else None,
+            restart="unless-stopped" if self.start else "no",
+            must_run=self.start,
+            opts=opts
+        )
 
-        Creates PyInfra operations that remove the Docker container using
-        PyInfra's native docker.container operation with present=False.
+        # Store for dependency tracking
+        self._pulumi_resource = container
 
-        Returns:
-            str: PyInfra operation code to remove the container
-
-        Example generated code:
-            ```python
-            docker.container(
-                name="Remove nginx-server",
-                container="nginx-server",
-                present=False,
-            )
-            ```
-        """
-        if self.name is None:
-            raise ValueError("Resource name not completed")
-
-        return f'''
-# Remove Docker container: {self.name}
-docker.container(
-    name="Remove {self.name}",
-    container="{self.name}",
-    present=False,
-)
-'''
+        return container
 
     def get_connection_context(self) -> Dict[str, Any]:
         """Get connection context for this Docker resource.
@@ -218,17 +223,3 @@ docker.container(
 
         return context
 
-    def to_pyinfra_assert_operations(self) -> str:
-        """Generate PyInfra operations code for Docker container assertions.
-
-        Uses the base implementation which processes assertion objects.
-        If no assertions are defined, returns empty string (no default assertions).
-
-        Returns:
-            str: PyInfra assertion operation code
-        """
-        if self.name is None:
-            raise ValueError("Resource name not completed")
-
-        # Use the base implementation (processes assertion objects only)
-        return super().to_pyinfra_assert_operations()

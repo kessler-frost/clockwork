@@ -1,6 +1,8 @@
 """Git repository resource for cloning and managing repositories with optional AI-suggested URLs."""
 
 from typing import Optional, Dict, Any
+import pulumi
+import pulumi_command as command
 from .base import Resource
 
 
@@ -38,6 +40,9 @@ class GitRepoResource(Resource):
     pull: bool = True
     present: bool = True
 
+    # Store Pulumi resource for dependency tracking
+    _pulumi_resource: Optional[pulumi.Resource] = None
+
     def needs_completion(self) -> bool:
         """Returns True if any field needs AI completion.
 
@@ -54,137 +59,78 @@ class GitRepoResource(Resource):
             self.branch is None
         )
 
-    def to_pyinfra_operations(self) -> str:
-        """Generate PyInfra git.repo operation code.
+    def to_pulumi(self) -> pulumi.Resource:
+        """Convert to Pulumi Command resource for git operations.
 
-        Creates a PyInfra operation that clones or updates the Git repository with
-        the specified configuration. All fields should be populated by AI completion
-        before this is called.
+        Uses pulumi-command to execute git clone/pull operations locally.
+        All required fields should be populated by AI completion before this is called.
 
         Returns:
-            str: PyInfra operation code as a string
+            pulumi.Resource: Pulumi Command resource
 
-        Example generated code:
-            ```python
-            git.repo(
-                name="Clone flask-repo",
-                src="https://github.com/pallets/flask.git",
-                dest="/opt/flask",
-                branch="main",
-                pull=True,
-            )
-            ```
+        Raises:
+            ValueError: If required fields are not completed
+
+        Example:
+            >>> repo = GitRepoResource(
+            ...     name="flask-repo",
+            ...     repo_url="https://github.com/pallets/flask.git",
+            ...     dest="/opt/flask",
+            ...     branch="main"
+            ... )
+            >>> pulumi_resource = repo.to_pulumi()
         """
-        # All fields should be populated by AI completion
+        # Validate required fields
         if self.name is None or self.repo_url is None or self.dest is None or self.branch is None:
-            raise ValueError(f"Resource fields not completed. name={self.name}, repo_url={self.repo_url}, dest={self.dest}, branch={self.branch}")
+            raise ValueError(f"Resource not completed: name={self.name}, repo_url={self.repo_url}, dest={self.dest}, branch={self.branch}")
 
-        return f'''
-# Clone/update Git repository: {self.name}
-git.repo(
-    name="Clone {self.name}",
-    src="{self.repo_url}",
-    dest="{self.dest}",
-    branch="{self.branch}",
-    pull={self.pull},
-)
-'''
+        # Build resource options for dependencies
+        opts = None
+        if self.connections:
+            # Get Pulumi resources from connected resources for dependency tracking
+            depends_on = []
+            for conn_resource in getattr(self, '_connection_resources', []):
+                if hasattr(conn_resource, '_pulumi_resource') and conn_resource._pulumi_resource is not None:
+                    depends_on.append(conn_resource._pulumi_resource)
+            if depends_on:
+                opts = pulumi.ResourceOptions(depends_on=depends_on)
 
-    def to_pyinfra_destroy_operations(self) -> str:
-        """Generate PyInfra operations code to destroy/remove the repository.
+        # Build git clone/pull command
+        # Check if repo exists, if yes and pull=True then pull, else clone
+        if self.pull:
+            # If directory exists and is a git repo, pull; otherwise clone
+            git_command = f"""
+if [ -d "{self.dest}/.git" ]; then
+    echo "Repository exists, pulling latest changes..."
+    cd "{self.dest}" && git checkout {self.branch} && git pull origin {self.branch}
+else
+    echo "Cloning repository..."
+    git clone --branch {self.branch} {self.repo_url} {self.dest}
+fi
+"""
+        else:
+            # Just clone if doesn't exist
+            git_command = f"""
+if [ ! -d "{self.dest}/.git" ]; then
+    echo "Cloning repository..."
+    git clone --branch {self.branch} {self.repo_url} {self.dest}
+else
+    echo "Repository already exists at {self.dest}"
+fi
+"""
 
-        Creates a PyInfra operation that removes the cloned repository by deleting
-        the destination directory.
+        # Create Pulumi Command resource to execute git operations
+        git_resource = command.local.Command(
+            self.name,
+            create=git_command.strip(),
+            update=git_command.strip() if self.pull else None,
+            opts=opts
+        )
 
-        Returns:
-            str: PyInfra operation code to remove the repository
+        # Store for dependency tracking
+        self._pulumi_resource = git_resource
 
-        Example generated code:
-            ```python
-            files.directory(
-                name="Remove flask-repo",
-                path="/opt/flask",
-                present=False,
-            )
-            ```
-        """
-        # Name and dest should be populated by AI completion
-        if self.name is None or self.dest is None:
-            raise ValueError(f"Resource fields not completed. name={self.name}, dest={self.dest}")
-
-        return f'''
-# Remove Git repository: {self.name}
-files.directory(
-    name="Remove {self.name}",
-    path="{self.dest}",
-    present=False,
-)
-'''
-
-    def to_pyinfra_assert_operations(self) -> str:
-        """Generate PyInfra operations code for Git repository assertions.
-
-        Provides default assertions for GitRepoResource:
-        - Repository directory exists (if present=True)
-        - Directory is a valid Git repository (.git directory exists)
-
-        These can be overridden by specifying custom assertions.
-
-        Returns:
-            str: PyInfra assertion operation code
-
-        Example generated code:
-            ```python
-            # Default assertions for Git repository: flask-repo
-            server.shell(
-                name="Assert: Directory /opt/flask exists",
-                commands=[
-                    "test -d /opt/flask || exit 1"
-                ]
-            )
-            server.shell(
-                name="Assert: /opt/flask is a Git repository",
-                commands=[
-                    "test -d /opt/flask/.git || exit 1"
-                ]
-            )
-            ```
-        """
-        # Name and dest should be populated by AI completion
-        if self.name is None or self.dest is None:
-            raise ValueError(f"Resource fields not completed. name={self.name}, dest={self.dest}")
-
-        # If custom assertions are defined, use the base implementation
-        if self.assertions:
-            return super().to_pyinfra_assert_operations()
-
-        operations = []
-        operations.append(f"\n# Default assertions for Git repository: {self.name}")
-
-        # Check if repository directory should exist
-        if self.present:
-            operations.append(f'''
-# Assert: Repository directory exists
-server.shell(
-    name="Assert: Directory {self.dest} exists",
-    commands=[
-        "test -d {self.dest} || exit 1"
-    ],
-)
-''')
-
-            # Check if directory is a Git repository
-            operations.append(f'''
-# Assert: Directory is a Git repository
-server.shell(
-    name="Assert: {self.dest} is a Git repository",
-    commands=[
-        "test -d {self.dest}/.git || exit 1"
-    ],
-)
-''')
-
-        return "\n".join(operations)
+        return git_resource
 
     def get_connection_context(self) -> Dict[str, Any]:
         """Get connection context for this Git repository resource.

@@ -6,9 +6,9 @@ Clockwork provides **intelligent infrastructure orchestration in Python** that c
 
 - **Pydantic models** for declarative resource definition
 - **AI-powered resource completion** via PydanticAI (OpenAI-compatible APIs)
-- **PyInfra** for automated deployment
+- **Pulumi** for automated deployment
 
-The approach: Define infrastructure (Python) → AI completes resources → Automated deployment (PyInfra)
+The approach: Define infrastructure (Python) → AI completes resources → Automated deployment (Pulumi)
 
 ## Architecture Diagram
 
@@ -33,15 +33,14 @@ The approach: Define infrastructure (Python) → AI completes resources → Auto
        │      needs_completion()              │
        │    • Returns completed Resource objs │
        │                                      │
-       ├─── 3. Compile to PyInfra ────────────┤
-       │    (Template-based, no AI)          │
-       │    • resource.to_pyinfra_operations()│
-       │    • Generate inventory.py           │
-       │    • Generate deploy.py              │
-       │    • Generate destroy.py             │
+       ├─── 3. Compile to Pulumi ─────────────┤
+       │    (Object-based, Automation API)   │
+       │    • resource.to_pulumi()            │
+       │    • Returns Pulumi Resource objects │
+       │    • Create Pulumi program function  │
        │                                      │
        └─── 4. Execute Deploy ────────────────┘
-            (subprocess: pyinfra -y inventory.py deploy.py)
+            (Pulumi Automation API: stack.up())
 ```
 
 ## Core Components
@@ -61,12 +60,8 @@ class Resource(BaseModel):
         """Does this resource need AI completion?"""
         raise NotImplementedError
 
-    def to_pyinfra_operations(self) -> str:
-        """Generate PyInfra operation code."""
-        raise NotImplementedError
-
-    def to_pyinfra_destroy_operations(self) -> str:
-        """Generate PyInfra teardown code."""
+    def to_pulumi(self) -> Any:
+        """Generate Pulumi Resource object."""
         raise NotImplementedError
 ```
 
@@ -137,39 +132,40 @@ class ResourceCompleter:
 - Uses Tool Output mode (default) for reliable structured data generation
 - Models must support tool calls (function calling)
 
-### 3. PyInfra Compiler (Template Stage)
+### 3. Pulumi Compiler (Automation API Stage)
 
-**Location**: `clockwork/pyinfra_compiler.py`
+**Location**: `clockwork/pulumi_compiler.py`
 
-Converts completed resources to executable PyInfra code:
+Converts completed resources to Pulumi infrastructure using Automation API:
 
 ```python
-class PyInfraCompiler:
-    def compile(self, resources: List[Resource]) -> Path:
-        """Compile resources to PyInfra deployment files."""
-        operations = []
-        destroy_operations = []
+class PulumiCompiler:
+    def create_program(self, resources: List[Resource]) -> Callable:
+        """Create a Pulumi program function from resources."""
+        def pulumi_program():
+            for resource in resources:
+                # Call resource's to_pulumi() to create Pulumi resources
+                resource.to_pulumi()
+        return pulumi_program
 
-        for resource in resources:
-            # Get PyInfra code from each resource
-            operations.append(resource.to_pyinfra_operations())
-            destroy_operations.append(resource.to_pyinfra_destroy_operations())
-
-        # Generate files
-        self._write_inventory()
-        self._write_deploy(operations)
-        self._write_destroy(destroy_operations)
-
-        return self.output_dir
+    async def apply(self, resources: List[Resource], project_name: str) -> dict:
+        """Apply infrastructure changes using Pulumi."""
+        program = self.create_program(resources)
+        stack = auto.create_or_select_stack(
+            stack_name="dev",
+            project_name=project_name,
+            program=program,
+        )
+        up_result = stack.up()
+        return {"success": True, "summary": up_result.summary}
 ```
 
 **Output Structure**:
 
 ```text
-.clockwork/pyinfra/
-├── inventory.py    # "@local" (localhost)
-├── deploy.py       # All PyInfra deployment operations
-└── destroy.py      # All PyInfra teardown operations
+.clockwork/state/
+├── .pulumi/        # Pulumi state files
+└── Pulumi.*.yaml   # Stack configuration
 ```
 
 ### 4. Core Orchestrator
@@ -189,28 +185,32 @@ class ClockworkCore:
             self.resource_completer.complete(resources)
         )
 
-        # 3. Compile to PyInfra (template-based)
-        pyinfra_dir = self.pyinfra_compiler.compile(completed_resources)
-
-        # 4. Execute PyInfra deployment
+        # 3. Compile to Pulumi (object-based)
+        # 4. Execute Pulumi deployment
         if not dry_run:
-            result = self._execute_pyinfra(pyinfra_dir, "deploy.py")
+            result = asyncio.run(
+                self.pulumi_compiler.apply(completed_resources)
+            )
 
         return result
 
     def plan(self, main_file: Path):
-        """Complete and compile without deploying."""
-        return self.apply(main_file, dry_run=True)
+        """Complete and preview without deploying."""
+        resources = self._load_resources(main_file)
+        completed_resources = asyncio.run(
+            self.resource_completer.complete(resources)
+        )
+        result = asyncio.run(
+            self.pulumi_compiler.preview(completed_resources)
+        )
+        return result
 
     def destroy(self, main_file: Path, dry_run: bool = False):
-        """Execute pre-generated destroy operations."""
-        # Get PyInfra directory (generated during apply)
-        pyinfra_dir = self._get_pyinfra_dir(main_file)
-
-        # Execute destroy operations
+        """Destroy infrastructure using Pulumi."""
         if not dry_run:
-            result = self._execute_pyinfra(pyinfra_dir, "destroy.py")
-
+            result = asyncio.run(
+                self.pulumi_compiler.destroy()
+            )
         return result
 
     def assert_resources(self, main_file: Path, dry_run: bool = False):
@@ -223,12 +223,9 @@ class ClockworkCore:
             self.resource_completer.complete(resources)
         )
 
-        # 3. Compile assertions
-        pyinfra_dir = self.pyinfra_compiler.compile_assert(completed_resources)
-
-        # 4. Execute assertions
+        # 3. Run assertions directly (no compilation)
         if not dry_run:
-            result = self._execute_pyinfra(pyinfra_dir, "assert.py")
+            result = self._execute_assertions(completed_resources)
 
         return result
 ```
@@ -240,10 +237,10 @@ class ClockworkCore:
 Simple Typer-based CLI:
 
 ```bash
-uv run clockwork apply       # Full pipeline (deploy resources)
-uv run clockwork plan        # Complete resources without deploying
+uv run clockwork apply       # Full pipeline (deploy resources via Pulumi)
+uv run clockwork plan        # Preview resources without deploying
 uv run clockwork assert      # Validate deployed resources
-uv run clockwork destroy     # Tear down resources
+uv run clockwork destroy     # Tear down resources via Pulumi
 uv run clockwork service start   # Start monitoring service
 uv run clockwork service stop    # Stop monitoring service
 uv run clockwork service status  # Check service status
@@ -351,7 +348,7 @@ POST   /projects/{project_id}/remediate - Manual remediation trigger
 2. Collect diagnostics → Logs, status, error messages
 3. Enhance prompt → Add error context to AI prompt
 4. Re-complete resource → AI generates fixed configuration
-5. Re-apply resource → Deploy the fix using PyInfra
+5. Re-apply resource → Deploy the fix using Pulumi
 6. Validate fix → Run assertions to verify success
 7. Update state → Reset attempts on success, increment on failure
 ```
@@ -394,49 +391,29 @@ article = FileResource(
 - Merge with user values (user values override AI)
 - Result: Fully completed `FileResource`
 
-### Stage 3: Compile (Template)
+### Stage 3: Compile (Pulumi)
 
-- Call `article.to_pyinfra_operations()`
-- Generate PyInfra code:
+- Call `article.to_pulumi()`
+- Returns Pulumi Resource object (dynamic provider for file operations)
+- Create Pulumi program function wrapping all resources
 
-```python
-# Create file: conways_game_of_life.md
-with open("_temp_conways_game_of_life.md", "w") as f:
-    f.write("""# Conway's Game of Life...""")
+### Stage 4: Deploy (Pulumi Automation API)
 
-files.put(
-    name="Create conways_game_of_life.md",
-    src="_temp_conways_game_of_life.md",
-    dest="/path/to/conways_game_of_life.md",
-    mode="644",
-)
-```
-
-### Stage 4: Deploy (PyInfra)
-
-- Run: `pyinfra -y inventory.py deploy.py`
-- PyInfra executes operations
+- Execute: `stack.up()` via Automation API
+- Pulumi creates/updates infrastructure
+- State stored in `.clockwork/state/`
 - File created at specified path
 
 ### Destroy Pipeline
 
-The destroy pipeline uses pre-generated destroy operations:
+The destroy pipeline uses Pulumi's state management:
 
-**Stage 1-3**: Already done during `apply` - `destroy.py` is generated alongside `deploy.py`
+**Destroy Execute**:
 
-**Stage 4 (Destroy Execute)**:
-
-- Run: `pyinfra -y inventory.py destroy.py`
-- PyInfra removes the file
+- Execute: `stack.destroy()` via Automation API
+- Pulumi reads state from `.clockwork/state/`
+- All tracked resources are destroyed
 - **Automatic Cleanup**: After successful destroy, the `.clockwork` directory is automatically removed (unless `--keep-files` flag is used)
-
-```python
-files.file(
-    name="Remove conways_game_of_life.md",
-    path="/path/to/conways_game_of_life.md",
-    present=False,
-)
-```
 
 **CLI Options**:
 ```bash
@@ -451,9 +428,9 @@ clockwork destroy --keep-files
 
 The assert pipeline validates deployed resources:
 
-**Stages 1-3**: Load → Complete → Compile assertions
+**Stages 1-2**: Load → Complete resources
 
-**Stage 4**: Execute `assert.py` with PyInfra to validate resources are correctly deployed
+**Stage 3**: Execute assertions directly on resources (no Pulumi compilation needed)
 
 ## Design Principles
 
@@ -466,13 +443,13 @@ The assert pipeline validates deployed resources:
 ### 2. Intelligent Completion
 
 - **AI Stage**: Fills in missing fields intelligently using structured outputs
-- **Compilation Stage**: Deterministic transformation to PyInfra operations
+- **Compilation Stage**: Object-based transformation to Pulumi resources
 - **User Override**: User-provided values always take precedence
 
 ### 3. Automated Deployment
 
-- Delegates execution to battle-tested PyInfra
-- No custom state management or execution engines
+- Delegates execution to battle-tested Pulumi
+- Pulumi handles state management and resource lifecycles
 - Focus on intelligent orchestration, not reimplementation
 
 ### 4. Simplicity
@@ -496,25 +473,15 @@ class ServiceResource(Resource):
     def needs_completion(self) -> bool:
         return self.service_name is None or self.port is None
 
-    def to_pyinfra_operations(self) -> str:
-        return f'''
-server.systemd.service(
-    name="Start {self.name}",
-    service="{self.service_name}",
-    running=True,
-    enabled=True,
-)
-'''
+    def to_pulumi(self) -> Any:
+        """Create Pulumi resource using pulumi-command provider."""
+        from pulumi_command import local
 
-    def to_pyinfra_destroy_operations(self) -> str:
-        return f'''
-server.systemd.service(
-    name="Stop {self.name}",
-    service="{self.service_name}",
-    running=False,
-    enabled=False,
-)
-'''
+        return local.Command(
+            f"systemd-{self.name}",
+            create=f"systemctl start {self.service_name}",
+            delete=f"systemctl stop {self.service_name}",
+        )
 ```
 
 2. Export in `__init__.py`
@@ -537,16 +504,14 @@ clockwork apply
 
 ### Different Deployment Targets
 
-PyInfra supports many targets (SSH, Docker, Kubernetes). Modify `inventory.py` generation in `PyInfraCompiler`:
+Pulumi supports many backends (local file, S3, Azure Blob, etc.). Configure via Pulumi settings:
 
-```python
-def _generate_inventory(self) -> str:
-    return '''
-production_servers = [
-    "ssh://user@server1.example.com",
-    "ssh://user@server2.example.com",
-]
-'''
+```bash
+# Use S3 backend
+pulumi login s3://my-pulumi-state-bucket
+
+# Use Azure Blob Storage
+pulumi login azblob://my-container
 ```
 
 ## Dependencies
@@ -560,7 +525,9 @@ dependencies = [
     "rich>=13.0.0",                              # Terminal output
     "pydantic-ai-slim[mcp,duckduckgo]>=0.0.49", # AI framework with MCP support
     "openai>=1.99.9",                            # OpenAI-compatible client
-    "pyinfra>=3.0",                              # Deployment engine
+    "pulumi>=3.0",                               # Infrastructure as code engine
+    "pulumi-docker>=4.0",                        # Docker provider
+    "pulumi-command>=1.0",                       # Command provider
 ]
 ```
 
@@ -570,10 +537,10 @@ dependencies = [
 |---------|----------------|
 | **Config Format** | Python (Pydantic models) |
 | **AI Integration** | OpenAI-compatible APIs (cloud or local) |
-| **Execution** | PyInfra (battle-tested) |
-| **State Management** | PyInfra handles it |
+| **Execution** | Pulumi (battle-tested IaC) |
+| **State Management** | Pulumi Automation API |
 | **Code Size** | ~1,000 lines of core logic |
-| **Dependencies** | 7 focused packages |
+| **Dependencies** | 9 focused packages |
 | **Complexity** | Simple linear pipeline |
 
 ## Future Enhancements

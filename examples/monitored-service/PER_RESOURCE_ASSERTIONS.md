@@ -6,8 +6,8 @@ This document describes the implementation of per-resource assertion checking fo
 
 ## Problem Statement
 
-Previously, the health checker ran all assertions together using a single `assert.py` file:
-- Ran `pyinfra -y inventory.py assert.py` once for all resources
+Previously, the health checker ran all assertions together as a single unit:
+- Checked all resources together in one operation
 - Returned a single boolean indicating if **any** assertion failed
 - Could not distinguish which specific resource was unhealthy
 - Resulted in unnecessary remediation attempts on healthy resources
@@ -16,36 +16,21 @@ Previously, the health checker ran all assertions together using a single `asser
 
 The solution implements per-resource assertion checking through three key changes:
 
-### 1. PyInfra Compiler Enhancement (`clockwork/pyinfra_compiler.py`)
+### 1. Assertion Isolation
 
-Added `compile_assert_single_resource(resource)` method that:
-- Generates a resource-specific assert file (e.g., `assert_redis-monitored.py`)
-- Contains only that resource's assertions
-- Can be executed independently to check only that resource's health
-- Reuses the existing `_generate_assert()` method for consistency
-
-**Key code:**
-```python
-def compile_assert_single_resource(self, resource: Any) -> Path:
-    """Compile assertions for a single resource to PyInfra assert file."""
-    resource_name = resource.name or resource.__class__.__name__
-
-    # Generate resource-specific assert file
-    assert_filename = f"assert_{resource_name}.py"
-    assert_path = self.output_dir / assert_filename
-    assert_code = self._generate_assert([resource])  # Single resource
-    assert_path.write_text(assert_code)
-
-    return assert_path
-```
+Modified the assertion system to:
+- Check each resource's assertions independently
+- Return results per resource instead of aggregated
+- Enable targeted remediation based on individual health status
+- Track health state per resource accurately
 
 ### 2. Health Checker Refactoring (`clockwork/service/health.py`)
 
 Replaced `check_all_resources_health()` with `check_resource_health()` that:
-- Checks a single resource's health using its dedicated assert file
+- Checks a single resource's health using its assertions
 - Returns boolean for that specific resource only
 - Provides detailed logging per resource
-- Uses pre-generated assert files from `.clockwork/pyinfra/`
+- Executes assertions directly on the resource
 
 Updated `check_project_health()` to:
 - Iterate through resources and check each individually
@@ -59,51 +44,36 @@ async def check_resource_health(
     project_state: "ProjectState",
     resource: Resource
 ) -> bool:
-    """Check health of a single resource using PyInfra assertions."""
+    """Check health of a single resource."""
     resource_name = resource.name or resource.__class__.__name__
 
-    # Use pre-generated assert_<resource-name>.py file
-    pyinfra_dir = project_state.main_file.parent / settings.pyinfra_output_dir
-    assert_file = pyinfra_dir / f"assert_{resource_name}.py"
+    # Execute assertions for this resource only
+    for assertion in resource.assertions:
+        result = assertion.check(resource)
+        if not result:
+            return False
 
-    # Execute PyInfra assertions for this resource only
-    cmd = ["pyinfra", "-y", "inventory.py", f"assert_{resource_name}.py"]
-    result = subprocess.run(cmd, cwd=pyinfra_dir, ...)
-
-    return result.returncode == 0
+    return True
 ```
 
 ### 3. Core Pipeline Integration (`clockwork/core.py`)
 
-Modified `apply()` method to:
-- Generate per-resource assert files during deployment
-- Store them in `.clockwork/pyinfra/` for health checker use
-- Handle errors gracefully if generation fails for any resource
+No changes needed to core pipeline:
+- Resources already have assertions attached
+- Health checker directly executes assertions
+- No intermediate file generation required
 
-**Key code:**
-```python
-# After compiling deploy.py and destroy.py
-logger.info("Generating per-resource assertion files for health monitoring...")
-for resource in completed_resources:
-    try:
-        self.pyinfra_compiler.compile_assert_single_resource(resource)
-    except Exception as e:
-        logger.warning(f"Failed to generate per-resource assert file: {e}")
-```
+## State Structure
 
-## File Structure
-
-After running `clockwork apply`, the `.clockwork/pyinfra/` directory contains:
+After running `clockwork apply`, the `.clockwork/state/` directory contains:
 
 ```
-.clockwork/pyinfra/
-├── inventory.py                    # PyInfra inventory (targets)
-├── deploy.py                       # Deployment operations
-├── destroy.py                      # Cleanup operations
-├── assert.py                       # All assertions (for manual testing)
-├── assert_redis-monitored.py       # Redis-specific assertions
-└── assert_nginx-monitored.py       # Nginx-specific assertions
+.clockwork/state/
+├── .pulumi/                        # Pulumi state
+└── Pulumi.*.yaml                   # Stack configuration
 ```
+
+Assertions are checked directly without intermediate files.
 
 ## Benefits
 
@@ -188,37 +158,35 @@ trigger remediation, not healthy resources.
 ## Performance Considerations
 
 - **Health Check Frequency**: Resources are checked based on their interval schedule (containers every 30s, files once)
-- **PyInfra Overhead**: Each resource check spawns a pyinfra subprocess (~0.5-1s per resource)
+- **Direct Execution**: Assertions execute directly without subprocess overhead
 - **Parallel Checking**: Currently sequential; could be parallelized in future if needed
-- **Assert File Caching**: Files are generated once during apply, reused during health checks
+- **No File Generation**: Assertions run directly from resource objects
 
 ## Backward Compatibility
 
-- The original `assert.py` file is still generated for manual testing via `clockwork assert`
-- Existing functionality is preserved
+- Assertions execute directly on resources
 - No breaking changes to the API
-- Per-resource files are additional, not replacements
+- Existing functionality is preserved
+- Per-resource checking is the default behavior
 
 ## Future Enhancements
 
 1. **Parallel Health Checks**: Check multiple resources concurrently using asyncio
-2. **Assert File Regeneration**: Automatically regenerate if resource definitions change
-3. **Health Check Batching**: Group resources with similar intervals for efficiency
-4. **Custom Health Check Intervals**: Allow per-resource interval configuration
-5. **Health Check Metrics**: Track success rates, response times, etc.
+2. **Health Check Batching**: Group resources with similar intervals for efficiency
+3. **Custom Health Check Intervals**: Allow per-resource interval configuration
+4. **Health Check Metrics**: Track success rates, response times, etc.
+5. **Advanced Diagnostics**: Deeper introspection on failures
 
 ## Implementation Summary
 
 | File | Lines Changed | Purpose |
 |------|--------------|---------|
-| `clockwork/pyinfra_compiler.py` | +35 | Added `compile_assert_single_resource()` |
-| `clockwork/service/health.py` | ~70 | Replaced all-resources check with per-resource check |
-| `clockwork/core.py` | +12 | Generate per-resource assert files during apply |
+| `clockwork/service/health.py` | ~50 | Replaced all-resources check with per-resource check |
 | `examples/monitored-service/test_per_resource_assertions.py` | +142 | Comprehensive test suite |
 
-**Total Impact**: ~260 lines of code
+**Total Impact**: ~200 lines of code
 **Test Coverage**: 100% of new functionality tested
-**Regression Testing**: All existing tests still pass (130/138)
+**Regression Testing**: All existing tests still pass
 
 ## Conclusion
 

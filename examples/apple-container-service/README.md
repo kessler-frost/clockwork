@@ -35,10 +35,10 @@ clockwork destroy
 ## How it works
 
 1. **AI completion**: Analyzes descriptions and suggests appropriate container images, ports, volumes, and configuration
-2. **macOS Optimized**: Uses Apple Containers CLI for native macOS container support
+2. **macOS Optimized**: Uses Apple Containers CLI via Pulumi custom dynamic provider
 3. **Orchestration**: Deploys containers with specified configuration
 4. **Assertions**: Validates deployment with health checks and port accessibility tests
-5. **`.clockwork/`** directory created in current directory with generated PyInfra code
+5. **`.clockwork/`** directory created in current directory with Pulumi state
 
 ## Platform support
 

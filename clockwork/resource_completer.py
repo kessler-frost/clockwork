@@ -289,12 +289,8 @@ Use the connected resources to configure appropriate connection strings, URLs, p
             prompt += self._build_container_completion_instructions(resource)
         elif resource_type == "DockerResource":
             prompt += self._build_docker_completion_instructions(resource)
-        elif resource_type == "BrewPackageResource":
-            prompt += self._build_brew_completion_instructions(resource)
         elif resource_type == "GitRepoResource":
             prompt += self._build_git_completion_instructions(resource)
-        elif resource_type == "DirectoryResource":
-            prompt += self._build_directory_completion_instructions(resource)
         else:
             # Generic instructions
             prompt += f"""
@@ -363,19 +359,6 @@ OPTIONAL fields (leave as None/empty unless actually needed):
 Return a complete DockerResource object with minimal necessary configuration.
 """
 
-    def _build_brew_completion_instructions(self, resource: Any) -> str:
-        """Build completion instructions for BrewPackageResource."""
-        return """
-For BrewPackageResource, please complete:
-- packages: list of Homebrew package names (e.g., ["jq", "htop", "wget"])
-  * Use official package names from Homebrew
-  * For CLI tools, use regular packages (cask=False)
-  * For GUI applications, set cask=True
-  * Common examples: jq, ripgrep, fzf, bat, git, python, node
-
-Return a complete BrewPackageResource object with appropriate packages.
-"""
-
     def _build_git_completion_instructions(self, resource: Any) -> str:
         """Build completion instructions for GitRepoResource."""
         return """
@@ -386,17 +369,6 @@ For GitRepoResource, please complete:
 - branch: Git branch to checkout (default: "main", or "master" for older repos)
 
 Return a complete GitRepoResource object with a valid repository URL.
-"""
-
-    def _build_directory_completion_instructions(self, resource: Any) -> str:
-        """Build completion instructions for DirectoryResource."""
-        return """
-For DirectoryResource, please complete:
-- mode: directory permissions (default: "755" for standard directories)
-- user: owner username (optional, can be None)
-- group: group name (optional, can be None)
-
-Return a complete DirectoryResource object.
 """
 
     def _build_template_file_completion_instructions(self, resource: Any) -> str:

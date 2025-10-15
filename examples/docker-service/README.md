@@ -4,7 +4,7 @@ Cross-platform container orchestration with AI-powered Docker management.
 
 ## What it does
 
-DockerResource provides intelligent Docker container management using PyInfra's native docker operations. Works on Mac, Linux, Windows, and remote servers via SSH.
+DockerResource provides intelligent Docker container management using Pulumi's Docker provider. Works on Mac, Linux, Windows, and remote servers via SSH.
 
 ## Prerequisites
 
@@ -35,10 +35,10 @@ clockwork destroy
 ## How it works
 
 1. **AI completion**: Analyzes descriptions and suggests appropriate container images, ports, volumes, and configuration
-2. **Cross-platform**: Uses PyInfra's docker.container operation for universal Docker support
+2. **Cross-platform**: Uses Pulumi Docker provider for universal Docker support
 3. **Orchestration**: Deploys containers with specified configuration
 4. **Assertions**: Validates deployment with health checks and port accessibility tests
-5. **`.clockwork/`** directory created in current directory with generated PyInfra code
+5. **`.clockwork/`** directory created in current directory with Pulumi state
 
 ## Platform support
 

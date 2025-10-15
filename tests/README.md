@@ -1,6 +1,6 @@
 # Clockwork Test Suite
 
-Test suite for Clockwork covering resources, integration, and PyInfra compilation.
+Test suite for Clockwork covering resources, integration, and Pulumi compilation.
 
 ## Running Tests
 
@@ -18,9 +18,9 @@ uv run pytest tests/ --cov=clockwork --cov-report=html
 ## Test Files
 
 - **`test_resources.py`** - FileResource and base Resource tests
-- **`test_docker_resource.py`** - DockerServiceResource tests (legacy)
+- **`test_docker_resource.py`** - DockerResource tests
 - **`test_apple_container_resource.py`** - AppleContainerResource tests (macOS native containers)
-- **`test_pyinfra_compiler.py`** - PyInfra code generation tests
+- **`test_pulumi_compiler.py`** - Pulumi compilation tests
 - **`test_integration.py`** - Full pipeline integration tests
 - **`conftest.py`** - Shared fixtures and configuration
 

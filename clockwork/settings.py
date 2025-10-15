@@ -47,10 +47,10 @@ class ClockworkSettings(BaseSettings):
         description="Base URL for OpenAI-compatible API endpoint (env: CW_BASE_URL)"
     )
 
-    # PyInfra Configuration
-    pyinfra_output_dir: Path = Field(
-        default=Path(".clockwork/pyinfra"),
-        description="Directory for PyInfra generated files (env: CW_PYINFRA_OUTPUT_DIR)"
+    # Pulumi Configuration
+    pulumi_state_dir: Path = Field(
+        default=Path(".clockwork/state"),
+        description="Directory for Pulumi state files (env: CW_PULUMI_STATE_DIR)"
     )
 
     # Logging Configuration

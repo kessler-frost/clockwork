@@ -30,14 +30,14 @@ Clockwork uses a **type-safe assertion system** with built-in assertion classes:
 1. **Built-in Assertion Classes** (type-safe, no AI required):
    - `HealthcheckAssert(url)` - HTTP health endpoint validation
    - `PortAccessibleAssert(port)` - Network port accessibility checks
-   - `ContainerRunningAssert()` - Apple Container status verification
+   - `ContainerRunningAssert()` - Container status verification
    - `FileExistsAssert(path)` - File presence validation
    - `ResponseTimeAssert(url, max_ms)` - Performance validation
    - And many more (see CLAUDE.md for full list)
 
-2. **PyInfra-Based Execution**:
-   - All assertions compile to PyInfra operations
-   - Consistent execution model with apply/destroy
+2. **Direct Execution**:
+   - Assertions execute directly on resources
+   - Independent of deployment mechanism
    - Idempotent and reliable verification
 
 **Example Usage:**

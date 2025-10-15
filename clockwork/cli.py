@@ -2,6 +2,7 @@
 Clockwork CLI - Intelligent Infrastructure Orchestration in Python.
 """
 
+import asyncio
 import logging
 import os
 import shutil
@@ -224,7 +225,14 @@ def _run_command(
 
     try:
         core = _initialize_core(api_key, model)
-        result = getattr(core, core_method)(main_file)
+        method = getattr(core, core_method)
+
+        # Check if method is async and run accordingly
+        if asyncio.iscoroutinefunction(method):
+            result = asyncio.run(method(main_file))
+        else:
+            result = method(main_file)
+
         success_handler(result)
     except Exception as e:
         _handle_command_error(e, command_name)
@@ -260,13 +268,31 @@ def apply(
     main_file = _get_main_file()
 
     def _handle_success(result):
-        console.print("\n[bold green]✓ Deployment successful![/bold green]")
-        if result.get("stdout"):
-            console.print("\n[dim]PyInfra output:[/dim]")
-            console.print(result["stdout"])
+        if result.get("success"):
+            console.print("\n[bold green]✓ Deployment successful![/bold green]")
+
+            # Show Pulumi summary
+            if result.get("summary"):
+                summary = result["summary"]
+                console.print(f"\n[dim]Result: {summary.get('result', 'unknown')}[/dim]")
+
+                changes = summary.get("resource_changes", {})
+                if changes:
+                    console.print(f"[dim]Resources: +{changes.get('create', 0)} ~{changes.get('update', 0)} -{changes.get('delete', 0)}[/dim]")
+
+                if summary.get("duration"):
+                    console.print(f"[dim]Duration: {summary['duration']}s[/dim]")
+
+            # Show outputs if any
+            if result.get("outputs"):
+                console.print("\n[dim]Outputs:[/dim]")
+                for key, value in result["outputs"].items():
+                    console.print(f"  {key}: {value}")
+        else:
+            console.print(f"\n[bold red]✗ Deployment failed:[/bold red] {result.get('error', 'Unknown error')}")
 
         # Register project with service
-        if not skip_service_check:
+        if not skip_service_check and result.get("success"):
             if _register_project_with_service(main_file):
                 console.print("[dim]✓ Project registered with monitoring service[/dim]")
             else:
@@ -296,12 +322,26 @@ def plan(
         help="Model name (overrides .env)"
     ),
 ):
-    """Complete resources and compile without deploying."""
+    """Preview Pulumi changes without deploying."""
     def _handle_success(result):
         console.print(f"\n[bold]Plan Summary:[/bold]")
         console.print(f"  Resources: {result['resources']}")
         console.print(f"  Completed resources: {result['completed_resources']}")
-        console.print(f"  PyInfra directory: {result['pyinfra_dir']}")
+
+        # Show preview details
+        preview = result.get("preview", {})
+        if preview.get("success"):
+            summary = preview.get("summary", {})
+            change_summary = summary.get("change_summary", {})
+
+            console.print(f"\n[bold]Preview Changes:[/bold]")
+            console.print(f"  Create: {change_summary.get('create', 0)}")
+            console.print(f"  Update: {change_summary.get('update', 0)}")
+            console.print(f"  Delete: {change_summary.get('delete', 0)}")
+            console.print(f"  Total steps: {summary.get('steps', 0)}")
+        elif preview.get("error"):
+            console.print(f"\n[yellow]⚠ Preview error:[/yellow] {preview['error']}")
+
         console.print("\n[dim]Run 'clockwork apply' to deploy these resources.[/dim]")
 
     _run_command(
@@ -327,11 +367,6 @@ def destroy(
         "--model",
         help="Model name (overrides .env)"
     ),
-    keep_files: bool = typer.Option(
-        False,
-        "--keep-files",
-        help="Keep .clockwork directory after destroy"
-    ),
     skip_service_check: bool = typer.Option(
         False,
         "--skip-service-check",
@@ -350,31 +385,25 @@ def destroy(
     main_file = _get_main_file()
 
     def _handle_success(result):
-        console.print("\n[bold green]✓ Resources destroyed successfully![/bold green]")
-        if result.get("stdout"):
-            console.print("\n[dim]PyInfra output:[/dim]")
-            console.print(result["stdout"])
+        if result.get("success"):
+            console.print("\n[bold green]✓ Resources destroyed successfully![/bold green]")
+
+            # Show Pulumi summary
+            if result.get("summary"):
+                summary = result["summary"]
+                console.print(f"\n[dim]Result: {summary.get('result', 'unknown')}[/dim]")
+
+                if summary.get("duration"):
+                    console.print(f"[dim]Duration: {summary['duration']}s[/dim]")
+        else:
+            console.print(f"\n[bold red]✗ Destroy failed:[/bold red] {result.get('error', 'Unknown error')}")
 
         # Unregister project from service
-        if not skip_service_check:
+        if not skip_service_check and result.get("success"):
             if _unregister_project_from_service(main_file):
                 console.print("[dim]✓ Project unregistered from monitoring service[/dim]")
             else:
                 console.print("[yellow]⚠ Could not unregister from service[/yellow]")
-
-        # Clean up .clockwork directory unless --keep-files is set
-        if not keep_files:
-            settings = get_settings()
-            # Get the .clockwork directory (parent of pyinfra output dir)
-            pyinfra_dir = main_file.parent / settings.pyinfra_output_dir
-            clockwork_dir = pyinfra_dir.parent
-
-            # Safety check: only remove if it's actually named .clockwork
-            if clockwork_dir.exists() and clockwork_dir.name == ".clockwork":
-                shutil.rmtree(str(clockwork_dir))
-                console.print(f"\n[dim]✓ Removed {clockwork_dir}[/dim]")
-        else:
-            console.print(f"\n[dim]ℹ Kept .clockwork directory (--keep-files flag set)[/dim]")
 
     _run_command(
         command_name="destroy",
@@ -415,10 +444,27 @@ def assert_cmd(
             raise typer.Exit(code=1)
 
     def _handle_success(result):
-        console.print("\n[bold green]✓ All assertions passed![/bold green]")
-        if result.get("stdout"):
-            console.print("\n[dim]PyInfra output:[/dim]")
-            console.print(result["stdout"])
+        if result.get("success"):
+            console.print("\n[bold green]✓ All assertions passed![/bold green]")
+        else:
+            console.print("\n[bold red]✗ Some assertions failed[/bold red]")
+
+        # Show assertion summary
+        console.print(f"\n[bold]Assertion Summary:[/bold]")
+        console.print(f"  Total: {result.get('total', 0)}")
+        console.print(f"  Passed: {result.get('passed', 0)}")
+        console.print(f"  Failed: {result.get('failed', 0)}")
+
+        # Show failed assertions if any
+        if result.get("failed", 0) > 0:
+            details = result.get("details", {})
+            failed = details.get("failed", [])
+            if failed:
+                console.print(f"\n[bold red]Failed Assertions:[/bold red]")
+                for failure in failed:
+                    console.print(f"  • {failure['resource']}: {failure['assertion']}")
+                    if failure.get("error"):
+                        console.print(f"    [dim]Error: {failure['error']}[/dim]")
 
     _run_command(
         command_name="assert",

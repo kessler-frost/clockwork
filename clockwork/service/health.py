@@ -12,7 +12,6 @@ from typing import Dict, Optional, Any, TYPE_CHECKING
 
 from clockwork.resources.base import Resource
 from clockwork.resources.file import FileResource
-from clockwork.resources.directory import DirectoryResource
 from clockwork.resources.docker import DockerResource
 from clockwork.resources.apple_container import AppleContainerResource
 from clockwork.resources.git import GitRepoResource
@@ -30,7 +29,7 @@ class HealthChecker:
 
     This class manages continuous health monitoring of infrastructure resources.
     Different resource types have different check intervals:
-    - FileResource/DirectoryResource: Check once after registration, then skip
+    - FileResource: Check once after registration, then skip
     - DockerResource/AppleContainerResource: Every 30s (configurable)
     - GitRepoResource: Every 5 minutes (300s)
     - Default: service_check_interval_default from settings
@@ -47,7 +46,6 @@ class HealthChecker:
 
     # Resource-specific check intervals (in seconds)
     INTERVAL_FILE = float('inf')  # Check once, then skip
-    INTERVAL_DIRECTORY = float('inf')  # Check once, then skip
     INTERVAL_CONTAINER = 30  # Container resources (Docker/AppleContainer)
     INTERVAL_GIT = 300  # Git repository resources (5 minutes)
 
@@ -81,7 +79,7 @@ class HealthChecker:
         """Get check interval in seconds for a resource type.
 
         Different resource types have different monitoring needs:
-        - Static resources (files, directories) are checked once
+        - Static resources (files) are checked once
         - Dynamic resources (containers) are checked frequently
         - Repository resources are checked periodically
 
@@ -94,7 +92,7 @@ class HealthChecker:
         settings = get_settings()
 
         # Check resource type and return appropriate interval
-        if isinstance(resource, (FileResource, DirectoryResource)):
+        if isinstance(resource, FileResource):
             return self.INTERVAL_FILE
 
         if isinstance(resource, (DockerResource, AppleContainerResource)):
@@ -110,8 +108,7 @@ class HealthChecker:
         """Determine if a resource should be checked now.
 
         Checks are scheduled based on resource type and last check time.
-        Resources with infinite interval (files, directories) are only
-        checked once.
+        Resources with infinite interval (files) are only checked once.
 
         Args:
             project_id: Project identifier
@@ -143,16 +140,52 @@ class HealthChecker:
         elapsed = (datetime.now() - last_check).total_seconds()
         return elapsed >= interval
 
+    def _find_resource_in_state(self, state: Dict[str, Any], resource_name: str) -> Optional[Dict[str, Any]]:
+        """Find a resource in Pulumi stack state by name.
+
+        Searches the exported stack state for a resource matching the given name.
+        The Pulumi state structure contains a 'deployment' key with 'resources' array.
+
+        Args:
+            state: Exported Pulumi stack state (from stack.export_stack())
+            resource_name: Name of the resource to find
+
+        Returns:
+            Resource state dict if found, None otherwise
+        """
+        try:
+            # Pulumi state structure: state['deployment']['resources']
+            deployment = state.get('deployment', {})
+            resources = deployment.get('resources', [])
+
+            # Search for resource by URN or name
+            for res in resources:
+                # Check URN for resource name
+                urn = res.get('urn', '')
+                if resource_name in urn:
+                    return res
+
+                # Also check the 'id' field which may contain the resource name
+                res_id = res.get('id', '')
+                if resource_name in res_id:
+                    return res
+
+            return None
+
+        except Exception as e:
+            logger.warning(f"Error searching Pulumi state for {resource_name}: {e}")
+            return None
+
     async def check_resource_health(
         self,
         project_state: "ProjectState",
         resource: Resource
     ) -> bool:
-        """Check health of a single resource using PyInfra assertions.
+        """Check health of a single resource using Pulumi Automation API.
 
-        Uses the pre-generated assert_<resource-name>.py file from the project's
-        .clockwork directory instead of regenerating it. This is faster and avoids
-        race conditions.
+        Uses Pulumi Automation API to query stack state and check if the
+        resource exists and is in a healthy state. Falls back to running
+        assertions if defined on the resource.
 
         Args:
             project_state: Project state containing resource context
@@ -165,47 +198,75 @@ class HealthChecker:
             resource_name = resource.name or resource.__class__.__name__
             logger.debug(f"Checking health for resource: {resource_name}")
 
-            # Use pre-generated assert_<resource-name>.py from .clockwork directory
+            # Import Pulumi Automation API
+            from pulumi import automation as auto
+
+            # Get stack to query state
             settings = get_settings()
-            pyinfra_dir = project_state.main_file.parent / settings.pyinfra_output_dir
-            assert_file = pyinfra_dir / f"assert_{resource_name}.py"
+            project_name = "clockwork"
+            stack_name = "dev"
 
-            if not assert_file.exists():
-                logger.warning(
-                    f"assert_{resource_name}.py not found at {assert_file}. "
-                    "Per-resource assertions may not have been generated yet."
+            try:
+                # Create empty program for state query
+                def empty_program():
+                    pass
+
+                # Select existing stack
+                stack = auto.select_stack(
+                    stack_name=stack_name,
+                    project_name=project_name,
+                    program=empty_program,
                 )
-                return False
 
-            # Execute PyInfra assertions directly
-            import subprocess
-            cmd = ["pyinfra", "-y", "inventory.py", f"assert_{resource_name}.py"]
+                # Export stack state
+                state = stack.export_stack()
 
-            result = subprocess.run(
-                cmd,
-                cwd=pyinfra_dir,
-                capture_output=True,
-                text=True,
-                timeout=30  # 30 second timeout for assertions
-            )
+                # Find resource in state
+                resource_state = self._find_resource_in_state(state, resource_name)
 
-            is_healthy = result.returncode == 0
+                if not resource_state:
+                    logger.warning(
+                        f"Resource {resource_name} not found in Pulumi state. "
+                        "May not have been deployed yet."
+                    )
+                    return False
+
+                # Check if resource is in a healthy state (not pending delete, etc.)
+                is_healthy = True
+                logger.debug(f"Found resource {resource_name} in Pulumi state")
+
+            except Exception as e:
+                logger.warning(
+                    f"Failed to query Pulumi state for {resource_name}: {e}. "
+                    "Falling back to assertions if available."
+                )
+                is_healthy = False
+
+            # If resource has assertions, run them as additional validation
+            if hasattr(resource, 'assertions') and resource.assertions:
+                logger.debug(f"Running assertions for {resource_name}")
+                try:
+                    # Import assertion runner
+                    from clockwork.core import ClockworkCore
+                    core = ClockworkCore()
+                    assertion_results = await core.assert_resources([resource])
+
+                    # Check if all assertions passed
+                    if not assertion_results.get('success', False):
+                        logger.debug(f"Assertions failed for {resource_name}")
+                        is_healthy = False
+                except Exception as e:
+                    logger.warning(f"Failed to run assertions for {resource_name}: {e}")
+                    # Don't fail health check if assertions can't run
+                    pass
 
             logger.debug(
                 f"Health check result for {resource_name}: "
-                f"{'healthy' if is_healthy else 'unhealthy'} "
-                f"(exit code: {result.returncode})"
+                f"{'healthy' if is_healthy else 'unhealthy'}"
             )
-
-            if not is_healthy:
-                logger.debug(f"Assertion output for {resource_name}: {result.stdout}")
-                logger.debug(f"Assertion errors for {resource_name}: {result.stderr}")
 
             return is_healthy
 
-        except subprocess.TimeoutExpired:
-            logger.error(f"Health check timed out after 30 seconds for {resource_name}")
-            return False
         except Exception as e:
             logger.error(f"Health check failed for resource {resource_name}: {e}", exc_info=True)
             return False

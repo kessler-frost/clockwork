@@ -1,11 +1,11 @@
 """Clockwork assertions module for validating resource runtime state.
 
-This module provides type-safe assertions that compile to PyInfra operations
-for validating that deployed resources match their desired state.
+This module provides type-safe assertions for validating that deployed
+resources match their desired state.
 
 Assertion Categories:
     - HTTP: Web service health checks, port accessibility, response times
-    - Container: Apple Container status, health, and logs
+    - Container: Container status, health, and logs
     - File: File existence, permissions, size, content validation
     - Resource: Memory, CPU, and disk usage monitoring
     - Process: Process running/not running validation
@@ -20,7 +20,7 @@ Example:
     ... )
     >>> from clockwork.resources import AppleContainerResource
     >>>
-    >>> # Apple Container service with assertions
+    >>> # Container service with assertions
     >>> nginx = AppleContainerResource(
     ...     name="nginx",
     ...     description="Web server",

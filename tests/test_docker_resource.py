@@ -1,6 +1,7 @@
 """Tests for DockerResource."""
 
 import pytest
+from unittest.mock import Mock, patch
 from clockwork.resources import DockerResource
 
 
@@ -74,79 +75,89 @@ def test_needs_completion_no_image():
 
 
 def test_needs_completion_with_all_fields():
-    """Test needs_completion() returns False when all fields are specified."""
+    """Test needs_completion() returns False when all required fields are specified."""
     container = DockerResource(
         name="nginx",
         description="Web server",
         image="nginx:latest",
-        ports=[],
-        volumes=[],
-        env_vars={},
-        networks=[]
+        ports=[]
     )
 
     assert container.needs_completion() is False
 
 
-def test_to_pyinfra_operations_with_image():
-    """Test PyInfra code generation with explicit image."""
+@patch('clockwork.resources.docker.docker.Container')
+def test_to_pulumi_basic(mock_container):
+    """Test Pulumi resource creation with basic fields."""
+    mock_pulumi_container = Mock()
+    mock_container.return_value = mock_pulumi_container
+
     container = DockerResource(
         name="redis",
         description="Redis cache",
         image="redis:7-alpine",
-        ports=["6379:6379"],
-        volumes=["redis_data:/data"],
-        env_vars={"REDIS_PASSWORD": "secret"},
-        networks=["cache"]
+        ports=["6379:6379"]
     )
 
-    operations = container.to_pyinfra_operations()
+    result = container.to_pulumi()
 
-    # Check docker.container operation calls
-    assert 'docker.container(' in operations
+    # Verify Container was called with correct arguments
+    mock_container.assert_called_once()
+    call_args = mock_container.call_args
 
-    # Check container name
-    assert 'container="redis"' in operations
+    assert call_args[0][0] == "redis"  # Resource name
+    assert call_args[1]["image"] == "redis:7-alpine"
+    assert call_args[1]["name"] == "redis"
+    assert len(call_args[1]["ports"]) == 1
+    assert call_args[1]["ports"][0].internal == 6379
+    assert call_args[1]["ports"][0].external == 6379
 
-    # Check image
-    assert 'redis:7-alpine' in operations
-
-    # Check ports, volumes, env_vars, networks
-    assert '"6379:6379"' in operations
-    assert '"redis_data:/data"' in operations
-    # PyInfra uses env_vars as list of KEY=VALUE strings
-    assert '"REDIS_PASSWORD=secret"' in operations
-    assert '"cache"' in operations
-
-    # Check state flags
-    assert 'present=True' in operations
-    assert 'start=True' in operations
+    # Verify result and storage
+    assert result == mock_pulumi_container
+    assert container._pulumi_resource == mock_pulumi_container
 
 
-def test_to_pyinfra_operations_with_ai_image():
-    """Test PyInfra code generation with AI-completed fields."""
+@patch('clockwork.resources.docker.docker.Container')
+def test_to_pulumi_with_volumes_and_env(mock_container):
+    """Test Pulumi resource creation with volumes and environment variables."""
+    mock_pulumi_container = Mock()
+    mock_container.return_value = mock_pulumi_container
+
     container = DockerResource(
-        name="nginx-ai",
-        description="Web server for static content"
+        name="postgres",
+        description="Database",
+        image="postgres:15",
+        ports=["5432:5432"],
+        volumes=["pg_data:/var/lib/postgresql/data"],
+        env_vars={"POSTGRES_PASSWORD": "secret", "POSTGRES_USER": "admin"},
+        networks=["backend"]
     )
 
-    # Simulate AI completion
-    container.image = "nginx:latest"
-    container.ports = []
-    container.volumes = []
-    container.env_vars = {}
-    container.networks = []
+    result = container.to_pulumi()
 
-    operations = container.to_pyinfra_operations()
+    call_args = mock_container.call_args
 
-    # Check that AI-completed image is used
-    assert 'nginx:latest' in operations
-    assert 'container="nginx-ai"' in operations
-    assert 'docker.container(' in operations
+    # Check volumes
+    assert len(call_args[1]["volumes"]) == 1
+    assert call_args[1]["volumes"][0].host_path == "pg_data"
+    assert call_args[1]["volumes"][0].container_path == "/var/lib/postgresql/data"
+    assert call_args[1]["volumes"][0].read_only is False
+
+    # Check environment variables
+    assert "POSTGRES_PASSWORD=secret" in call_args[1]["envs"]
+    assert "POSTGRES_USER=admin" in call_args[1]["envs"]
+
+    # Check networks
+    assert len(call_args[1]["networks_advanced"]) == 1
+    assert call_args[1]["networks_advanced"][0].name == "backend"
 
 
-def test_to_pyinfra_operations_multiple_ports():
-    """Test PyInfra code generation with multiple port mappings."""
+@patch('clockwork.resources.docker.docker.Container')
+def test_to_pulumi_multiple_ports(mock_container):
+    """Test Pulumi resource creation with multiple port mappings."""
+    mock_pulumi_container = Mock()
+    mock_container.return_value = mock_pulumi_container
+
     container = DockerResource(
         name="web",
         description="Web server",
@@ -154,20 +165,28 @@ def test_to_pyinfra_operations_multiple_ports():
         ports=["80:80", "443:443", "8080:8080"]
     )
 
-    operations = container.to_pyinfra_operations()
+    container.to_pulumi()
 
-    assert '"80:80"' in operations
-    assert '"443:443"' in operations
-    assert '"8080:8080"' in operations
-    assert 'docker.container(' in operations
+    call_args = mock_container.call_args
+    ports = call_args[1]["ports"]
+
+    assert len(ports) == 3
+    assert ports[0].internal == 80 and ports[0].external == 80
+    assert ports[1].internal == 443 and ports[1].external == 443
+    assert ports[2].internal == 8080 and ports[2].external == 8080
 
 
-def test_to_pyinfra_operations_multiple_volumes():
-    """Test PyInfra code generation with multiple volume mounts."""
+@patch('clockwork.resources.docker.docker.Container')
+def test_to_pulumi_multiple_volumes(mock_container):
+    """Test Pulumi resource creation with multiple volume mounts."""
+    mock_pulumi_container = Mock()
+    mock_container.return_value = mock_pulumi_container
+
     container = DockerResource(
         name="data",
         description="Data container",
         image="alpine:latest",
+        ports=[],
         volumes=[
             "/host/data:/container/data",
             "named_volume:/app",
@@ -175,37 +194,61 @@ def test_to_pyinfra_operations_multiple_volumes():
         ]
     )
 
-    operations = container.to_pyinfra_operations()
+    container.to_pulumi()
 
-    assert '"/host/data:/container/data"' in operations
-    assert '"named_volume:/app"' in operations
-    assert '"/etc/config:/config:ro"' in operations
-    assert 'docker.container(' in operations
+    call_args = mock_container.call_args
+    volumes = call_args[1]["volumes"]
+
+    assert len(volumes) == 3
+    assert volumes[0].host_path == "/host/data"
+    assert volumes[0].container_path == "/container/data"
+    assert volumes[0].read_only is False
+
+    assert volumes[1].host_path == "named_volume"
+    assert volumes[1].container_path == "/app"
+    assert volumes[1].read_only is False
+
+    assert volumes[2].host_path == "/etc/config"
+    assert volumes[2].container_path == "/config"
+    assert volumes[2].read_only is True
 
 
-def test_to_pyinfra_operations_multiple_networks():
-    """Test PyInfra code generation with multiple networks."""
+@patch('clockwork.resources.docker.docker.Container')
+def test_to_pulumi_multiple_networks(mock_container):
+    """Test Pulumi resource creation with multiple networks."""
+    mock_pulumi_container = Mock()
+    mock_container.return_value = mock_pulumi_container
+
     container = DockerResource(
         name="networked",
         description="Multi-network container",
         image="alpine:latest",
+        ports=[],
         networks=["frontend", "backend", "monitoring"]
     )
 
-    operations = container.to_pyinfra_operations()
+    container.to_pulumi()
 
-    assert '"frontend"' in operations
-    assert '"backend"' in operations
-    assert '"monitoring"' in operations
-    assert 'docker.container(' in operations
+    call_args = mock_container.call_args
+    networks = call_args[1]["networks_advanced"]
+
+    assert len(networks) == 3
+    assert networks[0].name == "frontend"
+    assert networks[1].name == "backend"
+    assert networks[2].name == "monitoring"
 
 
-def test_to_pyinfra_operations_complex_env_vars():
-    """Test PyInfra code generation with complex environment variables."""
+@patch('clockwork.resources.docker.docker.Container')
+def test_to_pulumi_complex_env_vars(mock_container):
+    """Test Pulumi resource creation with complex environment variables."""
+    mock_pulumi_container = Mock()
+    mock_container.return_value = mock_pulumi_container
+
     container = DockerResource(
         name="app",
         description="Application container",
         image="myapp:latest",
+        ports=[],
         env_vars={
             "DATABASE_URL": "postgresql://user:pass@db:5432/mydb",
             "REDIS_URL": "redis://cache:6379",
@@ -214,165 +257,114 @@ def test_to_pyinfra_operations_complex_env_vars():
         }
     )
 
-    operations = container.to_pyinfra_operations()
+    container.to_pulumi()
 
-    # PyInfra uses env_vars as list of KEY=VALUE strings
-    assert '"DATABASE_URL=postgresql://user:pass@db:5432/mydb"' in operations
-    assert '"REDIS_URL=redis://cache:6379"' in operations
-    assert '"DEBUG=false"' in operations
-    assert '"PORT=3000"' in operations
-    assert 'docker.container(' in operations
+    call_args = mock_container.call_args
+    envs = call_args[1]["envs"]
 
-
-def test_to_pyinfra_operations_completed_fields():
-    """Test PyInfra code generation with completed fields."""
-    container = DockerResource(
-        name="test",
-        description="Test container",
-        image="simple:latest",
-        ports=[],
-        volumes=[],
-        env_vars={},
-        networks=[]
-    )
-
-    operations = container.to_pyinfra_operations()
-
-    # Should use completed image field
-    assert 'simple:latest' in operations
-    assert 'docker.container(' in operations
+    assert "DATABASE_URL=postgresql://user:pass@db:5432/mydb" in envs
+    assert "REDIS_URL=redis://cache:6379" in envs
+    assert "DEBUG=false" in envs
+    assert "PORT=3000" in envs
 
 
-def test_to_pyinfra_operations_missing_fields_raises_error():
-    """Test PyInfra code generation when fields are not completed raises error."""
+def test_to_pulumi_missing_fields_raises_error():
+    """Test to_pulumi() raises error when fields are not completed."""
     container = DockerResource(
         name="missing",
         description="Container with missing fields"
     )
 
     # Should raise error when required fields are not completed
-    with pytest.raises(ValueError, match="Resource fields not completed"):
-        container.to_pyinfra_operations()
+    with pytest.raises(ValueError, match="Resource not completed"):
+        container.to_pulumi()
 
 
-def test_to_pyinfra_destroy_operations():
-    """Test PyInfra destroy code generation."""
-    container = DockerResource(
-        name="remove-me",
-        description="Container to remove",
-        image="alpine:latest"
+@patch('clockwork.resources.docker.docker.Container')
+def test_to_pulumi_with_connections(mock_container):
+    """Test Pulumi resource creation with connection dependencies."""
+    import pulumi
+
+    mock_pulumi_container = Mock()
+    mock_container.return_value = mock_pulumi_container
+
+    # Create a real connected resource without Pulumi resource set
+    # This tests that the code handles connections correctly
+    db_container = DockerResource(
+        name="postgres",
+        description="Database",
+        image="postgres:15",
+        ports=["5432:5432"]
+    )
+    # Don't set _pulumi_resource - test that code handles missing resources
+
+    # Create app container with connection to database
+    app_container = DockerResource(
+        name="app",
+        description="Application",
+        image="myapp:latest",
+        ports=["8000:8000"],
+        connections=[db_container]
     )
 
-    operations = container.to_pyinfra_destroy_operations()
+    app_container.to_pulumi()
 
-    # Check destroy operation uses docker.container with present=False
-    assert 'name="Remove remove-me"' in operations
-    assert 'container="remove-me"' in operations
-    assert 'docker.container(' in operations
-    assert 'present=False' in operations
+    call_args = mock_container.call_args
 
+    # When connected resource doesn't have _pulumi_resource set,
+    # opts should be None
+    opts = call_args[1]["opts"]
+    assert opts is None
 
-def test_to_pyinfra_destroy_operations_only_needs_name():
-    """Test destroy operations only need name field."""
-    container = DockerResource(
-        name="test-destroy",
-        description="Test"
-    )
-
-    # Destroy only needs name field
-    operations = container.to_pyinfra_destroy_operations()
-
-    # Should only have docker.container operation with present=False
-    assert 'docker.container(' in operations
-    assert 'container="test-destroy"' in operations
-    assert 'present=False' in operations
+    # Verify connections are stored in _connection_resources
+    assert len(app_container._connection_resources) == 1
+    assert app_container._connection_resources[0] == db_container
 
 
-def test_docker_resource_present_false():
-    """Test DockerResource with present=False."""
-    container = DockerResource(
-        name="stopped",
-        description="Stopped container",
-        image="alpine:latest",
-        present=False
-    )
+@patch('clockwork.resources.docker.docker.Container')
+def test_to_pulumi_start_false(mock_container):
+    """Test Pulumi resource creation with start=False."""
+    mock_pulumi_container = Mock()
+    mock_container.return_value = mock_pulumi_container
 
-    operations = container.to_pyinfra_operations()
-
-    # When present=False, should remove the container
-    assert 'docker.container(' in operations
-    assert 'container="stopped"' in operations
-    assert 'present=False' in operations
-
-
-def test_docker_resource_start_false():
-    """Test DockerResource with start=False."""
     container = DockerResource(
         name="not-running",
         description="Container that exists but doesn't run",
         image="alpine:latest",
+        ports=[],
         start=False
     )
 
-    operations = container.to_pyinfra_operations()
+    container.to_pulumi()
 
-    # When start=False, should have start=False
-    assert 'docker.container(' in operations
-    assert 'container="not-running"' in operations
-    assert 'start=False' in operations
-    assert 'present=True' in operations
+    call_args = mock_container.call_args
+
+    # When start=False, should have restart="no" and must_run=False
+    assert call_args[1]["restart"] == "no"
+    assert call_args[1]["must_run"] is False
 
 
-def test_container_operation_format():
-    """Test that container operation is properly formatted."""
+@patch('clockwork.resources.docker.docker.Container')
+def test_to_pulumi_port_internal_only(mock_container):
+    """Test Pulumi resource creation with internal-only port."""
+    mock_pulumi_container = Mock()
+    mock_container.return_value = mock_pulumi_container
+
     container = DockerResource(
-        name="test",
-        description="Test container",
-        image="nginx:latest",
-        ports=["80:80"],
-        volumes=["/data:/data"],
-        env_vars={"KEY": "value"}
-    )
-
-    operations = container.to_pyinfra_operations()
-
-    # Verify operation structure
-    assert 'docker.container(' in operations
-    assert 'container="test"' in operations
-    assert '"80:80"' in operations
-    assert '"/data:/data"' in operations
-    # PyInfra uses env_vars as list of KEY=VALUE strings
-    assert '"KEY=value"' in operations
-    assert 'nginx:latest' in operations
-
-
-def test_to_pyinfra_assert_operations_default():
-    """Test default assertion generation."""
-    container = DockerResource(
-        name="nginx",
-        description="Web server",
-        image="nginx:latest"
-    )
-
-    operations = container.to_pyinfra_assert_operations()
-
-    # No default assertions generated - users must explicitly add assertion objects
-    assert operations == ""
-
-
-def test_to_pyinfra_assert_operations_present_only():
-    """Test assertion when container should exist but not run."""
-    container = DockerResource(
-        name="stopped",
-        description="Stopped container",
+        name="internal",
+        description="Internal service",
         image="alpine:latest",
-        start=False
+        ports=["3000"]  # Internal only, Docker assigns external
     )
 
-    operations = container.to_pyinfra_assert_operations()
+    container.to_pulumi()
 
-    # No default assertions generated - users must explicitly add assertion objects
-    assert operations == ""
+    call_args = mock_container.call_args
+    ports = call_args[1]["ports"]
+
+    assert len(ports) == 1
+    assert ports[0].internal == 3000
+    assert not hasattr(ports[0], 'external') or ports[0].external is None
 
 
 def test_pydantic_validation():
@@ -382,26 +374,22 @@ def test_pydantic_validation():
         DockerResource(name="test")
 
 
-def test_docker_operations_use_docker_not_apple():
-    """Test that generated operations use 'docker.container', not 'apple_containers'."""
+def test_get_connection_context():
+    """Test that connection context is properly generated."""
     container = DockerResource(
-        name="test",
-        description="Test container",
-        image="nginx:latest"
+        name="postgres",
+        description="Database",
+        image="postgres:15",
+        ports=["5432:5432"],
+        env_vars={"POSTGRES_PASSWORD": "secret"},
+        networks=["backend"]
     )
 
-    operations = container.to_pyinfra_operations()
-    destroy_ops = container.to_pyinfra_destroy_operations()
-    assert_ops = container.to_pyinfra_assert_operations()
+    context = container.get_connection_context()
 
-    # Verify docker.container is used
-    assert "docker.container(" in operations
-    assert "docker.container(" in destroy_ops
-
-    # Verify no apple_containers operations are used
-    assert "apple_containers" not in operations.lower()
-    assert "apple_containers" not in destroy_ops.lower()
-    assert "apple_containers" not in assert_ops.lower()
-
-    # No default assertions generated
-    assert assert_ops == ""
+    assert context["name"] == "postgres"
+    assert context["type"] == "DockerResource"
+    assert context["image"] == "postgres:15"
+    assert context["ports"] == ["5432:5432"]
+    assert context["env_vars"] == {"POSTGRES_PASSWORD": "secret"}
+    assert context["networks"] == ["backend"]

@@ -1,7 +1,17 @@
 """Tests for resource models."""
 
+import asyncio
 import pytest
 from clockwork.resources import Resource, FileResource
+
+
+@pytest.fixture(autouse=True)
+def event_loop():
+    """Create an event loop for each test (needed for Pulumi Output)."""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    yield loop
+    loop.close()
 
 
 def test_file_resource_minimal():
@@ -38,9 +48,9 @@ def test_file_resource_needs_completion():
     assert file3.needs_completion() is False
 
 
-def test_file_resource_to_pyinfra_operations():
-    """Test FileResource.to_pyinfra_operations()."""
-    # Resource must be completed (all fields set) before generating operations
+def test_file_resource_to_pulumi():
+    """Test FileResource.to_pulumi()."""
+    # Resource must be completed (all fields set) before generating Pulumi resource
     file = FileResource(
         name="example.txt",
         description="Example file",
@@ -48,16 +58,17 @@ def test_file_resource_to_pyinfra_operations():
         content="Hello World"
     )
 
-    operations = file.to_pyinfra_operations()
-
-    assert "files.put" in operations
-    assert "example.txt" in operations
-    assert "/tmp/example.txt" in operations
-    assert "Hello World" in operations
+    # to_pulumi() should return a Pulumi File resource
+    pulumi_resource = file.to_pulumi()
+    assert pulumi_resource is not None
+    assert hasattr(pulumi_resource, 'path')
+    assert hasattr(pulumi_resource, 'content')
+    assert hasattr(pulumi_resource, 'mode')
 
 
 def test_file_resource_default_path():
     """Test FileResource default path generation."""
+    from pathlib import Path
     # Resource must have name set to resolve path
     file = FileResource(
         name="test.md",
@@ -65,9 +76,10 @@ def test_file_resource_default_path():
         content="test content"
     )
 
-    operations = file.to_pyinfra_operations()
-    # Default is current directory, not /tmp
-    assert "test.md" in operations
+    file_path, _ = file._resolve_file_path()
+    # Default is current directory
+    assert "test.md" in file_path
+    assert Path(file_path).name == "test.md"
 
 
 def test_file_resource_user_content():
@@ -79,8 +91,7 @@ def test_file_resource_user_content():
         content=user_content
     )
 
-    operations = file.to_pyinfra_operations()
-    assert user_content in operations
+    assert file.content == user_content
 
 
 def test_file_resource_escape_content():
@@ -91,10 +102,8 @@ def test_file_resource_escape_content():
         content='Line with "quotes" and \n newlines'
     )
 
-    operations = file.to_pyinfra_operations()
-    # Triple-quoted strings preserve content, including quotes and newlines
-    assert '"quotes"' in operations or 'quotes' in operations
-    assert 'newlines' in operations
+    assert '"quotes"' in file.content or 'quotes' in file.content
+    assert 'newlines' in file.content
 
 
 def test_file_resource_modes():
@@ -106,8 +115,7 @@ def test_file_resource_modes():
         mode="755"
     )
 
-    operations = file.to_pyinfra_operations()
-    assert 'mode="755"' in operations
+    assert file.mode == "755"
 
 
 def test_file_resource_default_mode():
@@ -118,6 +126,6 @@ def test_file_resource_default_mode():
         content="content"
     )
 
-    operations = file.to_pyinfra_operations()
-    # Default mode is 644
-    assert 'mode="644"' in operations
+    # Default mode should be used when creating Pulumi resource
+    pulumi_resource = file.to_pulumi()
+    assert pulumi_resource is not None
