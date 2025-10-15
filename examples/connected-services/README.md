@@ -221,7 +221,6 @@ clockwork destroy
 # 1. Remove containers in reverse order (worker, api, redis, postgres)
 # 2. Remove volumes (postgres_data, redis_data)
 # 3. Remove networks (app_network)
-# 4. Remove .clockwork directory (use --keep-files to preserve)
 ```
 
 ## Commands
@@ -233,11 +232,8 @@ clockwork apply
 # Run assertions (validates all services)
 clockwork assert
 
-# Destroy resources (removes .clockwork directory by default)
+# Destroy resources
 clockwork destroy
-
-# Destroy resources but keep .clockwork directory for inspection
-clockwork destroy --keep-files
 ```
 
 ## Troubleshooting

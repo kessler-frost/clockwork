@@ -7,7 +7,7 @@
 ```bash
 uv run clockwork --help          # CLI help
 uv run pytest tests/             # Run tests
-cd examples/file-generation && uv run clockwork apply  # Run example
+cd examples/showcase && uv run clockwork apply  # Run example
 ```
 
 **Platform**: macOS, Linux, Windows (local or SSH remote)
@@ -70,7 +70,7 @@ filesystem_mcp = MCPServerStdio('npx', args=['-y', '@modelcontextprotocol/server
 FileResource(description="Code analysis", toolsets=[filesystem_mcp])
 ```
 
-See `examples/tool-integration/`
+See `examples/showcase/` for tool integration examples
 
 ## Resource Connections
 
@@ -122,7 +122,7 @@ CW_BASE_URL=https://openrouter.ai/api/v1
 ```text
 clockwork/
 ├── clockwork/          # Core (resources, completer, compiler, cli, settings)
-├── examples/          # file-generation, docker-service, tool-integration, connected-services, etc.
+├── examples/          # showcase (all features), connected-services (real-world)
 ├── tests/
 └── pyproject.toml
 ```
@@ -156,6 +156,5 @@ uv run pytest tests/test_resources.py -v  # Specific file
 ## Cleanup
 
 ```bash
-clockwork destroy  # Removes .clockwork/ by default
-clockwork destroy --keep-files  # Keep .clockwork/
+clockwork destroy  # Removes all deployed resources
 ```
