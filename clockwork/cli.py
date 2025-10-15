@@ -9,6 +9,7 @@ import shutil
 import signal
 import subprocess
 import time
+import urllib.parse
 from pathlib import Path
 
 import httpx
@@ -99,7 +100,7 @@ def _register_project_with_service(main_file: Path) -> bool:
             json={"main_file": str(main_file.absolute())},
             timeout=5.0
         )
-        return response.status_code == 200
+        return response.status_code == 201
     except Exception:
         return False
 
@@ -115,13 +116,13 @@ def _unregister_project_from_service(main_file: Path) -> bool:
     """
     settings = get_settings()
     try:
-        # Use main_file path as project_id (will be URL encoded)
-        project_id = str(main_file.absolute())
+        # URL-encode the main_file path for use as project_id
+        project_id = urllib.parse.quote(str(main_file.absolute()), safe='')
         response = httpx.delete(
             f"http://localhost:{settings.service_port}/projects/{project_id}",
             timeout=5.0
         )
-        return response.status_code == 200
+        return response.status_code == 204
     except Exception:
         return False
 
@@ -511,6 +512,7 @@ def service_start():
                 '--host', '0.0.0.0',
                 '--port', str(settings.service_port),
                 '--log-level', 'warning',  # Only show warnings/errors from uvicorn
+                '--reload',  # Enable auto-reload when code changes
             ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,  # Keep stderr to see uvicorn errors
@@ -569,6 +571,85 @@ def service_stop():
         raise typer.Exit(code=1)
     except Exception as e:
         console.print(f"[red]✗ Failed to stop service: {e}[/red]")
+        raise typer.Exit(code=1)
+
+
+@service_app.command("restart")
+def service_restart():
+    """Restart Clockwork monitoring service."""
+    settings = get_settings()
+
+    # Check if service is running
+    is_running = check_service_running()
+
+    if is_running:
+        # Stop the service
+        pid = _read_service_pid()
+
+        if pid is not None:
+            try:
+                os.kill(pid, signal.SIGTERM)
+                console.print(f"[dim]Stopping service (PID: {pid})[/dim]")
+
+                # Clean up PID file
+                pid_file = _get_service_pid_file()
+                if pid_file.exists():
+                    pid_file.unlink()
+
+                # Wait for service to stop
+                time.sleep(2)
+
+            except ProcessLookupError:
+                console.print("[yellow]Process not found (already stopped?)[/yellow]")
+                pid_file = _get_service_pid_file()
+                if pid_file.exists():
+                    pid_file.unlink()
+            except PermissionError:
+                console.print(f"[red]✗ Permission denied (PID: {pid})[/red]")
+                raise typer.Exit(code=1)
+            except Exception as e:
+                console.print(f"[red]✗ Failed to stop service: {e}[/red]")
+                raise typer.Exit(code=1)
+    else:
+        console.print("[dim]Service not running, starting...[/dim]")
+
+    # Start the service
+    pid_file = _get_service_pid_file()
+    pid_file.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        process = subprocess.Popen(
+            [
+                'uvicorn',
+                'clockwork.service.app:app',
+                '--host', '0.0.0.0',
+                '--port', str(settings.service_port),
+                '--log-level', 'warning',
+                '--reload',
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
+
+        # Save PID
+        pid_file.write_text(str(process.pid))
+
+        # Wait and verify service started
+        time.sleep(2)
+        if check_service_running():
+            console.print(f"[green]✓ Service restarted on port {settings.service_port}[/green]")
+            console.print(f"[dim]PID: {process.pid}[/dim]")
+        else:
+            console.print("[red]✗ Service failed to start[/red]")
+            console.print("[dim]Check that clockwork.service.app module exists[/dim]")
+            raise typer.Exit(code=1)
+
+    except FileNotFoundError:
+        console.print("[red]✗ uvicorn not found[/red]")
+        console.print("[dim]Install with: uv pip install uvicorn[/dim]")
+        raise typer.Exit(code=1)
+    except Exception as e:
+        console.print(f"[red]✗ Failed to start service: {e}[/red]")
         raise typer.Exit(code=1)
 
 

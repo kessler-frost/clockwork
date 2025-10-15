@@ -101,6 +101,22 @@ class ProjectManager:
         async with self._lock:
             return self._projects.get(project_id)
 
+    async def get_project_by_main_file(self, main_file: Path) -> Optional[ProjectState]:
+        """Get project state by main file path.
+
+        Args:
+            main_file: Path to the project's main.py file
+
+        Returns:
+            ProjectState if found, None otherwise
+        """
+        async with self._lock:
+            # Search for project with matching main_file
+            for project in self._projects.values():
+                if project.main_file.resolve() == main_file.resolve():
+                    return project
+            return None
+
     async def list_projects(self) -> List[ProjectState]:
         """List all registered projects.
 

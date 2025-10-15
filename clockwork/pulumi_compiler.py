@@ -6,6 +6,7 @@ programmatically, providing methods for deployment, preview, and destruction.
 """
 
 import logging
+import os
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -35,6 +36,12 @@ class PulumiCompiler:
 
         # Create state directory
         self.state_dir.mkdir(parents=True, exist_ok=True)
+
+        # Set Pulumi passphrase from settings if not already set in environment
+        if "PULUMI_CONFIG_PASSPHRASE" not in os.environ:
+            os.environ["PULUMI_CONFIG_PASSPHRASE"] = settings.pulumi_config_passphrase
+            logger.debug("Set PULUMI_CONFIG_PASSPHRASE from settings")
+
         logger.info(
             f"Initialized Pulumi compiler with state dir: {self.state_dir}"
         )

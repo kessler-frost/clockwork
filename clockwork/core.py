@@ -355,17 +355,23 @@ class ClockworkCore:
                 assertion_desc = assertion.description or assertion.__class__.__name__
 
                 try:
-                    # TODO: Implement assertion.check() method for direct validation
-                    # For now, this is a placeholder implementation
                     logger.info(f"  Checking: {assertion_desc}")
 
-                    # Placeholder - assertions will be properly implemented in Agent 10
-                    # Real implementation will call assertion.check(resource) -> bool
-                    results["passed"].append({
-                        "resource": resource_name,
-                        "assertion": assertion_desc
-                    })
-                    logger.info(f"  ✓ Passed: {assertion_desc}")
+                    passed = await assertion.check(resource)
+
+                    if passed:
+                        results["passed"].append({
+                            "resource": resource_name,
+                            "assertion": assertion_desc
+                        })
+                        logger.info(f"  ✓ Passed: {assertion_desc}")
+                    else:
+                        results["failed"].append({
+                            "resource": resource_name,
+                            "assertion": assertion_desc,
+                            "error": "Assertion check returned False"
+                        })
+                        logger.error(f"  ✗ Failed: {assertion_desc}")
 
                 except Exception as e:
                     results["failed"].append({

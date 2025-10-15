@@ -1,5 +1,7 @@
 """HTTP-based assertions for web services and APIs."""
 
+import httpx
+import socket
 from typing import Any, Literal
 from .base import BaseAssertion
 
@@ -27,6 +29,22 @@ class HealthcheckAssert(BaseAssertion):
     expected_status: int = 200
     timeout_seconds: int = 5
 
+    async def check(self, resource: "Resource") -> bool:
+        """Check if the HTTP endpoint returns expected status code.
+
+        Args:
+            resource: The resource to validate
+
+        Returns:
+            True if endpoint returns expected status, False otherwise
+        """
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(self.url, timeout=self.timeout_seconds)
+                return response.status_code == self.expected_status
+        except Exception:
+            return False
+
 
 class PortAccessibleAssert(BaseAssertion):
     """Assert that a network port is accessible and listening.
@@ -53,25 +71,29 @@ class PortAccessibleAssert(BaseAssertion):
     protocol: Literal["tcp", "udp"] = "tcp"
     timeout_seconds: int = 5
 
+    async def check(self, resource: "Resource") -> bool:
+        """Check if the port is accessible.
 
-class ResponseTimeAssert(BaseAssertion):
-    """Assert that an HTTP endpoint responds within a time limit.
+        Args:
+            resource: The resource to validate
 
-    Measures the total time for an HTTP request and validates it completes
-    within the specified maximum time in milliseconds.
-
-    Attributes:
-        url: Full URL to check (e.g., "http://localhost:8080/api")
-        max_ms: Maximum response time in milliseconds
-        timeout_seconds: Maximum time to wait before giving up (default: 30)
-
-    Example:
-        >>> ResponseTimeAssert(
-        ...     url="http://localhost:8080/api/users",
-        ...     max_ms=500
-        ... )
-    """
-
-    url: str
-    max_ms: int
-    timeout_seconds: int = 30
+        Returns:
+            True if port is accessible, False otherwise
+        """
+        try:
+            if self.protocol == "tcp":
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(self.timeout_seconds)
+                result = sock.connect_ex((self.host, self.port))
+                sock.close()
+                return result == 0
+            else:
+                # UDP check
+                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                sock.settimeout(self.timeout_seconds)
+                sock.sendto(b"", (self.host, self.port))
+                sock.recvfrom(1024)
+                sock.close()
+                return True
+        except Exception:
+            return False

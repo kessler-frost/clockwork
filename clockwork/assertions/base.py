@@ -21,3 +21,14 @@ class BaseAssertion(BaseModel):
 
     description: Optional[str] = None
     timeout_seconds: int = 30
+
+    async def check(self, resource: "Resource") -> bool:
+        """Check if this assertion passes for the given resource.
+
+        Args:
+            resource: The resource to validate
+
+        Returns:
+            True if assertion passes, False otherwise
+        """
+        raise NotImplementedError("Subclasses must implement check()")

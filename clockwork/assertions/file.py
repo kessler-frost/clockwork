@@ -1,5 +1,7 @@
 """File system assertions for validating file properties."""
 
+import hashlib
+import re
 from typing import Any, Optional
 from pathlib import Path
 from .base import BaseAssertion
@@ -41,60 +43,20 @@ class FileExistsAssert(BaseAssertion):
     path: str
     timeout_seconds: int = 5
 
+    async def check(self, resource) -> bool:
+        """Check if the file or directory exists.
 
-class FilePermissionsAssert(BaseAssertion):
-    """Assert that a file has specific permissions and ownership.
+        Args:
+            resource: The resource to validate
 
-    Validates file mode (permissions), owner, and/or group. All specified
-    attributes must match for the assertion to pass.
-
-    Attributes:
-        path: Path to the file to check
-        mode: Expected file mode in octal (e.g., "644", "755")
-        owner: Expected owner username (optional)
-        group: Expected group name (optional)
-        timeout_seconds: Maximum time to wait (default: 5)
-
-    Example:
-        >>> FilePermissionsAssert(
-        ...     path="/etc/app/config.json",
-        ...     mode="644",
-        ...     owner="root",
-        ...     group="root"
-        ... )
-    """
-
-    path: str
-    mode: str
-    owner: Optional[str] = None
-    group: Optional[str] = None
-    timeout_seconds: int = 5
-
-
-class FileSizeAssert(BaseAssertion):
-    """Assert that a file size is within specified bounds.
-
-    Validates that a file's size falls within minimum and/or maximum limits.
-    At least one of min_bytes or max_bytes must be specified.
-
-    Attributes:
-        path: Path to the file to check
-        min_bytes: Minimum file size in bytes (optional)
-        max_bytes: Maximum file size in bytes (optional)
-        timeout_seconds: Maximum time to wait (default: 5)
-
-    Example:
-        >>> FileSizeAssert(
-        ...     path="/var/log/app.log",
-        ...     min_bytes=100,
-        ...     max_bytes=1048576  # 1 MB
-        ... )
-    """
-
-    path: str
-    min_bytes: Optional[int] = None
-    max_bytes: Optional[int] = None
-    timeout_seconds: int = 5
+        Returns:
+            True if file/directory exists, False otherwise
+        """
+        try:
+            resolved_path = _resolve_path_for_assertion(self.path)
+            return Path(resolved_path).exists()
+        except Exception:
+            return False
 
 
 class FileContentMatchesAssert(BaseAssertion):
@@ -127,3 +89,29 @@ class FileContentMatchesAssert(BaseAssertion):
     pattern: Optional[str] = None
     sha256: Optional[str] = None
     timeout_seconds: int = 10
+
+    async def check(self, resource) -> bool:
+        """Check if file content matches pattern or checksum.
+
+        Args:
+            resource: The resource to validate
+
+        Returns:
+            True if content matches, False otherwise
+        """
+        try:
+            resolved_path = _resolve_path_for_assertion(self.path)
+            path = Path(resolved_path)
+
+            if self.pattern is not None:
+                content = path.read_text()
+                return re.search(self.pattern, content) is not None
+
+            if self.sha256 is not None:
+                content = path.read_bytes()
+                file_hash = hashlib.sha256(content).hexdigest()
+                return file_hash.lower() == self.sha256.lower()
+
+            return False
+        except Exception:
+            return False

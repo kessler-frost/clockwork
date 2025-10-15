@@ -4,19 +4,15 @@ This module provides type-safe assertions for validating that deployed
 resources match their desired state.
 
 Assertion Categories:
-    - HTTP: Web service health checks, port accessibility, response times
-    - Container: Container status, health, and logs
-    - File: File existence, permissions, size, content validation
-    - Resource: Memory, CPU, and disk usage monitoring
-    - Process: Process running/not running validation
+    - HTTP: Web service health checks, port accessibility
+    - Container: Container status
+    - File: File existence, content validation
 
 Example:
     >>> from clockwork.assertions import (
     ...     HealthcheckAssert,
     ...     ContainerRunningAssert,
     ...     FileExistsAssert,
-    ...     MemoryUsageAssert,
-    ...     ProcessRunningAssert,
     ... )
     >>> from clockwork.resources import AppleContainerResource
     >>>
@@ -28,7 +24,6 @@ Example:
     ...     assertions=[
     ...         ContainerRunningAssert(),
     ...         HealthcheckAssert(url="http://localhost:8080", expected_status=200),
-    ...         MemoryUsageAssert(max_mb=512, container_name="nginx"),
     ...     ]
     ... )
 """
@@ -40,35 +35,17 @@ from .base import BaseAssertion
 from .http import (
     HealthcheckAssert,
     PortAccessibleAssert,
-    ResponseTimeAssert,
 )
 
 # Container assertions
 from .container import (
     ContainerRunningAssert,
-    ContainerHealthyAssert,
-    LogContainsAssert,
 )
 
 # File assertions
 from .file import (
     FileExistsAssert,
-    FilePermissionsAssert,
-    FileSizeAssert,
     FileContentMatchesAssert,
-)
-
-# Resource usage assertions
-from .resource import (
-    MemoryUsageAssert,
-    CpuUsageAssert,
-    DiskUsageAssert,
-)
-
-# Process assertions
-from .process import (
-    ProcessRunningAssert,
-    ProcessNotRunningAssert,
 )
 
 __all__ = [
@@ -77,21 +54,9 @@ __all__ = [
     # HTTP
     "HealthcheckAssert",
     "PortAccessibleAssert",
-    "ResponseTimeAssert",
     # Container
     "ContainerRunningAssert",
-    "ContainerHealthyAssert",
-    "LogContainsAssert",
     # File
     "FileExistsAssert",
-    "FilePermissionsAssert",
-    "FileSizeAssert",
     "FileContentMatchesAssert",
-    # Resource
-    "MemoryUsageAssert",
-    "CpuUsageAssert",
-    "DiskUsageAssert",
-    # Process
-    "ProcessRunningAssert",
-    "ProcessNotRunningAssert",
 ]

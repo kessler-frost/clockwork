@@ -10,6 +10,7 @@ This module provides automatic remediation for failed resource deployments by:
 """
 
 import logging
+import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 

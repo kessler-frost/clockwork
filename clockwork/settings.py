@@ -28,7 +28,7 @@ class ClockworkSettings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
-        env_prefix="CW_"  # All Clockwork env vars must start with CW_
+        env_prefix="CW_",  # All Clockwork env vars must start with CW_
     )
 
     # AI Configuration (OpenAI-compatible API)
@@ -51,6 +51,12 @@ class ClockworkSettings(BaseSettings):
     pulumi_state_dir: Path = Field(
         default=Path(".clockwork/state"),
         description="Directory for Pulumi state files (env: CW_PULUMI_STATE_DIR)"
+    )
+
+    pulumi_config_passphrase: str = Field(
+        default="clockwork",
+        description="Pulumi passphrase for state encryption (env: CW_PULUMI_CONFIG_PASSPHRASE or PULUMI_CONFIG_PASSPHRASE)",
+        validation_alias="PULUMI_CONFIG_PASSPHRASE"  # Also accept standard Pulumi env var
     )
 
     # Logging Configuration

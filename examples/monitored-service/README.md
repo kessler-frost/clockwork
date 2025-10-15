@@ -76,9 +76,9 @@ clockwork service status
 # Registered projects: 1
 ```
 
-### 4. Test Auto-Remediation
+### 4. Test Auto-Remediation (Step-by-Step Guide)
 
-Simulate a failure to see auto-remediation in action:
+This section provides a detailed walkthrough to test the auto-remediation feature:
 
 ```bash
 # Stop a container manually

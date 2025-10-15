@@ -39,7 +39,6 @@ postgres = DockerResource(
         "POSTGRES_USER": "admin",
         "POSTGRES_PASSWORD": "secret123"
     },
-    volumes=["postgres_data:/var/lib/postgresql/data"],
     assertions=[
         ContainerRunningAssert(timeout_seconds=10),
         PortAccessibleAssert(port=5432, host="localhost", protocol="tcp"),
@@ -51,7 +50,6 @@ redis = DockerResource(
     name="redis-cache",
     image="redis:7-alpine",
     ports=["6379:6379"],
-    volumes=["redis_data:/data"],
     assertions=[
         ContainerRunningAssert(timeout_seconds=10),
         PortAccessibleAssert(port=6379, host="localhost", protocol="tcp"),

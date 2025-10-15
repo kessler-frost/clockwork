@@ -261,19 +261,38 @@ def create_app() -> FastAPI:
 
         return {"project_id": project_id}
 
-    @app.delete("/projects/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
+    @app.delete("/projects/{project_id:path}", status_code=status.HTTP_204_NO_CONTENT)
     async def unregister_project(project_id: str):
         """
         Unregister a project from monitoring.
 
         Args:
-            project_id: Unique project identifier
+            project_id: Unique project identifier (UUID) or main_file path
 
         Raises:
             HTTPException: If project not found
         """
         manager = app.state.manager
+        logger.info(f"Unregister request for project_id: {project_id}")
+
+        # Try unregistering by UUID first
         success = await manager.unregister_project(project_id)
+
+        # If not found, try looking up by main_file path
+        if not success:
+            try:
+                main_file = Path(project_id)
+                logger.info(f"Trying to find project by main_file: {main_file}")
+                project = await manager.get_project_by_main_file(main_file)
+                if project:
+                    logger.info(f"Found project {project.project_id}, unregistering...")
+                    success = await manager.unregister_project(project.project_id)
+                else:
+                    logger.warning(f"No project found with main_file: {main_file}")
+            except Exception as e:
+                # Invalid path or other error, keep success as False
+                logger.error(f"Error during path lookup: {e}")
+                pass
 
         if not success:
             raise HTTPException(
@@ -281,6 +300,7 @@ def create_app() -> FastAPI:
                 detail=f"Project not found: {project_id}"
             )
 
+        logger.info(f"Successfully unregistered project: {project_id}")
         return JSONResponse(status_code=status.HTTP_204_NO_CONTENT, content=None)
 
     @app.get("/projects")

@@ -1,5 +1,6 @@
 """Container-specific assertions for both Docker and Apple Containers."""
 
+import subprocess
 from typing import Any, Optional
 from .base import BaseAssertion
 from .utils import resolve_container_name, escape_shell_pattern
@@ -22,46 +23,33 @@ class ContainerRunningAssert(BaseAssertion):
     container_name: Optional[str] = None
     timeout_seconds: int = 5
 
+    async def check(self, resource: "Resource") -> bool:
+        """Check if the container is running.
 
-class ContainerHealthyAssert(BaseAssertion):
-    """Assert that a container reports healthy status.
+        Args:
+            resource: The resource to validate
 
-    Checks the container's health check status. The container must have
-    a HEALTHCHECK defined in its container image or configuration.
+        Returns:
+            True if container is running, False otherwise
+        """
+        try:
+            container_name = resolve_container_name(self, resource)
 
-    Attributes:
-        container_name: Optional override for container name (defaults to resource.name)
-        timeout_seconds: Maximum time to wait for healthy state (default: 30)
+            # Determine if this is Docker or Apple Container based on resource type
+            resource_type = resource.__class__.__name__
 
-    Example:
-        >>> ContainerHealthyAssert()  # Uses resource name
-        >>> ContainerHealthyAssert(container_name="postgres", timeout_seconds=60)
-    """
+            if resource_type == "AppleContainerResource":
+                cmd = ["container", "ps", "--filter", f"name={container_name}", "--format", "{{.Status}}"]
+            else:
+                # Default to Docker for DockerResource and others
+                cmd = ["docker", "ps", "-a", "--filter", f"name={container_name}", "--format", "{{.Status}}"]
 
-    container_name: Optional[str] = None
-    timeout_seconds: int = 30
-
-
-class LogContainsAssert(BaseAssertion):
-    """Assert that container logs contain a specific pattern.
-
-    Searches the container's recent logs for a regex pattern. Useful for
-    verifying successful startup messages or specific events.
-
-    Attributes:
-        pattern: Regular expression pattern to search for in logs
-        lines: Number of log lines to check from the end (default: 100)
-        container_name: Optional override for container name (defaults to resource.name)
-        timeout_seconds: Maximum time to wait (default: 10)
-
-    Example:
-        >>> LogContainsAssert(
-        ...     pattern="Server started on port 8080",
-        ...     lines=50
-        ... )
-    """
-
-    pattern: str
-    lines: int = 100
-    container_name: Optional[str] = None
-    timeout_seconds: int = 10
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=self.timeout_seconds
+            )
+            return "up" in result.stdout.lower()
+        except Exception:
+            return False

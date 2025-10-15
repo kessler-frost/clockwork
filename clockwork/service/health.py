@@ -155,8 +155,12 @@ class HealthChecker:
         """
         try:
             # Pulumi state structure: state['deployment']['resources']
-            deployment = state.get('deployment', {})
-            resources = deployment.get('resources', [])
+            # Note: deployment might be a dict or an object with attributes
+            deployment = state.get('deployment') if isinstance(state, dict) else getattr(state, 'deployment', None)
+            if deployment is None:
+                return None
+
+            resources = deployment.get('resources', []) if isinstance(deployment, dict) else getattr(deployment, 'resources', [])
 
             # Search for resource by URN or name
             for res in resources:
@@ -181,11 +185,10 @@ class HealthChecker:
         project_state: "ProjectState",
         resource: Resource
     ) -> bool:
-        """Check health of a single resource using Pulumi Automation API.
+        """Check health of a single resource using assertions.
 
-        Uses Pulumi Automation API to query stack state and check if the
-        resource exists and is in a healthy state. Falls back to running
-        assertions if defined on the resource.
+        Runs the resource's defined assertions by loading and checking all resources
+        from the project's main file, then extracting results for this specific resource.
 
         Args:
             project_state: Project state containing resource context
@@ -198,74 +201,38 @@ class HealthChecker:
             resource_name = resource.name or resource.__class__.__name__
             logger.debug(f"Checking health for resource: {resource_name}")
 
-            # Import Pulumi Automation API
-            from pulumi import automation as auto
+            # If resource has no assertions, assume healthy
+            if not hasattr(resource, 'assertions') or not resource.assertions:
+                logger.debug(f"No assertions defined for {resource_name}, assuming healthy")
+                return True
 
-            # Get stack to query state
-            settings = get_settings()
-            project_name = "clockwork"
-            stack_name = "dev"
-
+            # Run assertions for ALL resources in the project via main_file
+            # (This is the only way to properly execute assertions in the current architecture)
             try:
-                # Create empty program for state query
-                def empty_program():
-                    pass
+                from clockwork.core import ClockworkCore
+                core = ClockworkCore()
+                assertion_results = await core.assert_resources(project_state.main_file)
 
-                # Select existing stack
-                stack = auto.select_stack(
-                    stack_name=stack_name,
-                    project_name=project_name,
-                    program=empty_program,
-                )
+                # Extract result for this specific resource from the full results
+                # Check if any assertions for this resource failed
+                if not assertion_results.get('success', False):
+                    details = assertion_results.get('details', {})
+                    failed = details.get('failed', [])
 
-                # Export stack state
-                state = stack.export_stack()
+                    # Check if any failures are for our resource
+                    for failure in failed:
+                        if failure.get('resource') == resource_name:
+                            logger.debug(f"Health check result for {resource_name}: unhealthy (assertion failed)")
+                            return False
 
-                # Find resource in state
-                resource_state = self._find_resource_in_state(state, resource_name)
-
-                if not resource_state:
-                    logger.warning(
-                        f"Resource {resource_name} not found in Pulumi state. "
-                        "May not have been deployed yet."
-                    )
-                    return False
-
-                # Check if resource is in a healthy state (not pending delete, etc.)
-                is_healthy = True
-                logger.debug(f"Found resource {resource_name} in Pulumi state")
+                # If we get here, either all assertions passed or this resource had no failures
+                logger.debug(f"Health check result for {resource_name}: healthy")
+                return True
 
             except Exception as e:
-                logger.warning(
-                    f"Failed to query Pulumi state for {resource_name}: {e}. "
-                    "Falling back to assertions if available."
-                )
-                is_healthy = False
-
-            # If resource has assertions, run them as additional validation
-            if hasattr(resource, 'assertions') and resource.assertions:
-                logger.debug(f"Running assertions for {resource_name}")
-                try:
-                    # Import assertion runner
-                    from clockwork.core import ClockworkCore
-                    core = ClockworkCore()
-                    assertion_results = await core.assert_resources([resource])
-
-                    # Check if all assertions passed
-                    if not assertion_results.get('success', False):
-                        logger.debug(f"Assertions failed for {resource_name}")
-                        is_healthy = False
-                except Exception as e:
-                    logger.warning(f"Failed to run assertions for {resource_name}: {e}")
-                    # Don't fail health check if assertions can't run
-                    pass
-
-            logger.debug(
-                f"Health check result for {resource_name}: "
-                f"{'healthy' if is_healthy else 'unhealthy'}"
-            )
-
-            return is_healthy
+                logger.warning(f"Failed to run assertions for {resource_name}: {e}")
+                # If assertions can't run, assume unhealthy
+                return False
 
         except Exception as e:
             logger.error(f"Health check failed for resource {resource_name}: {e}", exc_info=True)

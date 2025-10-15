@@ -31,7 +31,6 @@ redis = DockerResource(
     name="redis-monitored",
     image="redis:7-alpine",
     ports=["6380:6379"],  # Using 6380 on host to avoid conflicts
-    volumes=["redis_monitored_data:/data"],
     assertions=[
         ContainerRunningAssert(timeout_seconds=10),
         PortAccessibleAssert(port=6380, host="localhost", protocol="tcp"),

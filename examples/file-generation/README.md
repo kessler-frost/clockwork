@@ -1,43 +1,46 @@
 # File Generation Example
 
-This example demonstrates Clockwork's intelligent file orchestration with AI-powered content generation.
+Basic file creation example demonstrating Clockwork's simplest use case.
 
-## What it does
+## What It Does
 
-Creates three files in `scratch/`:
+Creates a README file in a `scratch/` directory with user-provided content and validates it exists with the correct content.
 
-1. **game_of_life.md** - AI-generated article about Conway's Game of Life
-2. **clockwork_poem.txt** - AI-generated poem about infrastructure automation
-3. **README.md** - User-provided content (no AI generation)
-
-## Run the example
+## Quick Start
 
 ```bash
-# Navigate to example directory
 cd examples/file-generation
-
-# Deploy
-clockwork apply
-
-# Check the results
-ls -la scratch/
-cat scratch/game_of_life.md
-
-# Clean up
-clockwork destroy
+clockwork apply     # Deploy
+clockwork assert    # Validate (2 assertions)
+clockwork destroy   # Clean up
 ```
 
-## How it works
+## What You'll Learn
 
-1. **Load**: Clockwork loads resources from `main.py` in current directory
-2. **Generate**: AI generates content for resources with `content=None`
-3. **Compile**: Resources compile to Pulumi resources (custom dynamic providers)
-4. **Deploy**: Pulumi executes the deployment via Automation API
-5. **`.clockwork/`** directory created in current directory
+- Creating files with specified content
+- Setting file permissions (mode: 644)
+- Using assertions to validate file existence and content
 
-## Customization
+## Resources Created
 
-- Modify descriptions to generate different content
-- Add more FileResource instances
-- Change `directory` to deploy files elsewhere
-- Add custom assertions for file validation
+- **FileResource**: `scratch/README.md` with Clockwork documentation
+
+## Expected Output
+
+After `clockwork apply`:
+```bash
+ls scratch/
+# README.md
+
+cat scratch/README.md
+# Shows Clockwork documentation
+```
+
+## Assertions
+
+1. `FileExistsAssert` - Verifies file was created
+2. `FileContentMatchesAssert` - Checks file contains "Clockwork"
+
+---
+
+**Duration**: ~10s | **AI Used**: No | **Difficulty**: 🟢 Beginner
