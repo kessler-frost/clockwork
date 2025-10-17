@@ -1,11 +1,11 @@
 """
-Connected Services Example - Full-stack application with resource connections.
+Connected Services Example - Full-stack application with primitive connections.
 
-This example demonstrates Clockwork's resource connection system, which enables:
+This example demonstrates Clockwork's primitive connection system, which enables:
 1. Dependency-aware deployment order
-2. AI-powered configuration with context from connected resources
+2. AI-powered configuration with context from connected primitives
 3. Automatic environment variable generation for service communication
-4. Network-aware container orchestration
+4. Network-aware container deployment
 
 Architecture:
 - PostgreSQL database (independent)

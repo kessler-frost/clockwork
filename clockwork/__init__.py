@@ -1,15 +1,15 @@
 """
-Clockwork - Intelligent Infrastructure Orchestration in Python.
+Clockwork - Intelligent, Composable Primitives for Infrastructure.
 
-Define infrastructure in Python using Pydantic models. Clockwork orchestrates
-deployment using AI-powered intelligence and Pulumi automation.
+Build infrastructure using composable primitives in Python. Clockwork provides
+atomic building blocks (containers, files, services) with adjustable AI assistance.
 
-Orchestration pipeline:
-1. AI generates artifacts and configurations (via PydanticAI)
-2. Compiles to Pulumi resources
-3. Automates deployment with state management
+You choose how much AI handles per primitive:
+- Specify everything → Full control, zero AI
+- Specify key details → AI fills gaps
+- Describe requirements → AI handles implementation
 
-Pure Python infrastructure with intelligent AI assistance.
+Pure Python primitives with flexible, intelligent completion and Pulumi deployment.
 """
 
 from .core import ClockworkCore

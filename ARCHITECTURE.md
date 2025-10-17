@@ -2,13 +2,15 @@
 
 ## Overview
 
-Clockwork provides **intelligent infrastructure orchestration in Python** that combines:
+Clockwork provides **intelligent, composable primitives for infrastructure** that combine:
 
-- **Pydantic models** for declarative resource definition
-- **AI-powered resource completion** via PydanticAI (OpenAI-compatible APIs)
+- **Pydantic models** for declarative primitive definition
+- **AI-powered completion** via PydanticAI (OpenAI-compatible APIs)
 - **Pulumi** for automated deployment
 
-The approach: Define infrastructure (Python) → AI completes resources → Automated deployment (Pulumi)
+Primitives are atomic building blocks - containers, files, services - that you compose freely. Each primitive can be fully specified, partially specified, or AI-completed based on your preference.
+
+The approach: Compose primitives (Python) → AI completes what you left unspecified → Automated deployment (Pulumi)
 
 ## Architecture Diagram
 
@@ -318,27 +320,58 @@ The assert pipeline validates deployed resources:
 
 ## Design Principles
 
-### 1. Python-First Orchestration
+### 1. Composable Primitives
 
-- No custom DSL or YAML, pure Python for infrastructure definition
-- Pydantic for type safety and validation
-- Full IDE support and autocompletion
+- Primitives are atomic building blocks that compose freely
+- No rigid constraints on how primitives combine
+- Mix and match to build what you need
+- Pure Python - no custom DSL or YAML
 
-### 2. Intelligent Completion
+### 2. Adjustable Intelligence
 
-- **AI Stage**: Fills in missing fields intelligently using structured outputs
-- **Compilation Stage**: Object-based transformation to Pulumi resources
+- **Full Control**: Specify everything → AI does nothing
+- **Hybrid**: Specify key details → AI fills gaps
+- **Fast Mode**: Describe requirements → AI handles implementation
 - **User Override**: User-provided values always take precedence
+- You choose the level per primitive, per project
 
-### 3. Automated Deployment
+### 3. Functional Determinism Through Validation
+
+Clockwork achieves reliable outcomes without sacrificing AI flexibility:
+
+**Structural Determinism**: Pydantic models enforce output schemas
+```python
+class FileResource(Resource):
+    name: str        # AI must provide a string
+    content: str     # AI must provide a string
+    directory: str   # AI must provide a string
+```
+
+**Behavioral Determinism**: Assertions validate functionality, not implementation
+```python
+web_server = DockerResource(
+    description="web server for static files",
+    assertions=[
+        ContainerRunningAssert(),           # Must be running
+        HealthcheckAssert(url="http://..."), # Must respond HTTP 200
+        ResponseTimeAssert(max_ms=200)      # Must be fast
+    ]
+)
+# AI picks implementation (nginx, caddy, etc.)
+# Assertions verify behavior → functionally deterministic
+```
+
+**User-Controlled Variance**: More specification → less AI variance → higher determinism
+
+### 4. Automated Deployment
 
 - Delegates execution to battle-tested Pulumi
 - Pulumi handles state management and resource lifecycles
-- Focus on intelligent orchestration, not reimplementation
+- Focus on intelligent primitives, not reimplementation
 
-### 4. Simplicity
+### 5. Simplicity
 
-- Linear orchestration pipeline: Load → Complete → Compile → Deploy
+- Linear pipeline: Load → Complete → Compile → Deploy
 - No complex dependency graphs or state management
 - Clear separation of concerns between stages
 

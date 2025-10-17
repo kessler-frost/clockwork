@@ -1,6 +1,6 @@
 # Clockwork Development Guide
 
-**Intelligent Infrastructure Orchestration in Python.**
+**Intelligent, Composable Primitives for Infrastructure.**
 
 ## Setup
 
@@ -16,6 +16,41 @@ cd examples/showcase && uv run clockwork apply  # Run example
 ## Architecture
 
 **Flow**: Declare (Pydantic) → Resolve (dependencies) → Complete (AI) → Compile (Pulumi) → Deploy (Automation API)
+
+## Controlling AI Involvement
+
+Clockwork primitives offer **adjustable intelligence** - you choose how much AI handles per resource:
+
+**Full Control (No AI)**:
+```python
+DockerResource(
+    name="my-nginx",
+    image="nginx:1.25-alpine",
+    ports=["8080:80"],
+    volumes=["/configs:/etc/nginx"]
+)
+# All fields specified → AI skipped
+```
+
+**Hybrid (AI Assists)**:
+```python
+DockerResource(
+    description="web server with caching",
+    ports=["8080:80"]  # You specify port
+    # AI picks image and config
+)
+```
+
+**Fast Mode (AI Handles Implementation)**:
+```python
+DockerResource(
+    description="web server for static files",
+    assertions=[HealthcheckAssert(url="http://localhost:8080")]
+)
+# AI handles everything, assertions verify behavior
+```
+
+Choose per primitive, per project. What you find tedious is personal.
 
 ## Resource Types
 
@@ -35,9 +70,16 @@ TemplateFileResource(
 )
 ```
 
-## Assertions
+## Assertions: Functional Determinism
 
-Type-safe validation (Pydantic-based, no AI costs):
+Clockwork achieves **functional determinism** through validation - assertions verify behavior, not implementation.
+
+**Philosophy**: Same requirements → validated equivalent results
+- AI can choose optimal implementations
+- Outcomes are verified, not assumed
+- Flexibility without unpredictability
+
+**Type-safe validation** (Pydantic-based, no AI costs):
 
 **HTTP/Network**: HealthcheckAssert, PortAccessibleAssert, ResponseTimeAssert
 **Container**: ContainerRunningAssert, ContainerHealthyAssert, LogContainsAssert
@@ -50,6 +92,7 @@ nginx = AppleContainerResource(
     name="nginx", description="Web server", ports=["8080:80"],
     assertions=[ContainerRunningAssert(), HealthcheckAssert(url="http://localhost:8080")]
 )
+# AI might pick nginx OR caddy, but both must pass assertions
 ```
 
 Run: `clockwork assert`

@@ -1,24 +1,63 @@
 # Clockwork
 
-**Intelligent Infrastructure Orchestration in Python.**
+**Intelligent, Composable Primitives for Infrastructure.**
 
-Define infrastructure as pure Python code with AI-powered intelligence and Pulumi deployment.
+Build infrastructure using composable primitives in Python - AI handles the parts you find tedious, you control what matters.
 
 [![Version](https://img.shields.io/badge/version-0.3.0-blue)](./pyproject.toml)
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue)](./pyproject.toml)
 [![Deploy](https://img.shields.io/badge/deploy-Pulumi-blueviolet)](https://pulumi.com)
 
-## Overview
+## Build Infrastructure Your Way
 
-Clockwork orchestrates infrastructure intelligently using **pure Python**. You define what you want using Pydantic models, then Clockwork:
+Clockwork provides intelligent primitives that adapt to how you want to work.
 
-1. **AI completes** missing fields and configurations
-2. **Compiles** to Pulumi resources
-3. **Deploys** your infrastructure
+**The insight:** What's tedious is personal.
+- Some people love writing Docker configs, others just want containers running
+- Some enjoy crafting nginx rules, others prefer describing requirements
+- Some care about specific image versions, others just need something that works
 
-**The approach**: Declarative Python resources → Intelligent AI processing → Automated Pulumi deployment.
+**Your choice:**
+- **Specify everything** → Full control, zero AI
+- **Specify key details** → AI fills gaps
+- **Describe what you need** → AI handles implementation
 
-No custom DSL. No YAML files. Just Python with AI assistance.
+Clockwork gives you flexibility to work how you prefer, on what you prefer.
+
+## How It Works
+
+Same primitive, different levels of control - you choose per resource:
+
+**Full control** (No AI):
+```python
+nginx = DockerResource(
+    name="my-nginx",
+    image="nginx:1.25-alpine",
+    ports=["8080:80"],
+    volumes=["/configs:/etc/nginx"]
+)
+# You specified everything - AI does nothing
+```
+
+**Hybrid** (AI assists):
+```python
+nginx = DockerResource(
+    description="web server with caching enabled",
+    ports=["8080:80"]  # You care about the port
+    # AI picks image, generates config with caching
+)
+```
+
+**Fast** (AI handles implementation):
+```python
+nginx = DockerResource(
+    description="web server for static files",
+    assertions=[HealthcheckAssert(url="http://localhost:8080")]
+)
+# AI handles everything, assertions verify behavior
+```
+
+No custom DSL. No YAML files. Just Python with adjustable AI assistance.
 
 ## Quick Start
 
@@ -229,10 +268,11 @@ uv run clockwork apply --model "openai/gpt-4o-mini"
 ## Why Clockwork?
 
 - **Pure Python**: No custom DSL or YAML, just Pydantic models
-- **Intelligent**: AI-powered content generation and resource configuration
-- **Orchestrated**: Automated pipeline from definition to deployment
+- **Composable**: Mix and match primitives like building blocks
+- **Flexible**: You choose how much AI handles vs how much you specify
+- **Intelligent**: AI-powered completion adapts to your needs
+- **Functionally Deterministic**: Assertions validate behavior, ensuring reliable outcomes
 - **Type-safe**: Full IDE support with Pydantic validation
-- **Verifiable**: Built-in assertion system for deployment validation
 
 ## Examples
 

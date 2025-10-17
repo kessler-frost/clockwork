@@ -41,11 +41,11 @@ readme_manual = FileResource(
     directory="scratch",
     content="""# Clockwork Showcase
 
-This demonstrates Clockwork's infrastructure orchestration capabilities.
+This demonstrates Clockwork's intelligent, composable primitives for infrastructure.
 
 ## Features
-- Declarative Python infrastructure
-- AI-powered resource completion
+- Composable primitives (files, containers, services)
+- Adjustable AI assistance per primitive
 - Pulumi-based deployment
 - Type-safe assertions
 

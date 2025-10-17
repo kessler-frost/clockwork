@@ -1,5 +1,5 @@
 """
-Clockwork Resources - Pydantic models for declarative infrastructure.
+Clockwork Resources - Pydantic models for composable infrastructure primitives.
 """
 
 from .base import Resource

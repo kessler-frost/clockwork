@@ -1,6 +1,6 @@
 # Connected Services Example
 
-Full-stack application demonstrating Clockwork's resource connection system for intelligent dependency management and AI-powered configuration.
+Full-stack application demonstrating Clockwork's primitive connection system for intelligent dependency management and AI-powered configuration.
 
 ## What it demonstrates
 

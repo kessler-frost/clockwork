@@ -1,10 +1,10 @@
 """
-Clockwork Core - Intelligent Infrastructure Orchestration in Python.
+Clockwork Core - Intelligent, Composable Primitives for Infrastructure.
 
-Apply Pipeline: Load resources → Complete resources (AI) → Deploy with Pulumi
+Apply Pipeline: Load primitives → Complete primitives (AI) → Deploy with Pulumi
 Destroy Pipeline: Destroy infrastructure using Pulumi
-Assert Pipeline: Load resources → Complete resources (AI) → Run assertions directly
-Plan Pipeline: Load resources → Complete resources (AI) → Preview with Pulumi
+Assert Pipeline: Load primitives → Complete primitives (AI) → Run assertions directly
+Plan Pipeline: Load primitives → Complete primitives (AI) → Preview with Pulumi
 """
 
 import importlib.util
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 class ClockworkCore:
-    """Main orchestrator for the Clockwork pipeline."""
+    """Main coordinator for the Clockwork pipeline."""
 
     def __init__(
         self,
