@@ -16,7 +16,6 @@ Cleanup: clockwork destroy
 from datetime import datetime
 from clockwork.resources import (
     FileResource,
-    TemplateFileResource,
     GitRepoResource,
     DockerResource,
 )
@@ -72,49 +71,7 @@ config_ai = FileResource(
 
 
 # ==============================================================================
-# SECTION 2: Template Resources
-# ==============================================================================
-
-# Manual template - you provide template and variables
-nginx_config_manual = TemplateFileResource(
-    name="nginx.conf",
-    description="Nginx configuration for web server on port 8080",
-    directory="scratch",
-    template_content="""server {
-    listen {{ port }};
-    server_name {{ server_name }};
-
-    location / {
-        root {{ document_root }};
-        index index.html;
-    }
-}""",
-    variables={
-        "port": 8080,
-        "server_name": "localhost",
-        "document_root": "/var/www/html"
-    },
-    mode="644",
-    assertions=[
-        FileExistsAssert(path="scratch/nginx.conf"),
-        FileContentMatchesAssert(path="scratch/nginx.conf", pattern="8080"),
-    ]
-)
-
-# AI-generated template - AI creates template and variables from description
-redis_config_ai = TemplateFileResource(
-    name="redis.conf",
-    description="Redis configuration file for cache server with 256MB max memory, LRU eviction policy, and persistence enabled",
-    directory="scratch",
-    # AI generates both template_content and variables!
-    assertions=[
-        FileExistsAssert(path="scratch/redis.conf"),
-    ]
-)
-
-
-# ==============================================================================
-# SECTION 3: Git Repository Resources
+# SECTION 2: Git Repository Resources
 # ==============================================================================
 
 # AI finds the repository URL from description
@@ -128,7 +85,7 @@ fastapi_repo = GitRepoResource(
 
 
 # ==============================================================================
-# SECTION 4: Docker Container Resources
+# SECTION 3: Docker Container Resources
 # ==============================================================================
 
 # Docker container with comprehensive assertions
@@ -146,7 +103,7 @@ nginx_container = DockerResource(
 
 
 # ==============================================================================
-# SECTION 5: Tool Integration (Optional)
+# SECTION 4: Tool Integration (Optional)
 # ==============================================================================
 
 # Custom tool - Python function the AI can call

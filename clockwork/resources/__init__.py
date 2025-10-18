@@ -4,7 +4,6 @@ Clockwork Resources - Pydantic models for composable infrastructure primitives.
 
 from .base import Resource
 from .file import FileResource
-from .template_file import TemplateFileResource
 from .apple_container import AppleContainerResource
 from .docker import DockerResource
 from .git import GitRepoResource
@@ -13,9 +12,8 @@ from .git import GitRepoResource
 from clockwork.assertions.base import BaseAssertion  # noqa: F401
 Resource.model_rebuild()
 FileResource.model_rebuild()
-TemplateFileResource.model_rebuild()
 AppleContainerResource.model_rebuild()
 DockerResource.model_rebuild()
 GitRepoResource.model_rebuild()
 
-__all__ = ["Resource", "FileResource", "TemplateFileResource", "AppleContainerResource", "DockerResource", "GitRepoResource"]
+__all__ = ["Resource", "FileResource", "AppleContainerResource", "DockerResource", "GitRepoResource"]
