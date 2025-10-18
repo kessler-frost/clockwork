@@ -1,6 +1,7 @@
 """Apple Container resource for running containers with optional AI-suggested images."""
 
 from typing import Optional, Dict, Any, List
+from pydantic import Field
 from .base import Resource
 import pulumi
 
@@ -39,12 +40,12 @@ class AppleContainerResource(Resource):
     """
 
     description: str
-    name: str | None = None
-    image: str | None = None
-    ports: List[str] | None = None
-    volumes: List[str] = []  # Optional - defaults to empty
-    env_vars: Dict[str, str] = {}  # Optional - defaults to empty
-    networks: List[str] = []  # Optional - defaults to empty
+    name: str | None = Field(None, description="Container name - must be unique", examples=["nginx-server", "postgres-db", "redis-cache"])
+    image: str | None = Field(None, description="Container image with tag - prefer official, well-maintained images", examples=["nginx:alpine", "postgres:15-alpine", "redis:7-alpine"])
+    ports: List[str] | None = Field(None, description="Port mappings in 'host:container' format", examples=[["8080:80"], ["5432:5432", "5433:5432"]])
+    volumes: List[str] = Field(default_factory=list, description="Volume mounts in 'host:container' or 'host:container:ro' format", examples=[["./data:/data"], ["./config:/etc/nginx:ro"]])
+    env_vars: Dict[str, str] = Field(default_factory=dict, description="Environment variables as key-value pairs", examples=[{"DEBUG": "1"}, {"POSTGRES_PASSWORD": "secret", "POSTGRES_DB": "myapp"}])
+    networks: List[str] = Field(default_factory=list, description="Networks to attach container to", examples=[["backend"], ["frontend", "backend"]])
     present: bool = True
     start: bool = True
 

@@ -194,6 +194,7 @@ uv run pytest tests/test_resources.py -v  # Specific file
 **Key**: Imports (stdlib→third-party→local), naming (`snake_case`, `CapWords`), type hints, docstrings (Args/Returns/Raises)
 **Settings**: Use `get_settings()`, never `os.getenv()` or hardcoded values
 **API Docs**: Context7 MCP server first, then WebFetch/WebSearch
+**Python Packages**: ALWAYS use Context7 MCP server to check API reference before making code changes involving Python packages (e.g., PydanticAI, Pulumi, Pydantic). Use `resolve-library-id` then `get-library-docs` to get current API documentation.
 **Pulumi Patterns**: Use native providers (pulumi-docker, pulumi-command) and custom dynamic providers for special cases
 
 ## Cleanup

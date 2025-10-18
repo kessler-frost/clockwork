@@ -3,6 +3,7 @@
 from typing import Optional, Dict, Any
 import pulumi
 import pulumi_command as command
+from pydantic import Field
 from .base import Resource
 
 
@@ -33,10 +34,10 @@ class GitRepoResource(Resource):
     """
 
     description: str
-    name: str | None = None
-    repo_url: str | None = None
-    dest: str | None = None
-    branch: str | None = None
+    name: str | None = Field(None, description="Repository identifier/short name", examples=["fastapi", "django", "flask"])
+    repo_url: str | None = Field(None, description="Git repository URL - prefer official GitHub repos", examples=["https://github.com/tiangolo/fastapi.git", "https://github.com/django/django.git"])
+    dest: str | None = Field(None, description="Destination directory for cloned repository", examples=["./repos/fastapi", "/opt/django", "scratch/repos/flask"])
+    branch: str | None = Field(None, description="Git branch to checkout - usually main or master", examples=["main", "master", "develop"])
     pull: bool = True
     present: bool = True
 

@@ -269,10 +269,10 @@ def plan(
             summary = preview.get("summary", {})
             change_summary = summary.get("change_summary", {})
 
-            console.print(f"\n[bold]Preview Changes:[/bold]")
-            console.print(f"  Create: {change_summary.get('create', 0)}")
-            console.print(f"  Update: {change_summary.get('update', 0)}")
-            console.print(f"  Delete: {change_summary.get('delete', 0)}")
+            console.print(f"\n[bold]Planned Changes (preview only):[/bold]")
+            console.print(f"  Would create: {change_summary.get('create', 0)}")
+            console.print(f"  Would update: {change_summary.get('update', 0)}")
+            console.print(f"  Would delete: {change_summary.get('delete', 0)}")
             console.print(f"  Total steps: {summary.get('steps', 0)}")
         elif preview.get("error"):
             console.print(f"\n[yellow]⚠ Preview error:[/yellow] {preview['error']}")

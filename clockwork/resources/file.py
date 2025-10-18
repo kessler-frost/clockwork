@@ -1,7 +1,7 @@
 """File resource for creating files with optional AI-generated content."""
 
 from typing import Optional, Dict, Any
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from .base import Resource
 
 
@@ -19,12 +19,12 @@ class FileResource(Resource):
         )
     """
 
-    description: str  # what the file should contain (required)
-    name: str | None = None  # filename - AI generates if not provided
-    content: str | None = None  # content - AI generates if not provided
-    directory: str | None = None  # directory - AI picks best location (default: ".")
-    mode: str | None = None  # file permissions - AI picks (default: "644")
-    path: str | None = None  # full path (overrides directory + name if provided)
+    description: str
+    name: str | None = Field(None, description="Filename with extension", examples=["config.yaml", "README.md", "script.sh"])
+    content: str | None = Field(None, description="File content - can be markdown, code, config, or any text")
+    directory: str | None = Field(None, description="Directory path where file will be created", examples=[".", "scratch", "config"])
+    mode: str | None = Field(None, description="Unix file permissions in octal", examples=["644", "755", "600"])
+    path: str | None = Field(None, description="Full file path - overrides directory + name if provided")
 
     @model_validator(mode='after')
     def validate_description(self):

@@ -1,18 +1,14 @@
 """
 Resource Completer - AI-powered resource completion using PydanticAI structured outputs.
 
-This module replaces the artifact generation approach with a direct resource completion
-paradigm. Instead of generating text artifacts, the AI directly completes missing fields
-in Pydantic resource models.
+This module uses schema-native completion where Pydantic Field descriptions define
+the AI's task. No prompts needed - the schema IS the prompt!
 """
 
-import hashlib
-import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, List
 
-from pydantic import BaseModel
-from pydantic_ai import Agent, InlineDefsJsonSchemaTransformer
+from pydantic_ai import Agent, InlineDefsJsonSchemaTransformer, ModelRetry, RunContext
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.profiles.openai import OpenAIModelProfile
@@ -25,28 +21,6 @@ logger = logging.getLogger(__name__)
 
 class ResourceCompleter:
     """Completes partial resources using AI via PydanticAI structured outputs."""
-
-    # Class-level cache for completed resources
-    _completion_cache: Dict[str, Any] = {}
-
-    # System prompt for AI completion
-    SYSTEM_PROMPT = """You are a helpful assistant that completes partial infrastructure resource definitions.
-
-IMPORTANT: You will see a list of missing fields, but you should ONLY complete fields that are actually REQUIRED.
-Many fields are optional and should be left as None/empty unless there is a specific need for them.
-
-Guidelines:
-- REQUIRED fields: Must always be completed (e.g., name, image, content)
-- OPTIONAL fields: Only complete if actually needed for the specific use case
-- Leave optional fields as None/empty if not required (e.g., volumes, env_vars, networks, user, group)
-
-Always prefer:
-- Official, well-maintained images for containers
-- Standard, commonly-used packages for brew resources
-- Well-known official repositories for git resources
-- Minimal configurations that include only what's necessary
-
-Your completions should be production-ready, minimal, and follow best practices."""
 
     def __init__(
         self,
@@ -86,44 +60,6 @@ Your completions should be production-ready, minimal, and follow best practices.
             f"(tool selection: {enable_tool_selection})"
         )
 
-    def _get_cache_key(self, resource: Any) -> str:
-        """
-        Generate a cache key from resource state.
-
-        Creates a hash from:
-        - Resource class name
-        - Description
-        - All non-None field values (excluding tools, assertions, connections)
-
-        Args:
-            resource: Resource object to generate cache key for
-
-        Returns:
-            SHA256 hash string suitable for cache lookup
-        """
-        # Get resource data as dict
-        data = resource.model_dump(exclude_unset=False)
-
-        # Fields to exclude from cache key (may have side effects or user-specific values)
-        excluded_fields = {'assertions', 'connections', 'tools'}
-
-        # Build cache key components
-        cache_data = {
-            'class': resource.__class__.__name__,
-            'fields': {
-                k: v for k, v in data.items()
-                if v is not None and k not in excluded_fields
-            }
-        }
-
-        # Create stable JSON representation (sorted keys for consistency)
-        json_str = json.dumps(cache_data, sort_keys=True)
-
-        # Generate SHA256 hash
-        cache_key = hashlib.sha256(json_str.encode()).hexdigest()
-
-        return cache_key
-
     async def complete(self, resources: List[Any]) -> List[Any]:
         """
         Complete partial resources using AI (async version).
@@ -138,38 +74,11 @@ Your completions should be production-ready, minimal, and follow best practices.
 
         for resource in resources:
             if resource.needs_completion():
-                # Check if resource has tools - skip caching if it does (may have side effects)
-                has_tools = resource.tools is not None and len(resource.tools) > 0
-
-                if has_tools:
-                    logger.debug(f"Skipping cache for {resource.name} (has tools with potential side effects)")
-                    completed = await self._complete_resource(resource)
-                    completed_resources.append(completed)
-                    logger.info(f"Completed resource: {completed.name}")
-                    continue
-
-                # Generate cache key
-                cache_key = self._get_cache_key(resource)
-
-                # Check cache first
-                if cache_key in self._completion_cache:
-                    logger.debug(f"Cache HIT for {resource.name} (key: {cache_key[:16]}...)")
-                    cached_resource = self._completion_cache[cache_key]
-                    completed_resources.append(cached_resource)
-                    logger.info(f"Retrieved resource from cache: {cached_resource.name}")
-                else:
-                    logger.debug(f"Cache MISS for {resource.name} (key: {cache_key[:16]}...)")
-                    logger.info(f"Completing resource: {resource.name}")
-                    completed = await self._complete_resource(resource)
-
-                    # Store in cache
-                    self._completion_cache[cache_key] = completed
-                    logger.debug(f"Cached completed resource: {completed.name}")
-
-                    completed_resources.append(completed)
-                    logger.info(f"Completed resource: {completed.name}")
+                logger.info(f"Completing resource: {resource.name}")
+                completed = await self._complete_resource(resource)
+                completed_resources.append(completed)
+                logger.info(f"Completed resource: {completed.name}")
             else:
-                # Resource is already complete, use as-is
                 logger.info(f"Resource already complete: {resource.name}")
                 completed_resources.append(resource)
 
@@ -178,6 +87,7 @@ Your completions should be production-ready, minimal, and follow best practices.
     async def _complete_resource(self, resource: Any) -> Any:
         """
         Complete a single resource using PydanticAI Agent (async version).
+        Uses schema-native completion - Field descriptions define the contract.
 
         Args:
             resource: Partial Resource object needing completion
@@ -185,26 +95,17 @@ Your completions should be production-ready, minimal, and follow best practices.
         Returns:
             Completed Resource object with all fields filled
         """
-        # Build completion prompt based on resource type
-        prompt = self._build_completion_prompt(resource)
-
         # Get tools: prioritize user-provided tools, then use ToolSelector
         tools = []
         if resource.tools is not None and len(resource.tools) > 0:
-            # User provided explicit tools - use them
             tools = resource.tools
-            logger.debug(f"Using {len(tools)} user-provided tools for {resource.name}")
+            logger.debug(f"Using {len(tools)} user-provided tools")
         elif self.enable_tool_selection and self.tool_selector:
-            # Use ToolSelector to intelligently select tools
             context = resource.description or ""
             tools = self.tool_selector.select_tools_for_resource(resource, context)
-            logger.debug(f"ToolSelector chose {len(tools)} tools for {resource.name}")
-        else:
-            # No tools
-            logger.debug(f"No tools for {resource.name}")
+            logger.debug(f"ToolSelector chose {len(tools)} tools")
 
         # Create OpenAI-compatible model
-        # Works with any OpenAI-compatible API (OpenRouter, LM Studio, Ollama, etc.)
         model = OpenAIChatModel(
             self.model,
             provider=OpenAIProvider(
@@ -217,25 +118,47 @@ Your completions should be production-ready, minimal, and follow best practices.
             )
         )
 
-        # Create PydanticAI Agent with structured output
-        # Using default Tool Output mode for reliable structured data generation
-        # Models that don't support tool calls should be replaced with compatible models
+        # Create PydanticAI Agent with minimal system prompt
+        # Schema provides the detailed contract via Field descriptions
+        settings = get_settings()
         agent = Agent(
             model,
             tools=tools,
-            system_prompt=self.SYSTEM_PROMPT,
+            system_prompt="Complete the infrastructure resource by filling in all required fields based on the description. Use the schema field descriptions and examples as your guide.",
             output_type=resource.__class__,
+            retries=settings.completion_max_retries,
         )
 
-        # Get response from agent
-        result = await agent.run(prompt)
+        # Add output validator to ensure required fields are completed
+        @agent.output_validator
+        async def validate_required_fields(ctx: RunContext, output: Any) -> Any:
+            """Validate that all required fields defined by needs_completion() are filled."""
+            if output.needs_completion():
+                logger.warning(f"AI failed to complete required fields for {output.__class__.__name__}")
+                raise ModelRetry(
+                    f"The resource still has incomplete required fields. "
+                    f"You MUST provide actual non-None values for ALL required fields. "
+                    f"Review the resource definition and fill in any missing required fields. "
+                    f"Do NOT leave required fields as None."
+                )
+            return output
 
-        # Extract completed resource from result
-        completed_resource = result.output
+        # Build user message including description and current state
+        user_data = resource.model_dump(exclude={'tools', 'assertions', 'connections'})
+        provided_fields = {k: v for k, v in user_data.items() if v is not None}
+
+        # Create message showing what's provided and what needs completion
+        if provided_fields:
+            provided_str = "\n".join([f"- {k}: {v}" for k, v in provided_fields.items()])
+            user_message = f"{resource.description}\n\nAlready provided:\n{provided_str}"
+        else:
+            user_message = resource.description
+
+        # Run agent with description and current state
+        result = await agent.run(user_message)
 
         # Merge user-provided values with AI suggestions
-        # User values take precedence over AI suggestions
-        final_resource = self._merge_resources(resource, completed_resource)
+        final_resource = self._merge_resources(resource, result.output)
 
         return final_resource
 
@@ -284,204 +207,3 @@ Your completions should be production-ready, minimal, and follow best practices.
 
         # Create new resource instance with merged data
         return user_resource.__class__(**merged_data)
-
-    def _format_connection_context(self, connections: List[Dict[str, Any]]) -> str:
-        """Format connection context for AI prompt.
-
-        Args:
-            connections: List of connection context dictionaries
-
-        Returns:
-            Formatted string with connection information
-        """
-        if not connections:
-            return ""
-
-        lines = ["Connected Resources:"]
-        for context in connections:
-            type_name = context.get("type", "Unknown")
-            name = context.get("name", "unnamed")
-
-            # Format the connection info
-            conn_info = f"- {name} ({type_name}):"
-            for key, value in context.items():
-                if key not in ["type", "name"]:
-                    conn_info += f"\n  * {key}: {value}"
-
-            lines.append(conn_info)
-
-        return "\n".join(lines)
-
-    def _build_completion_prompt(self, resource: Any) -> str:
-        """Build completion prompt based on resource type and partial values.
-
-        Args:
-            resource: Partial resource object
-
-        Returns:
-            Prompt string for AI completion
-        """
-        resource_type = resource.__class__.__name__
-
-        # Get resource data as dict
-        data = resource.model_dump(exclude_unset=False)
-
-        # Fields that should never be completed by AI (user-provided only)
-        excluded_fields = {'assertions', 'connections', 'tools'}
-
-        # Identify which fields are missing (None) - excluding special fields
-        missing_fields = [k for k, v in data.items() if v is None and k not in excluded_fields]
-        provided_fields = {k: v for k, v in data.items() if v is not None and k not in excluded_fields}
-
-        # Build prompt
-        prompt = f"""You have a partial {resource_type} definition.
-
-Provided fields:
-{self._format_dict(provided_fields)}
-
-Missing fields (but ONLY complete REQUIRED ones):
-{', '.join(missing_fields)}
-
-IMPORTANT: Only complete fields that are actually REQUIRED for this specific use case.
-Leave optional fields as None unless explicitly needed.
-
-"""
-
-        # Add connection context if available
-        if hasattr(resource, 'connections') and resource.connections:
-            connection_context = self._format_connection_context(resource.connections)
-            prompt += f"""
-{connection_context}
-
-Use the connected resources to configure appropriate connection strings, URLs, ports, and environment variables.
-
-"""
-
-        # Add resource-specific completion instructions
-        if resource_type == "FileResource":
-            prompt += self._build_file_completion_instructions(resource)
-        elif resource_type == "TemplateFileResource":
-            prompt += self._build_template_file_completion_instructions(resource)
-        elif resource_type == "AppleContainerResource":
-            prompt += self._build_container_completion_instructions(resource)
-        elif resource_type == "DockerResource":
-            prompt += self._build_docker_completion_instructions(resource)
-        elif resource_type == "GitRepoResource":
-            prompt += self._build_git_completion_instructions(resource)
-        else:
-            # Generic instructions
-            prompt += f"""
-Please complete ONLY the REQUIRED fields based on the description and resource type.
-Leave optional fields as None unless explicitly needed.
-"""
-
-        return prompt
-
-    def _build_file_completion_instructions(self, resource: Any) -> str:
-        """Build completion instructions for FileResource."""
-        return """
-For FileResource, please complete:
-- name: appropriate filename with extension (e.g., "README.md", "config.json")
-- content: the actual file content based on the description
-- directory: where to create the file (use None for current directory, or specify subdirectory like "scratch")
-- mode: file permissions (default: "644" for regular files)
-
-The content should be well-formatted and production-ready.
-Return a complete FileResource object.
-"""
-
-    def _build_container_completion_instructions(self, resource: Any) -> str:
-        """Build completion instructions for AppleContainerResource."""
-        return """
-For AppleContainerResource, complete these fields:
-
-REQUIRED fields (must be completed):
-- name: container service name (e.g., "nginx-web", "postgres-db", "redis-cache")
-- image: Docker image with version tag (e.g., "nginx:alpine", "postgres:16-alpine", "redis:7-alpine")
-  * Prefer official images with alpine variants for smaller size
-  * Include version tags (not :latest) for reproducibility
-- ports: standard port mappings (e.g., ["8080:80"] for web servers, ["5432:5432"] for postgres)
-
-OPTIONAL fields (leave as None/empty unless actually needed):
-- env_vars: environment variables - ONLY if required by the image (e.g., {"POSTGRES_PASSWORD": "secret"})
-  * If connected resources are provided, generate appropriate environment variables for connecting to them
-  * Examples: DATABASE_URL=postgresql://user:pass@postgres-db:5432/mydb, REDIS_URL=redis://redis-cache:6379
-- volumes: data persistence - ONLY if data needs to persist (e.g., ["postgres_data:/var/lib/postgresql/data"])
-- networks: container networks - leave as empty list unless specific networking is needed
-  * If connected to other containers, consider adding them to the same network for inter-container communication
-
-Return a complete AppleContainerResource object with minimal necessary configuration.
-"""
-
-    def _build_docker_completion_instructions(self, resource: Any) -> str:
-        """Build completion instructions for DockerResource."""
-        return """
-For DockerResource, complete these fields:
-
-REQUIRED fields (must be completed):
-- name: container service name (e.g., "nginx-web", "postgres-db", "redis-cache")
-- image: Docker image with version tag (e.g., "nginx:alpine", "postgres:16-alpine", "redis:7-alpine")
-  * Prefer official images with alpine variants for smaller size
-  * Include version tags (not :latest) for reproducibility
-- ports: standard port mappings (e.g., ["8080:80"] for web servers, ["5432:5432"] for postgres)
-
-OPTIONAL fields (leave as None/empty unless actually needed):
-- env_vars: environment variables - ONLY if required by the image (e.g., {"POSTGRES_PASSWORD": "secret"})
-  * If connected resources are provided, generate appropriate environment variables for connecting to them
-  * Examples: DATABASE_URL=postgresql://user:pass@postgres-db:5432/mydb, REDIS_URL=redis://redis-cache:6379
-- volumes: data persistence - ONLY if data needs to persist (e.g., ["postgres_data:/var/lib/postgresql/data"])
-- networks: container networks - leave as empty list unless specific networking is needed
-  * If connected to other containers, consider adding them to the same network for inter-container communication
-
-Return a complete DockerResource object with minimal necessary configuration.
-"""
-
-    def _build_git_completion_instructions(self, resource: Any) -> str:
-        """Build completion instructions for GitRepoResource."""
-        return """
-For GitRepoResource, please complete:
-- repo_url: Git repository URL (e.g., "https://github.com/user/repo.git")
-  * Prefer official repositories
-  * Use HTTPS URLs (not SSH)
-- branch: Git branch to checkout (default: "main", or "master" for older repos)
-
-Return a complete GitRepoResource object with a valid repository URL.
-"""
-
-    def _build_template_file_completion_instructions(self, resource: Any) -> str:
-        """Build completion instructions for TemplateFileResource."""
-        return """
-For TemplateFileResource, complete these fields:
-
-REQUIRED fields (must be completed):
-- name: appropriate filename with extension (e.g., "config.conf", "settings.yaml")
-- template_content: Jinja2 template string with variables in {{ variable_name }} format
-- variables: Dictionary of variable names and their values for template rendering
-- directory: where to create the file (use None for current directory, or specify subdirectory like "scratch")
-- mode: file permissions (default: "644" for regular files)
-
-OPTIONAL fields (leave as None unless actually needed):
-- user: owner username - leave as None unless specific ownership required
-- group: group name - leave as None unless specific group required
-- path: full file path - leave as None (will be constructed from directory + name)
-
-The template_content should use Jinja2 syntax with {{ variable_name }} for variable interpolation.
-All variables referenced in the template should be provided in the variables dictionary.
-
-Return a complete TemplateFileResource object with minimal necessary configuration.
-"""
-
-    def _format_dict(self, data: Dict[str, Any]) -> str:
-        """Format dictionary for display in prompt."""
-        if not data:
-            return "(none)"
-
-        lines = []
-        for key, value in data.items():
-            # Truncate long values
-            value_str = str(value)
-            if len(value_str) > 100:
-                value_str = value_str[:100] + "..."
-            lines.append(f"  - {key}: {value_str}")
-
-        return "\n".join(lines)

@@ -1,7 +1,7 @@
 """Template file resource for creating files from Jinja2 templates."""
 
 from typing import Optional, Dict, Any
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from .base import Resource
 
 
@@ -24,15 +24,15 @@ class TemplateFileResource(Resource):
         )
     """
 
-    description: str  # what the file should contain (required)
-    template_content: str | None = None  # Jinja2 template - AI generates if not provided
-    variables: Dict[str, Any] | None = None  # template variables - AI generates if not provided
-    name: str | None = None  # filename - AI generates if not provided
-    directory: str | None = None  # directory - AI picks best location (default: ".")
-    mode: str | None = None  # file permissions - AI picks (default: "644")
-    path: str | None = None  # full path (overrides directory + name if provided)
-    user: str | None = None  # file owner (optional)
-    group: str | None = None  # file group (optional)
+    description: str
+    template_content: str | None = Field(None, description="Jinja2 template string with {{ variable }} placeholders", examples=["server { listen {{ port }}; }", "database: {{ db_host }}:{{ db_port }}"])
+    variables: Dict[str, Any] | None = Field(None, description="Template variables as key-value pairs", examples=[{"port": 8080}, {"db_host": "localhost", "db_port": 5432}])
+    name: str | None = Field(None, description="Filename with extension", examples=["nginx.conf", "config.yaml", "database.env"])
+    directory: str | None = Field(None, description="Directory path where file will be created", examples=[".", "scratch", "config"])
+    mode: str | None = Field(None, description="Unix file permissions in octal", examples=["644", "755", "600"])
+    path: str | None = Field(None, description="Full file path - overrides directory + name if provided")
+    user: str | None = Field(None, description="File owner username", examples=["www-data", "nginx", "root"])
+    group: str | None = Field(None, description="File group name", examples=["www-data", "nginx", "root"])
 
     @model_validator(mode='after')
     def validate_description(self):

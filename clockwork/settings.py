@@ -65,6 +65,12 @@ class ClockworkSettings(BaseSettings):
         description="Logging level (DEBUG, INFO, WARNING, ERROR) (env: CW_LOG_LEVEL)"
     )
 
+    # Resource Completion Configuration
+    completion_max_retries: int = Field(
+        default=3,
+        description="Maximum retry attempts for AI resource completion (env: CW_COMPLETION_MAX_RETRIES)"
+    )
+
     # Service Configuration
     service_port: int = Field(
         default=8765,

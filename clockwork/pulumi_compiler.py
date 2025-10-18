@@ -34,9 +34,6 @@ class PulumiCompiler:
         if not isinstance(self.state_dir, Path):
             self.state_dir = Path(self.state_dir)
 
-        # Create state directory
-        self.state_dir.mkdir(parents=True, exist_ok=True)
-
         # Set Pulumi passphrase from settings if not already set in environment
         if "PULUMI_CONFIG_PASSPHRASE" not in os.environ:
             os.environ["PULUMI_CONFIG_PASSPHRASE"] = settings.pulumi_config_passphrase
@@ -107,6 +104,9 @@ class PulumiCompiler:
             f"Applying {len(resources)} resources with Pulumi (project: {project_name})"
         )
 
+        # Ensure state directory exists before applying
+        self.state_dir.mkdir(parents=True, exist_ok=True)
+
         try:
             # Create program function
             program = self.create_program(resources)
@@ -167,6 +167,9 @@ class PulumiCompiler:
             Dictionary with success status and summary
         """
         logger.info(f"Destroying infrastructure (project: {project_name})")
+
+        # Ensure state directory exists before destroying
+        self.state_dir.mkdir(parents=True, exist_ok=True)
 
         try:
             # Select existing stack
