@@ -19,8 +19,8 @@ def test_docker_resource_basic():
     assert container.volumes == []  # Defaults to empty list
     assert container.env_vars == {}  # Defaults to empty dict
     assert container.networks == []  # Defaults to empty list
-    assert container.present is True
-    assert container.start is True
+    assert container.restart_policy == "unless-stopped"
+    assert container.must_run is True
 
 
 def test_docker_resource_with_image():
@@ -49,9 +49,7 @@ def test_docker_resource_full_config():
             "POSTGRES_PASSWORD": "secret",
             "POSTGRES_USER": "admin"
         },
-        networks=["backend"],
-        present=True,
-        start=True
+        networks=["backend"]
     )
 
     assert container.name == "postgres"
@@ -60,8 +58,8 @@ def test_docker_resource_full_config():
     assert container.volumes == ["pg_data:/var/lib/postgresql/data"]
     assert container.env_vars == {"POSTGRES_PASSWORD": "secret", "POSTGRES_USER": "admin"}
     assert container.networks == ["backend"]
-    assert container.present is True
-    assert container.start is True
+    assert container.restart_policy == "unless-stopped"
+    assert container.must_run is True
 
 
 def test_needs_completion_no_image():
@@ -323,7 +321,7 @@ def test_to_pulumi_with_connections(mock_container):
 
 @patch('clockwork.resources.docker.docker.Container')
 def test_to_pulumi_start_false(mock_container):
-    """Test Pulumi resource creation with start=False."""
+    """Test Pulumi resource creation with must_run=False."""
     mock_pulumi_container = Mock()
     mock_container.return_value = mock_pulumi_container
 
@@ -332,14 +330,15 @@ def test_to_pulumi_start_false(mock_container):
         description="Container that exists but doesn't run",
         image="alpine:latest",
         ports=[],
-        start=False
+        must_run=False,
+        restart_policy="no"
     )
 
     container.to_pulumi()
 
     call_args = mock_container.call_args
 
-    # When start=False, should have restart="no" and must_run=False
+    # When must_run=False, should have restart="no" and must_run=False
     assert call_args[1]["restart"] == "no"
     assert call_args[1]["must_run"] is False
 

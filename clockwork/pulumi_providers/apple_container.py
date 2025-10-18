@@ -27,8 +27,7 @@ class AppleContainerInputs:
         user: User to run as (format: "name|uid[:gid]")
         workdir: Working directory inside container
         labels: Labels to add to container {"key": "value"}
-        present: Whether the container should exist (True) or be removed (False)
-        start: Whether the container should be running (True) or stopped (False)
+        must_run: Whether the container must be running (True) or can be stopped (False)
     """
 
     def __init__(
@@ -44,8 +43,7 @@ class AppleContainerInputs:
         user: str | None = None,
         workdir: str | None = None,
         labels: Dict[str, str] | None = None,
-        present: bool = True,
-        start: bool = True,
+        must_run: bool = True,
     ):
         """Initialize AppleContainerInputs.
 
@@ -61,8 +59,7 @@ class AppleContainerInputs:
             user: User to run as (optional)
             workdir: Working directory (optional)
             labels: Container labels (optional)
-            present: Whether container should exist (default: True)
-            start: Whether container should be running (default: True)
+            must_run: Whether container must be running (default: True)
         """
         self.image = image
         self.container_name = container_name
@@ -75,8 +72,7 @@ class AppleContainerInputs:
         self.user = user
         self.workdir = workdir
         self.labels = labels or {}
-        self.present = present
-        self.start = start
+        self.must_run = must_run
 
         # Add clockwork.name label for tracking
         self.labels["clockwork.name"] = container_name
@@ -225,10 +221,10 @@ class AppleContainerProvider(ResourceProvider):
                     data = json.loads(inspect_result["stdout"])
                     if data and isinstance(data, list) and len(data) > 0:
                         status = data[0].get("status")
-                        if status == "running" and props.get("start", True):
+                        if status == "running" and props.get("must_run", True):
                             # Already running, return existing ID
                             return CreateResult(id_=existing_id, outs=props)
-                        elif not props.get("start", True):
+                        elif not props.get("must_run", True):
                             # Container exists and we don't want it running
                             return CreateResult(id_=existing_id, outs=props)
                 except (json.JSONDecodeError, KeyError):
@@ -237,11 +233,7 @@ class AppleContainerProvider(ResourceProvider):
             # Remove existing container
             await self._run_command(["container", "rm", "-f", existing_id])
 
-        if not props.get("present", True):
-            # Container should not exist, we're done
-            return CreateResult(id_=container_name, outs=props)
-
-        if props.get("start", True):
+        if props.get("must_run", True):
             # Create and start the container
             cmd = self._build_run_command(props)
             result = await self._run_command(cmd)
@@ -382,7 +374,7 @@ class AppleContainerProvider(ResourceProvider):
         # Fields that require replacement
         replacement_fields = [
             "image", "ports", "volumes", "env_vars", "networks",
-            "memory", "cpus", "user", "workdir", "labels", "start"
+            "memory", "cpus", "user", "workdir", "labels", "must_run"
         ]
 
         for field in replacement_fields:
@@ -451,8 +443,7 @@ class AppleContainer(pulumi.dynamic.Resource):
             "user": inputs.user,
             "workdir": inputs.workdir,
             "labels": inputs.labels,
-            "present": inputs.present,
-            "start": inputs.start,
+            "must_run": inputs.must_run,
         }
 
         super().__init__(

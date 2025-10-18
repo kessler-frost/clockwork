@@ -23,8 +23,8 @@ class DockerResource(Resource):
         volumes: Volume mounts as list of strings (optional - AI determines if not provided)
         env_vars: Environment variables as key-value pairs (optional - AI suggests if not provided)
         networks: Container networks to attach (optional - AI determines if not provided)
-        present: Whether the container should exist (True) or be removed (False)
-        start: Whether the container should be running (True) or stopped (False)
+        restart_policy: Container restart policy - "unless-stopped", "always", "on-failure", "no"
+        must_run: Whether the container must be running (True) or can be stopped (False)
 
     Note:
         Images must have a proper CMD or ENTRYPOINT. Use images like nginx, postgres,
@@ -53,8 +53,8 @@ class DockerResource(Resource):
     volumes: List[str] = Field(default_factory=list, description="Volume mounts in 'host:container' or 'host:container:ro' format", examples=[["./data:/data"], ["./config:/etc/nginx:ro"]])
     env_vars: Dict[str, str] = Field(default_factory=dict, description="Environment variables as key-value pairs", examples=[{"DEBUG": "1"}, {"POSTGRES_PASSWORD": "secret", "POSTGRES_DB": "myapp"}])
     networks: List[str] = Field(default_factory=list, description="Docker networks to attach container to", examples=[["backend"], ["frontend", "backend"]])
-    present: bool = True
-    start: bool = True
+    restart_policy: str = Field(default="unless-stopped", description="Container restart policy: 'unless-stopped', 'always', 'on-failure', 'no'", examples=["unless-stopped", "always", "no"])
+    must_run: bool = Field(default=True, description="Whether the container must be running after creation")
 
     # Store Pulumi resource for dependency tracking
     _pulumi_resource: pulumi.Resource | None = None
@@ -167,8 +167,8 @@ class DockerResource(Resource):
             volumes=volumes if volumes else None,
             envs=envs if envs else None,
             networks_advanced=networks_advanced if networks_advanced else None,
-            restart="unless-stopped" if self.start else "no",
-            must_run=self.start,
+            restart=self.restart_policy,
+            must_run=self.must_run,
             opts=opts
         )
 

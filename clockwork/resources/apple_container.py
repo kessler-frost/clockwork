@@ -21,8 +21,7 @@ class AppleContainerResource(Resource):
         volumes: Volume mounts as list of strings (optional - AI determines if not provided)
         env_vars: Environment variables as key-value pairs (optional - AI suggests if not provided)
         networks: Container networks to attach (optional - AI determines if not provided)
-        present: Whether the container should exist (True) or be removed (False)
-        start: Whether the container should be running (True) or stopped (False)
+        must_run: Whether the container must be running (True) or can be stopped (False)
 
     Examples:
         # Minimal - AI completes everything:
@@ -46,8 +45,7 @@ class AppleContainerResource(Resource):
     volumes: List[str] = Field(default_factory=list, description="Volume mounts in 'host:container' or 'host:container:ro' format", examples=[["./data:/data"], ["./config:/etc/nginx:ro"]])
     env_vars: Dict[str, str] = Field(default_factory=dict, description="Environment variables as key-value pairs", examples=[{"DEBUG": "1"}, {"POSTGRES_PASSWORD": "secret", "POSTGRES_DB": "myapp"}])
     networks: List[str] = Field(default_factory=list, description="Networks to attach container to", examples=[["backend"], ["frontend", "backend"]])
-    present: bool = True
-    start: bool = True
+    must_run: bool = Field(default=True, description="Whether the container must be running after creation")
 
     def needs_completion(self) -> bool:
         """Returns True if any critical field needs AI completion.
@@ -101,8 +99,7 @@ class AppleContainerResource(Resource):
             volumes=self.volumes,
             env_vars=self.env_vars,
             networks=self.networks,
-            present=self.present,
-            start=self.start,
+            must_run=self.must_run,
         )
 
         # Create and return the Pulumi resource

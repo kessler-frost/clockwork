@@ -19,8 +19,7 @@ def test_apple_container_resource_basic():
     assert container.volumes == []  # Defaults to empty list
     assert container.env_vars == {}  # Defaults to empty dict
     assert container.networks == []  # Defaults to empty list
-    assert container.present is True
-    assert container.start is True
+    assert container.must_run is True
 
 
 def test_apple_container_resource_with_image():
@@ -49,9 +48,7 @@ def test_apple_container_resource_full_config():
             "POSTGRES_PASSWORD": "secret",
             "POSTGRES_USER": "admin"
         },
-        networks=["backend"],
-        present=True,
-        start=True
+        networks=["backend"]
     )
 
     assert container.name == "postgres"
@@ -60,8 +57,7 @@ def test_apple_container_resource_full_config():
     assert container.volumes == ["pg_data:/var/lib/postgresql/data"]
     assert container.env_vars == {"POSTGRES_PASSWORD": "secret", "POSTGRES_USER": "admin"}
     assert container.networks == ["backend"]
-    assert container.present is True
-    assert container.start is True
+    assert container.must_run is True
 
 
 def test_needs_completion_no_image():
@@ -146,32 +142,18 @@ def test_to_pulumi_missing_fields_raises_error():
         container.to_pulumi()
 
 
-def test_apple_container_resource_present_false():
-    """Test AppleContainerResource with present=False."""
-    container = AppleContainerResource(
-        name="stopped",
-        description="Stopped container",
-        image="alpine:latest",
-        ports=[],
-        present=False
-    )
-
-    # Verify the present flag is set correctly
-    assert container.present is False
-
-
-def test_apple_container_resource_start_false():
-    """Test AppleContainerResource with start=False."""
+def test_apple_container_resource_must_run_false():
+    """Test AppleContainerResource with must_run=False."""
     container = AppleContainerResource(
         name="not-running",
         description="Container that exists but doesn't run",
         image="alpine:latest",
         ports=[],
-        start=False
+        must_run=False
     )
 
-    # Verify the start flag is set correctly
-    assert container.start is False
+    # Verify the must_run flag is set correctly
+    assert container.must_run is False
 
 
 def test_pydantic_validation():
