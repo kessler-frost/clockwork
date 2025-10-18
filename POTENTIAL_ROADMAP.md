@@ -7,7 +7,7 @@ _This is a living document of potential features and enhancements. Updated frequ
 ## ✅ Implemented Features
 
 ### Core Primitives & CLI Commands
-- **Primitive Types**: FileResource, TemplateFileResource, DockerResource, AppleContainerResource, GitRepoResource
+- **Primitive Types**: FileResource, DockerResource, AppleContainerResource, GitRepoResource
 - **CLI Commands**:
   - `clockwork apply` - Deploy primitives
   - `clockwork plan` - Preview without deploying

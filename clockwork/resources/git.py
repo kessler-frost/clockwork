@@ -2,9 +2,9 @@
 
 from typing import Optional, Dict, Any
 import pulumi
-import pulumi_command as command
 from pydantic import Field
 from .base import Resource
+from clockwork.pulumi_providers.git_repo import GitRepo, GitRepoInputs
 
 
 class GitRepoResource(Resource):
@@ -61,13 +61,13 @@ class GitRepoResource(Resource):
         )
 
     def to_pulumi(self) -> pulumi.Resource:
-        """Convert to Pulumi Command resource for git operations.
+        """Convert to Pulumi GitRepo resource for git operations.
 
-        Uses pulumi-command to execute git clone/pull operations locally.
+        Uses custom dynamic provider to execute git clone/pull operations.
         All required fields should be populated by AI completion before this is called.
 
         Returns:
-            pulumi.Resource: Pulumi Command resource
+            pulumi.Resource: Pulumi GitRepo resource
 
         Raises:
             ValueError: If required fields are not completed
@@ -96,36 +96,20 @@ class GitRepoResource(Resource):
             if depends_on:
                 opts = pulumi.ResourceOptions(depends_on=depends_on)
 
-        # Build git clone/pull command
-        # Check if repo exists, if yes and pull=True then pull, else clone
-        if self.pull:
-            # If directory exists and is a git repo, pull; otherwise clone
-            git_command = f"""
-if [ -d "{self.dest}/.git" ]; then
-    echo "Repository exists, pulling latest changes..."
-    cd "{self.dest}" && git checkout {self.branch} && git pull origin {self.branch}
-else
-    echo "Cloning repository..."
-    git clone --branch {self.branch} {self.repo_url} {self.dest}
-fi
-"""
-        else:
-            # Just clone if doesn't exist
-            git_command = f"""
-if [ ! -d "{self.dest}/.git" ]; then
-    echo "Cloning repository..."
-    git clone --branch {self.branch} {self.repo_url} {self.dest}
-else
-    echo "Repository already exists at {self.dest}"
-fi
-"""
+        # Create GitRepoInputs
+        inputs = GitRepoInputs(
+            repo_url=self.repo_url,
+            dest=self.dest,
+            branch=self.branch,
+            pull=self.pull,
+            repo_name=self.name,
+        )
 
-        # Create Pulumi Command resource to execute git operations
-        git_resource = command.local.Command(
-            self.name,
-            create=git_command.strip(),
-            update=git_command.strip() if self.pull else None,
-            opts=opts
+        # Create Pulumi GitRepo resource
+        git_resource = GitRepo(
+            resource_name=self.name,
+            inputs=inputs,
+            opts=opts,
         )
 
         # Store for dependency tracking

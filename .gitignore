@@ -54,6 +54,7 @@ dmypy.json
 *.cw.bak
 *.cwvars.bak
 .clockwork-state/
+.clockwork-service.pid
 
 # Clockwork demo directories
 .clockwork-demo/

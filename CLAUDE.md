@@ -55,20 +55,10 @@ Choose per primitive, per project. What you find tedious is personal.
 ## Resource Types
 
 **Containers**: DockerResource (cross-platform), AppleContainerResource (macOS)
-**Files**: FileResource, TemplateFileResource (Jinja2)
+**Files**: FileResource
 **Other**: GitRepoResource
 
 All support AI completion with `description` field.
-
-### TemplateFileResource Example
-
-```python
-TemplateFileResource(
-    description="Nginx config on port 8080",
-    template_content="server { listen {{ port }}; }",
-    variables={"port": 8080}  # Optional, AI can infer
-)
-```
 
 ## Assertions: Functional Determinism
 

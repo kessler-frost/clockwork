@@ -9,6 +9,7 @@ Plan Pipeline: Load primitives → Complete primitives (AI) → Preview with Pul
 
 import importlib.util
 import logging
+import shutil
 import traceback
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -262,13 +263,59 @@ class ClockworkCore:
 
         return result
 
-    async def destroy(self, main_file: Path, dry_run: bool = False) -> Dict[str, Any]:
+    def _extract_working_directories(self, resources: List[Any]) -> set[Path]:
+        """Extract unique top-level working directories from resources.
+
+        Args:
+            resources: List of resource objects
+
+        Returns:
+            Set of Path objects representing top-level working directories
         """
-        Destroy pipeline: destroy infrastructure using Pulumi.
+        directories = set()
+        cwd = Path.cwd()
+
+        for resource in resources:
+            # Extract directory from FileResource
+            if hasattr(resource, 'directory') and resource.directory:
+                dir_path = Path(resource.directory)
+                if not dir_path.is_absolute():
+                    dir_path = cwd / dir_path
+                # Get top-level directory relative to cwd
+                try:
+                    rel_path = dir_path.relative_to(cwd)
+                    top_level = cwd / rel_path.parts[0] if rel_path.parts else None
+                    if top_level and top_level != cwd:
+                        directories.add(top_level)
+                except ValueError:
+                    # Path is not relative to cwd, skip it
+                    pass
+
+            # Extract directory from GitRepoResource
+            if hasattr(resource, 'dest') and resource.dest:
+                dest_path = Path(resource.dest)
+                if not dest_path.is_absolute():
+                    dest_path = cwd / dest_path
+                # Get top-level directory relative to cwd
+                try:
+                    rel_path = dest_path.relative_to(cwd)
+                    top_level = cwd / rel_path.parts[0] if rel_path.parts else None
+                    if top_level and top_level != cwd:
+                        directories.add(top_level)
+                except ValueError:
+                    # Path is not relative to cwd, skip it
+                    pass
+
+        return directories
+
+    async def destroy(self, main_file: Path, dry_run: bool = False, keep_files: bool = False) -> Dict[str, Any]:
+        """
+        Destroy pipeline: destroy infrastructure using Pulumi and clean up working directories.
 
         Args:
             main_file: Path to main.py file (used to determine project name)
             dry_run: If True, skip execution
+            keep_files: If True, keep working directories (do not delete files)
 
         Returns:
             Dict with execution results
@@ -278,15 +325,33 @@ class ClockworkCore:
         # Get project name from directory
         project_name = main_file.parent.name
 
+        # Load resources to extract working directories
+        resources = self._load_resources(main_file)
+        working_dirs = self._extract_working_directories(resources)
+
         # Execute Pulumi destroy (unless dry run)
         if dry_run:
             logger.info("Dry run - skipping execution")
             return {
                 "dry_run": True,
-                "project_name": project_name
+                "project_name": project_name,
+                "working_directories_to_delete": [str(d) for d in working_dirs]
             }
 
         result = await self.pulumi_compiler.destroy(project_name)
+
+        # Clean up working directories after successful destroy (unless keep_files is True)
+        if result.get("success", False):
+            if keep_files:
+                logger.info("Keeping working directories (--keep-files flag set)")
+                result["working_directories_kept"] = [str(d) for d in working_dirs]
+            else:
+                for directory in working_dirs:
+                    if directory.exists():
+                        logger.info(f"Removing working directory: {directory}")
+                        shutil.rmtree(directory)
+                        logger.info(f"Deleted: {directory}")
+
         logger.info("Clockwork destroy pipeline complete")
 
         return result

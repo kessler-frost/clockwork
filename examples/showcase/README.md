@@ -10,18 +10,14 @@ Learn everything Clockwork can do in 5 minutes.
 - **Manual creation**: You provide content directly
 - **AI generation**: AI creates content from description
 
-### 2. Template Resources
-- **Manual templates**: You provide template + variables
-- **AI templates**: AI generates both template and variables
-
-### 3. Git Repositories
+### 2. Git Repositories
 - **AI discovery**: AI finds repo URL from description
 
-### 4. Docker Containers
+### 3. Docker Containers
 - **Container deployment** with health checks
 - **Comprehensive assertions** (running, port accessible, HTTP health)
 
-### 5. Tool Integration (Optional)
+### 4. Tool Integration (Optional)
 - **Web search**: DuckDuckGo integration
 - **Custom tools**: Your Python functions as AI tools
 
@@ -48,8 +44,6 @@ After `clockwork apply`:
 scratch/
 ├── README.md              # Manual file
 ├── config.yaml            # AI-generated file
-├── nginx.conf             # Manual template
-├── redis.conf             # AI-generated template
 └── repos/
     └── fastapi/           # Cloned git repo
 
@@ -83,22 +77,6 @@ config_ai = FileResource(
     description="Database config: host localhost, port 5432",
     directory="scratch"
     # AI writes the content!
-)
-```
-
-### Templates: Manual vs AI
-
-```python
-# You provide template and variables
-nginx_config_manual = TemplateFileResource(
-    template_content="server { listen {{ port }}; }",
-    variables={"port": 8080}
-)
-
-# AI generates both
-redis_config_ai = TemplateFileResource(
-    description="Redis config with 256MB memory, LRU eviction"
-    # AI creates template_content AND variables!
 )
 ```
 

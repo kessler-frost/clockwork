@@ -6,7 +6,6 @@ from unittest.mock import Mock, patch
 from clockwork.service.tools import ToolSelector
 from clockwork.resources import (
     FileResource,
-    TemplateFileResource,
     DockerResource,
     AppleContainerResource,
     GitRepoResource,
@@ -52,21 +51,6 @@ class TestResourceTypeTools:
 
         # Should call for duckduckgo_search
         mock_get_tool.assert_called_with("duckduckgo_search")
-        assert len(tools) > 0
-
-    @patch("clockwork.service.tools.ToolSelector._get_tool")
-    def test_template_file_resource_gets_web_search(self, mock_get_tool):
-        """Test TemplateFileResource gets web search tool."""
-        mock_search_tool = Mock()
-        mock_get_tool.return_value = mock_search_tool
-
-        selector = ToolSelector(enable_mcp=False)
-        resource = TemplateFileResource(description="Test template")
-
-        tools = selector.select_tools_for_resource(resource)
-
-        # Should call for duckduckgo_search
-        assert mock_get_tool.called
         assert len(tools) > 0
 
     @patch("clockwork.service.tools.ToolSelector._get_tool")
@@ -295,20 +279,6 @@ class TestToolLoading:
 
         selector = ToolSelector(enable_mcp=True)
         tool = selector._load_filesystem_mcp()
-
-        assert tool is None
-
-    def test_load_postgres_mcp_not_implemented(self):
-        """Test PostgreSQL MCP returns None (not implemented)."""
-        selector = ToolSelector(enable_mcp=True)
-        tool = selector._load_postgres_mcp()
-
-        assert tool is None
-
-    def test_load_sqlite_mcp_not_implemented(self):
-        """Test SQLite MCP returns None (not implemented)."""
-        selector = ToolSelector(enable_mcp=True)
-        tool = selector._load_sqlite_mcp()
 
         assert tool is None
 

@@ -157,20 +157,6 @@ FileResource(
 )
 ```
 
-### TemplateFileResource
-
-Creates files from Jinja2 templates with variable substitution.
-
-```python
-TemplateFileResource(
-    description="Nginx config for static files",
-    template_content="server { listen {{ port }}; }",  # Optional - AI generates if not provided
-    variables={"port": 8080},    # Optional - AI generates if not provided
-    name="nginx.conf",           # Optional - AI picks if not provided
-    directory="/etc/nginx"       # Optional - defaults to current dir
-)
-```
-
 ### DockerResource
 
 Runs Docker containers with optional AI-suggested images. Cross-platform support (Mac, Linux, Windows).

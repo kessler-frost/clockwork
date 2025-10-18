@@ -65,7 +65,7 @@ def _get_service_pid_file() -> Path:
     Returns:
         Path to service.pid file.
     """
-    return Path.cwd() / ".clockwork" / "service" / "service.pid"
+    return Path.cwd() / ".clockwork-service.pid"
 
 
 def _read_service_pid() -> int | None:
@@ -165,6 +165,7 @@ def _run_command(
     success_handler,
     api_key: str = None,
     model: str = None,
+    **kwargs,
 ):
     """Execute a Clockwork command with common setup and error handling.
 
@@ -176,6 +177,7 @@ def _run_command(
         success_handler: Callable that takes result dict and prints success output
         api_key: Optional API key override
         model: Optional model override
+        **kwargs: Additional keyword arguments to pass to the core method
     """
     main_file = _get_main_file()
     console.print(_create_command_panel(panel_title, panel_color))
@@ -186,9 +188,9 @@ def _run_command(
 
         # Check if method is async and run accordingly
         if asyncio.iscoroutinefunction(method):
-            result = asyncio.run(method(main_file))
+            result = asyncio.run(method(main_file, **kwargs))
         else:
-            result = method(main_file)
+            result = method(main_file, **kwargs)
 
         success_handler(result)
     except Exception as e:
@@ -302,6 +304,11 @@ def destroy(
         "--model",
         help="Model name (overrides .env)"
     ),
+    keep_files: bool = typer.Option(
+        False,
+        "--keep-files",
+        help="Keep working directories (do not delete files created by resources)"
+    ),
 ):
     """Destroy infrastructure: remove all deployed resources."""
     def _handle_success(result):
@@ -315,6 +322,12 @@ def destroy(
 
                 if summary.get("duration"):
                     console.print(f"[dim]Duration: {summary['duration']}s[/dim]")
+
+            # Show info about kept files if applicable
+            if keep_files and result.get("working_directories_kept"):
+                console.print(f"\n[dim]Working directories kept:[/dim]")
+                for directory in result["working_directories_kept"]:
+                    console.print(f"  [dim]• {directory}[/dim]")
         else:
             console.print(f"\n[bold red]✗ Destroy failed:[/bold red] {result.get('error', 'Unknown error')}")
 
@@ -326,6 +339,7 @@ def destroy(
         success_handler=_handle_success,
         api_key=api_key,
         model=model,
+        keep_files=keep_files,
     )
 
 
@@ -396,9 +410,8 @@ def service_start():
         console.print(f"[dim]Port: {settings.service_port}[/dim]")
         return
 
-    # Ensure service directory exists
+    # Get PID file path
     pid_file = _get_service_pid_file()
-    pid_file.parent.mkdir(parents=True, exist_ok=True)
 
     # Start uvicorn in background with autoreload
     try:

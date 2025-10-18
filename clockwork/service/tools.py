@@ -111,7 +111,6 @@ class ToolSelector:
 
         Maps resource types to relevant tools:
         - FileResource: web search (for content generation)
-        - TemplateFileResource: web search, filesystem (if enabled)
         - DockerResource: web search (for image suggestions)
         - AppleContainerResource: web search (for image suggestions)
         - GitRepoResource: web search (for finding repos)
@@ -126,8 +125,8 @@ class ToolSelector:
         resource_type = resource.__class__.__name__
         tools = []
 
-        # FileResource and TemplateFileResource benefit from web search
-        if resource_type in ["FileResource", "TemplateFileResource"]:
+        # FileResource benefits from web search
+        if resource_type == "FileResource":
             # Always add web search for content generation
             search_tool = self._get_tool("duckduckgo_search")
             if search_tool:

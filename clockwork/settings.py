@@ -48,11 +48,6 @@ class ClockworkSettings(BaseSettings):
     )
 
     # Pulumi Configuration
-    pulumi_state_dir: Path = Field(
-        default=Path(".clockwork/state"),
-        description="Directory for Pulumi state files (env: CW_PULUMI_STATE_DIR)"
-    )
-
     pulumi_config_passphrase: str = Field(
         default="clockwork",
         description="Pulumi passphrase for state encryption (env: CW_PULUMI_CONFIG_PASSPHRASE or PULUMI_CONFIG_PASSPHRASE)",

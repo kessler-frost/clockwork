@@ -2,7 +2,7 @@
 
 from .apple_container import AppleContainer, AppleContainerProvider, AppleContainerInputs
 from .file import File, FileInputs, FileProvider
-from .template_file import TemplateFile, TemplateFileInputs, TemplateFileProvider
+from .git_repo import GitRepo, GitRepoInputs, GitRepoProvider
 
 __all__ = [
     "AppleContainer",
@@ -11,7 +11,7 @@ __all__ = [
     "File",
     "FileInputs",
     "FileProvider",
-    "TemplateFile",
-    "TemplateFileInputs",
-    "TemplateFileProvider",
+    "GitRepo",
+    "GitRepoInputs",
+    "GitRepoProvider",
 ]
