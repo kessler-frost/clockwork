@@ -7,16 +7,17 @@ _This is a living document of potential features and enhancements. Updated frequ
 ## ✅ Implemented Features
 
 ### Core Primitives & CLI Commands
+
 - **Primitive Types**: FileResource, DockerResource, AppleContainerResource, GitRepoResource
 - **CLI Commands**:
   - `clockwork apply` - Deploy primitives
   - `clockwork plan` - Preview without deploying
   - `clockwork destroy` - Remove deployed infrastructure
   - `clockwork assert` - Validate deployed primitives
-  - `clockwork service start/stop/status` - Basic service management
   - `clockwork version` - Show version
 
 ### AI Completion & Flexibility
+
 - **Adjustable Intelligence**: Choose per-primitive control level
   - Full control (specify everything, no AI)
   - Hybrid mode (specify key details, AI fills gaps)
@@ -26,13 +27,15 @@ _This is a living document of potential features and enhancements. Updated frequ
 - **MCP Server Support**: Filesystem, databases, GitHub, Google Drive
 
 ### Resource Connections
+
 - **Dependency Declarations**: Connect primitives to express dependencies
 - **Topological Sorting**: Automatic deployment ordering (O(V+E))
 - **Cycle Detection**: Prevents circular dependencies
 - **AI Context Sharing**: Connected primitives share configuration data for intelligent completion
 
 ### Type-Safe Assertions
-Built-in assertion classes (no AI required):
+
+Built-in assertion classes for validating deployed resources (no AI required, Pydantic-based):
 
 **HTTP/Network:**
 - `HealthcheckAssert(url, expected_status, timeout_seconds)` - HTTP health checks
@@ -46,10 +49,11 @@ Built-in assertion classes (no AI required):
 - `FileContentMatchesAssert(path, pattern)` - Content validation with regex
 
 **Example:**
+
 ```python
 nginx = DockerResource(
-    name="nginx-web",
     description="Web server",
+    name="nginx-web",
     ports=["8080:80"],
     assertions=[
         ContainerRunningAssert(timeout_seconds=10),
@@ -59,15 +63,10 @@ nginx = DockerResource(
 )
 ```
 
+Run assertions:
 ```bash
 clockwork assert  # Validates all deployed primitives
 ```
-
-### Basic Service Infrastructure
-- Simple FastAPI health check endpoint on port 8765
-- Basic project registration
-- Service lifecycle management (start/stop/status)
-- **Note**: Does not yet perform active monitoring, drift detection, or remediation
 
 ---
 
@@ -187,7 +186,7 @@ clockwork update
 
 ### 3. Additional Built-in Assertions
 
-Expand the type-safe assertion library for common scenarios.
+Expand the type-safe assertion library for common scenarios (not yet implemented):
 
 **Container:**
 - `ContainerHealthyAssert()` - Docker health status

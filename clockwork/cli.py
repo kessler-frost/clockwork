@@ -4,14 +4,8 @@ Clockwork CLI - Intelligent Infrastructure Orchestration in Python.
 
 import asyncio
 import logging
-import os
-import shutil
-import signal
-import subprocess
-import time
 from pathlib import Path
 
-import httpx
 import typer
 from rich.console import Console
 from rich.panel import Panel
@@ -39,48 +33,6 @@ def configure_logging():
 
 # Configure logging on module import
 configure_logging()
-
-
-# Service helper functions
-def check_service_running() -> bool:
-    """Check if Clockwork service is running.
-
-    Returns:
-        True if service is running and healthy, False otherwise.
-    """
-    settings = get_settings()
-    try:
-        response = httpx.get(
-            f"http://localhost:{settings.service_port}/health",
-            timeout=1.0
-        )
-        return response.status_code == 200
-    except Exception:
-        return False
-
-
-def _get_service_pid_file() -> Path:
-    """Get path to service PID file.
-
-    Returns:
-        Path to service.pid file.
-    """
-    return Path.cwd() / ".clockwork-service.pid"
-
-
-def _read_service_pid() -> int | None:
-    """Read service PID from file.
-
-    Returns:
-        PID as integer, or None if file doesn't exist or is invalid.
-    """
-    pid_file = _get_service_pid_file()
-    if not pid_file.exists():
-        return None
-    try:
-        return int(pid_file.read_text().strip())
-    except (ValueError, OSError):
-        return None
 
 
 # Helper functions to reduce duplication across commands
@@ -389,131 +341,6 @@ def assert_cmd(
         api_key=api_key,
         model=model,
     )
-
-
-# Service commands
-service_app = typer.Typer(
-    name="service",
-    help="Manage Clockwork monitoring service"
-)
-app.add_typer(service_app, name="service")
-
-
-@service_app.command("start")
-def service_start():
-    """Start Clockwork service."""
-    settings = get_settings()
-
-    # Check if already running
-    if check_service_running():
-        console.print("[yellow]Service already running[/yellow]")
-        console.print(f"[dim]Port: {settings.service_port}[/dim]")
-        return
-
-    # Get PID file path
-    pid_file = _get_service_pid_file()
-
-    # Start uvicorn in background with autoreload
-    try:
-        process = subprocess.Popen(
-            [
-                'uvicorn',
-                'clockwork.service.app:app',
-                '--host', '0.0.0.0',
-                '--port', str(settings.service_port),
-                '--log-level', 'warning',
-                '--reload',
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
-        )
-
-        # Save PID
-        pid_file.write_text(str(process.pid))
-
-        # Wait a moment and check if service started
-        time.sleep(2)
-        if check_service_running():
-            console.print(f"[green]✓ Service started on port {settings.service_port}[/green]")
-            console.print(f"[dim]PID: {process.pid}[/dim]")
-        else:
-            console.print("[red]✗ Service failed to start[/red]")
-            raise typer.Exit(code=1)
-
-    except FileNotFoundError:
-        console.print("[red]✗ uvicorn not found[/red]")
-        console.print("[dim]Install with: uv pip install uvicorn[/dim]")
-        raise typer.Exit(code=1)
-    except Exception as e:
-        console.print(f"[red]✗ Failed to start service: {e}[/red]")
-        raise typer.Exit(code=1)
-
-
-@service_app.command("stop")
-def service_stop():
-    """Stop Clockwork service."""
-    pid = _read_service_pid()
-
-    if pid is None:
-        console.print("[yellow]Service PID file not found[/yellow]")
-        return
-
-    try:
-        os.kill(pid, signal.SIGTERM)
-        console.print(f"[green]✓ Service stopped (PID: {pid})[/green]")
-
-        # Clean up PID file
-        pid_file = _get_service_pid_file()
-        if pid_file.exists():
-            pid_file.unlink()
-
-    except ProcessLookupError:
-        console.print("[yellow]Process not found (already stopped?)[/yellow]")
-        # Clean up stale PID file
-        pid_file = _get_service_pid_file()
-        if pid_file.exists():
-            pid_file.unlink()
-    except PermissionError:
-        console.print(f"[red]✗ Permission denied (PID: {pid})[/red]")
-        raise typer.Exit(code=1)
-    except Exception as e:
-        console.print(f"[red]✗ Failed to stop service: {e}[/red]")
-        raise typer.Exit(code=1)
-
-
-@service_app.command("restart")
-def service_restart():
-    """Restart Clockwork service."""
-    console.print("[dim]Stopping service...[/dim]")
-    service_stop()
-    time.sleep(1)
-    console.print("[dim]Starting service...[/dim]")
-    service_start()
-
-
-@service_app.command("status")
-def service_status():
-    """Check Clockwork service status."""
-    settings = get_settings()
-
-    if not check_service_running():
-        console.print("[red]✗ Service not running[/red]")
-        console.print("[dim]Start with: clockwork service start[/dim]")
-        raise typer.Exit(code=1)
-
-    console.print("[green]✓ Service running[/green]")
-    console.print(f"[dim]Port: {settings.service_port}[/dim]")
-
-    # Try to get health info
-    try:
-        response = httpx.get(
-            f"http://localhost:{settings.service_port}/health",
-            timeout=5.0
-        )
-        health_data = response.json()
-        console.print(f"[dim]Status: {health_data.get('status', 'unknown')}[/dim]")
-    except Exception:
-        pass
 
 
 @app.command()

@@ -24,6 +24,7 @@ Clockwork primitives offer **adjustable intelligence** - you choose how much AI 
 **Full Control (No AI)**:
 ```python
 DockerResource(
+    description="Nginx web server",
     name="my-nginx",
     image="nginx:1.25-alpine",
     ports=["8080:80"],
@@ -71,11 +72,9 @@ Clockwork achieves **functional determinism** through validation - assertions ve
 
 **Type-safe validation** (Pydantic-based, no AI costs):
 
-**HTTP/Network**: HealthcheckAssert, PortAccessibleAssert, ResponseTimeAssert
-**Container**: ContainerRunningAssert, ContainerHealthyAssert, LogContainsAssert
-**File**: FileExistsAssert, FilePermissionsAssert, FileSizeAssert, FileContentMatchesAssert
-**Resources**: MemoryUsageAssert, CpuUsageAssert, DiskUsageAssert
-**Process**: ProcessRunningAssert, ProcessNotRunningAssert
+**HTTP/Network**: HealthcheckAssert, PortAccessibleAssert
+**Container**: ContainerRunningAssert
+**File**: FileExistsAssert, FileContentMatchesAssert
 
 ```python
 nginx = AppleContainerResource(
@@ -110,8 +109,8 @@ See `examples/showcase/` for tool integration examples
 Declare dependencies for AI context, automatic ordering, and cycle detection:
 
 ```python
-postgres = DockerResource(name="postgres-db", image="postgres:15-alpine", ports=["5432:5432"])
-redis = DockerResource(name="redis-cache", image="redis:7-alpine", ports=["6379:6379"])
+postgres = DockerResource(description="PostgreSQL database", name="postgres-db", image="postgres:15-alpine", ports=["5432:5432"])
+redis = DockerResource(description="Redis cache", name="redis-cache", image="redis:7-alpine", ports=["6379:6379"])
 
 # AI auto-generates DATABASE_URL, REDIS_URL env vars
 api = DockerResource(

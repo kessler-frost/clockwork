@@ -33,6 +33,7 @@ Resources declare connections to other resources:
 ```python
 # Independent resources (deploy first)
 postgres = DockerResource(
+    description="PostgreSQL database",
     name="postgres-db",
     image="postgres:15-alpine",
     ports=["5432:5432"],
@@ -40,6 +41,7 @@ postgres = DockerResource(
 )
 
 redis = DockerResource(
+    description="Redis cache",
     name="redis-cache",
     image="redis:7-alpine",
     ports=["6379:6379"]

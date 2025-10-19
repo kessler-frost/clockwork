@@ -3,7 +3,6 @@ Clockwork Showcase - Comprehensive feature demonstration.
 
 This example demonstrates all major Clockwork capabilities in one place:
 - File creation (manual and AI-generated)
-- Template rendering (manual and AI-generated)
 - Git repository cloning
 - Docker containers with assertions
 - Tool integration (web search and custom functions)

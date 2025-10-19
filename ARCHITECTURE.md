@@ -8,7 +8,7 @@ Clockwork provides **intelligent, composable primitives for infrastructure** tha
 - **AI-powered completion** via PydanticAI (OpenAI-compatible APIs)
 - **Pulumi** for automated deployment
 
-Primitives are atomic building blocks - containers, files, services - that you compose freely. Each primitive can be fully specified, partially specified, or AI-completed based on your preference.
+Primitives are atomic building blocks - containers, files, containerized services - that you compose freely. Each primitive can be fully specified, partially specified, or AI-completed based on your preference.
 
 The approach: Compose primitives (Python) → AI completes what you left unspecified → Automated deployment (Pulumi)
 
@@ -90,8 +90,7 @@ class AppleContainerResource(Resource):
     volumes: Optional[List[str]] = None      # Volume mounts ["/host:/container"]
     env_vars: Optional[Dict[str, str]] = None  # Environment variables
     networks: Optional[List[str]] = None     # Networks
-    present: bool = True                     # Should container exist
-    start: bool = True                       # Should container be running
+    must_run: bool = True                    # Whether container must be running
 ```
 
 ### 2. Resource Completer (AI Stage)
@@ -354,7 +353,6 @@ web_server = DockerResource(
     assertions=[
         ContainerRunningAssert(),           # Must be running
         HealthcheckAssert(url="http://..."), # Must respond HTTP 200
-        ResponseTimeAssert(max_ms=200)      # Must be fast
     ]
 )
 # AI picks implementation (nginx, caddy, etc.)

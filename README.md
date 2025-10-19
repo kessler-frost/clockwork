@@ -13,11 +13,13 @@ Build infrastructure using composable primitives in Python - AI handles the part
 Clockwork provides intelligent primitives that adapt to how you want to work.
 
 **The insight:** What's tedious is personal.
+
 - Some people love writing Docker configs, others just want containers running
 - Some enjoy crafting nginx rules, others prefer describing requirements
 - Some care about specific image versions, others just need something that works
 
 **Your choice:**
+
 - **Specify everything** → Full control, zero AI
 - **Specify key details** → AI fills gaps
 - **Describe what you need** → AI handles implementation
@@ -29,8 +31,10 @@ Clockwork gives you flexibility to work how you prefer, on what you prefer.
 Same primitive, different levels of control - you choose per resource:
 
 **Full control** (No AI):
+
 ```python
 nginx = DockerResource(
+    description="Nginx web server",
     name="my-nginx",
     image="nginx:1.25-alpine",
     ports=["8080:80"],
@@ -40,6 +44,7 @@ nginx = DockerResource(
 ```
 
 **Hybrid** (AI assists):
+
 ```python
 nginx = DockerResource(
     description="web server with caching enabled",
@@ -49,6 +54,7 @@ nginx = DockerResource(
 ```
 
 **Fast** (AI handles implementation):
+
 ```python
 nginx = DockerResource(
     description="web server for static files",
@@ -196,7 +202,6 @@ from clockwork.assertions import (
     HealthcheckAssert,
     PortAccessibleAssert,
     ContainerRunningAssert,
-    ResponseTimeAssert,
 )
 
 nginx = AppleContainerResource(
@@ -206,7 +211,6 @@ nginx = AppleContainerResource(
         ContainerRunningAssert(),
         PortAccessibleAssert(port=8080),
         HealthcheckAssert(url="http://localhost:8080"),
-        ResponseTimeAssert(url="http://localhost:8080", max_ms=200),
     ]
 )
 ```
@@ -242,7 +246,6 @@ CW_LOG_LEVEL=INFO
 | `CW_API_KEY` | None | API key (required for cloud models) |
 | `CW_MODEL` | `meta-llama/llama-4-scout:free` | Model for AI completion |
 | `CW_BASE_URL` | `https://openrouter.ai/api/v1` | API endpoint (OpenRouter, LM Studio, etc.) |
-| `CW_PULUMI_STATE_DIR` | `.clockwork/state` | Pulumi state directory |
 | `CW_LOG_LEVEL` | `INFO` | Logging level |
 
 Override via CLI:
@@ -263,26 +266,20 @@ uv run clockwork apply --model "openai/gpt-4o-mini"
 ## Examples
 
 ```bash
-# File generation
-cd examples/file-generation
+# Comprehensive showcase (all features)
+cd examples/showcase
 uv run clockwork apply
 uv run clockwork assert
 uv run clockwork destroy
 
-# Docker services (cross-platform)
-cd examples/docker-service
-uv run clockwork apply
-uv run clockwork assert
-uv run clockwork destroy
-
-# Apple Container services (macOS)
-cd examples/apple-container-service
+# Connected services (multi-service with dependencies)
+cd examples/connected-services
 uv run clockwork apply
 uv run clockwork assert
 uv run clockwork destroy
 ```
 
-See `examples/` directory for more.
+See `examples/` directory for more details.
 
 ## Development
 
@@ -325,4 +322,4 @@ See [CLAUDE.md](./CLAUDE.md) for development guide.
 
 ## Roadmap
 
-See [ROADMAP.md](./ROADMAP.md) for upcoming features.
+See [POTENTIAL_ROADMAP.md](./POTENTIAL_ROADMAP.md) for upcoming features.

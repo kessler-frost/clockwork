@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import Mock, patch
 
-from clockwork.service.tools import ToolSelector
+from clockwork.tool_selector import ToolSelector
 from clockwork.resources import (
     FileResource,
     DockerResource,
@@ -38,7 +38,7 @@ class TestToolSelectorBasics:
 class TestResourceTypeTools:
     """Test tool selection based on resource type."""
 
-    @patch("clockwork.service.tools.ToolSelector._get_tool")
+    @patch("clockwork.tool_selector.ToolSelector._get_tool")
     def test_file_resource_gets_web_search(self, mock_get_tool):
         """Test FileResource gets web search tool."""
         mock_search_tool = Mock()
@@ -53,7 +53,7 @@ class TestResourceTypeTools:
         mock_get_tool.assert_called_with("duckduckgo_search")
         assert len(tools) > 0
 
-    @patch("clockwork.service.tools.ToolSelector._get_tool")
+    @patch("clockwork.tool_selector.ToolSelector._get_tool")
     def test_docker_resource_gets_web_search(self, mock_get_tool):
         """Test DockerResource gets web search tool."""
         mock_search_tool = Mock()
@@ -68,7 +68,7 @@ class TestResourceTypeTools:
         mock_get_tool.assert_called_with("duckduckgo_search")
         assert len(tools) > 0
 
-    @patch("clockwork.service.tools.ToolSelector._get_tool")
+    @patch("clockwork.tool_selector.ToolSelector._get_tool")
     def test_apple_container_resource_gets_web_search(self, mock_get_tool):
         """Test AppleContainerResource gets web search tool."""
         mock_search_tool = Mock()
@@ -83,7 +83,7 @@ class TestResourceTypeTools:
         mock_get_tool.assert_called_with("duckduckgo_search")
         assert len(tools) > 0
 
-    @patch("clockwork.service.tools.ToolSelector._get_tool")
+    @patch("clockwork.tool_selector.ToolSelector._get_tool")
     def test_git_resource_gets_web_search(self, mock_get_tool):
         """Test GitRepoResource gets web search tool."""
         mock_search_tool = Mock()
@@ -106,7 +106,7 @@ class TestResourceTypeTools:
 class TestContextTools:
     """Test tool selection based on context."""
 
-    @patch("clockwork.service.tools.ToolSelector._get_tool")
+    @patch("clockwork.tool_selector.ToolSelector._get_tool")
     def test_search_keyword_adds_search_tool(self, mock_get_tool):
         """Test context with 'search' keyword adds search tool."""
         mock_search_tool = Mock()
@@ -122,7 +122,7 @@ class TestContextTools:
         assert mock_get_tool.called
         assert len(tools) > 0
 
-    @patch("clockwork.service.tools.ToolSelector._get_tool")
+    @patch("clockwork.tool_selector.ToolSelector._get_tool")
     def test_latest_keyword_adds_search_tool(self, mock_get_tool):
         """Test context with 'latest' keyword adds search tool."""
         mock_search_tool = Mock()
@@ -137,7 +137,7 @@ class TestContextTools:
         assert mock_get_tool.called
         assert len(tools) > 0
 
-    @patch("clockwork.service.tools.ToolSelector._get_tool")
+    @patch("clockwork.tool_selector.ToolSelector._get_tool")
     def test_current_keyword_adds_search_tool(self, mock_get_tool):
         """Test context with 'current' keyword adds search tool."""
         mock_search_tool = Mock()
@@ -156,7 +156,7 @@ class TestContextTools:
 class TestMCPTools:
     """Test MCP tool selection."""
 
-    @patch("clockwork.service.tools.ToolSelector._get_tool")
+    @patch("clockwork.tool_selector.ToolSelector._get_tool")
     def test_file_resource_with_mcp_enabled(self, mock_get_tool):
         """Test FileResource with MCP enabled gets filesystem tool."""
         mock_search_tool = Mock()
@@ -180,7 +180,7 @@ class TestMCPTools:
         assert mock_get_tool.call_count >= 2
         assert len(tools) > 0
 
-    @patch("clockwork.service.tools.ToolSelector._get_tool")
+    @patch("clockwork.tool_selector.ToolSelector._get_tool")
     def test_file_keyword_with_mcp_adds_filesystem(self, mock_get_tool):
         """Test context with 'file' keyword and MCP adds filesystem tool."""
         mock_fs_tool = Mock()
@@ -239,7 +239,7 @@ class TestToolRegistry:
 class TestDuplicateRemoval:
     """Test duplicate tool removal."""
 
-    @patch("clockwork.service.tools.ToolSelector._get_tool")
+    @patch("clockwork.tool_selector.ToolSelector._get_tool")
     def test_removes_duplicate_tools(self, mock_get_tool):
         """Test that duplicate tools are removed from selection."""
         mock_search_tool = Mock()
@@ -306,7 +306,7 @@ class TestEdgeCases:
 
         assert isinstance(tools, list)
 
-    @patch("clockwork.service.tools.ToolSelector._get_tool")
+    @patch("clockwork.tool_selector.ToolSelector._get_tool")
     def test_tool_loading_failure(self, mock_get_tool):
         """Test graceful handling when tool loading fails."""
         mock_get_tool.return_value = None  # Tool loading failed

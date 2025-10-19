@@ -13,7 +13,7 @@ from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.profiles.openai import OpenAIModelProfile
 
-from .service.tools import ToolSelector
+from .tool_selector import ToolSelector
 from .settings import get_settings
 
 logger = logging.getLogger(__name__)

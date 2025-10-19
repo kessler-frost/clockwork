@@ -66,12 +66,6 @@ class ClockworkSettings(BaseSettings):
         description="Maximum retry attempts for AI resource completion (env: CW_COMPLETION_MAX_RETRIES)"
     )
 
-    # Service Configuration
-    service_port: int = Field(
-        default=8765,
-        description="Service port (env: CW_SERVICE_PORT)"
-    )
-
 
 
 # Global settings instance
