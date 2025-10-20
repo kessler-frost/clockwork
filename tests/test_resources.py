@@ -13,7 +13,22 @@ def event_loop():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     yield loop
-    loop.close()
+
+    # Clean up pending tasks to avoid warnings
+    try:
+        # Cancel all pending tasks
+        pending = asyncio.all_tasks(loop)
+        for task in pending:
+            task.cancel()
+        # Run the loop one more time to process cancellations
+        if pending:
+            loop.run_until_complete(
+                asyncio.gather(*pending, return_exceptions=True)
+            )
+    except Exception:
+        pass
+    finally:
+        loop.close()
 
 
 def test_file_resource_minimal():

@@ -101,7 +101,8 @@ class BlankResource(Resource):
         # Also store in BlankResource-specific list for backward compatibility
         for resource in resources:
             # Store the actual Resource object (avoid duplicates)
-            if resource not in self._children_resources:
+            # Use object identity to avoid recursion with circular references
+            if not any(resource is child for child in self._children_resources):
                 self._children_resources.append(resource)
 
         return self

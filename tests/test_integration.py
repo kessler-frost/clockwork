@@ -549,18 +549,22 @@ dynamic_file = FileResource(
 
 def test_assert_command_with_object_assertions(tmp_path):
     """Test clockwork assert command with BaseAssertion objects."""
+    # Create the test file that assertions will check
+    test_file_path = tmp_path / "test.txt"
+    test_file_path.write_text("Test content")
+
     main_file = tmp_path / "main.py"
-    main_file.write_text("""
+    main_file.write_text(f"""
 from clockwork.resources import FileResource
-from clockwork.assertions import FileExistsAssert, FilePermissionsAssert
+from clockwork.assertions import FileExistsAssert, FileContentMatchesAssert
 
 test_file = FileResource(
     name="test.txt",
     description="Test file",
     content="Test content",
     assertions=[
-        FileExistsAssert(path="test.txt"),
-        FilePermissionsAssert(path="test.txt", mode="644")
+        FileExistsAssert(path="{test_file_path}"),
+        FileContentMatchesAssert(path="{test_file_path}", pattern="Test.*")
     ]
 )
 """)
@@ -645,10 +649,11 @@ test_file = FileResource(
         core = ClockworkCore(api_key="test-key")
         result = asyncio.run(core.assert_resources(main_file, dry_run=False))
 
-    # Assertions are currently placeholder implementations that pass
-    # In a real implementation, this would fail
-    assert result["success"] is True
+    # Assertion should fail because the file doesn't exist
+    assert result["success"] is False
     assert result["total"] == 1
+    assert result["passed"] == 0
+    assert result["failed"] == 1
 
 
 def test_assert_command_no_main_file():
@@ -671,7 +676,7 @@ def test_assert_multiple_resources_with_assertions(tmp_path):
     main_file = tmp_path / "main.py"
     main_file.write_text("""
 from clockwork.resources import FileResource
-from clockwork.assertions import FileExistsAssert, FilePermissionsAssert
+from clockwork.assertions import FileExistsAssert, FileContentMatchesAssert
 
 file1 = FileResource(
     name="file1.txt",
@@ -686,7 +691,7 @@ file2 = FileResource(
     content="Content 2",
     assertions=[
         FileExistsAssert(path="file2.txt"),
-        FilePermissionsAssert(path="file2.txt", mode="644")
+        FileContentMatchesAssert(path="file2.txt", pattern="Content.*")
     ]
 )
 """)

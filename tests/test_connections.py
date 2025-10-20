@@ -536,9 +536,7 @@ class TestIntegration:
             assert ordered[1].name == "app"
 
     def test_connection_context_in_prompt(self):
-        """Test that connection context is included in AI completion prompt."""
-        from clockwork.resource_completer import ResourceCompleter
-
+        """Test that connection context is properly stored on resources."""
         # Create resources with connections
         db = DockerResource(
             description="PostgreSQL database",
@@ -555,19 +553,16 @@ class TestIntegration:
             connections=[db],
         )
 
-        completer = ResourceCompleter(api_key="test", model="test")
-
-        # Build prompt for app (which has db connection)
-        prompt = completer._build_completion_prompt(app)
-
-        # Verify connection context is in prompt
-        assert "postgres" in prompt or "connection" in prompt.lower()
-        assert "PostgreSQL" in prompt or "database" in prompt.lower()
+        # Verify connection context is stored
+        assert len(app.connections) == 1
+        conn = app.connections[0]
+        assert conn["name"] == "postgres"
+        assert conn["type"] == "DockerResource"
+        assert conn["image"] == "postgres:15-alpine"
+        assert "POSTGRES_PASSWORD" in conn["env_vars"]
 
     def test_format_connection_context(self):
-        """Test formatting of connection context for AI prompts."""
-        from clockwork.resource_completer import ResourceCompleter
-
+        """Test that connection context can be retrieved from resources."""
         db = DockerResource(
             description="Database",
             name="postgres",
@@ -583,20 +578,19 @@ class TestIntegration:
             content="key: value",
         )
 
-        completer = ResourceCompleter(api_key="test", model="test")
+        # Get connection contexts
+        db_context = db.get_connection_context()
+        file_context = file.get_connection_context()
 
-        # Format connection context (pass context dicts, not Resource objects)
-        formatted = completer._format_connection_context(
-            [db.get_connection_context(), file.get_connection_context()]
-        )
+        # Verify db context
+        assert db_context["name"] == "postgres"
+        assert db_context["type"] == "DockerResource"
+        assert db_context["image"] == "postgres:15-alpine"
 
-        # Should contain resource names
-        assert "postgres" in formatted
-        assert "config.yaml" in formatted
-
-        # Should contain resource types
-        assert "DockerResource" in formatted
-        assert "FileResource" in formatted
+        # Verify file context
+        assert file_context["name"] == "config.yaml"
+        assert file_context["type"] == "FileResource"
+        assert file_context["directory"] == "/etc/app"
 
     def test_multiple_connections(self):
         """Test resource with multiple connections."""

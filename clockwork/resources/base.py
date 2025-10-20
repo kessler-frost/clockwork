@@ -368,8 +368,9 @@ class Resource(BaseModel):
                     f"Can only add Resource objects, got {type(resource).__name__}"
                 )
 
-            # Check for duplicates
-            if resource in self._children:
+            # Check for duplicates using object identity (not equality) to avoid
+            # recursion issues with circular references
+            if any(resource is child for child in self._children):
                 logging.warning(
                     f"Resource '{resource.name}' is already a child of '{self.name}', skipping"
                 )
