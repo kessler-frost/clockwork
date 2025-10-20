@@ -1,4 +1,4 @@
-name: Test Examples Suite
+name: Test Examples Suite (with Haiku 4.5)
 
 on:
   workflow_dispatch: # Manual trigger only
@@ -27,7 +27,7 @@ jobs:
       - name: Set up environment variables
         run: |
           echo "CW_API_KEY=${{ secrets.CW_API_KEY }}" >> $GITHUB_ENV
-          echo "CW_MODEL=openai/gpt-oss-20b:free" >> $GITHUB_ENV
+          echo "CW_MODEL=anthropic/claude-haiku-4.5" >> $GITHUB_ENV
           echo "CW_BASE_URL=https://openrouter.ai/api/v1" >> $GITHUB_ENV
           echo "CW_LOG_LEVEL=INFO" >> $GITHUB_ENV
 

@@ -139,7 +139,7 @@ uv run clockwork destroy
 uv run clockwork destroy --keep-files
 
 # Custom model
-uv run clockwork apply --model "openai/gpt-4o-mini"
+uv run clockwork apply --model "anthropic/claude-haiku-4.5"
 
 # Show version
 uv run clockwork version
@@ -251,7 +251,7 @@ CW_LOG_LEVEL=INFO
 Override via CLI:
 
 ```bash
-uv run clockwork apply --model "openai/gpt-4o-mini"
+uv run clockwork apply --model "anthropic/claude-haiku-4.5"
 ```
 
 ## Why Clockwork?

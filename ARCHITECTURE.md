@@ -409,7 +409,7 @@ Change model via CLI or environment:
 
 ```bash
 # Cloud (OpenRouter)
-clockwork apply --model "openai/gpt-4o-mini"
+clockwork apply --model "anthropic/claude-haiku-4.5"
 
 # Local (LM Studio)
 export CW_BASE_URL="http://localhost:1234/v1"
