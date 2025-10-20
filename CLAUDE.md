@@ -61,6 +61,214 @@ Choose per primitive, per project. What you find tedious is personal.
 
 All support AI completion with `description` field.
 
+## Composite Resources
+
+Composite resources enable building complex infrastructure from simpler components. **Philosophy**: All resources are composites - some are just atomic (0 children).
+
+**Benefits**:
+- **Organization**: Group related resources into logical units
+- **Reusability**: Define once, instantiate many times
+- **Abstraction**: Hide implementation details, expose clean interfaces
+
+### `.add()` vs `.connect()` - Critical Distinction
+
+Understanding the difference between composition and connection is fundamental to Clockwork:
+
+| Aspect | `.add()` | `.connect()` |
+|--------|----------|--------------|
+| **Relationship** | Parent-child composition | Dependency/reference |
+| **Resource Count** | 1 composite resource | N independent resources |
+| **Lifecycle** | Atomic (all children deploy/destroy together) | Independent (each resource has own lifecycle) |
+| **Pulumi Type** | ComponentResource with children | Separate resources with dependencies |
+| **Naming** | Children namespaced under parent | Each resource has own name |
+| **Use Case** | "Contains" - part of the whole | "Depends on" - needs to reference |
+
+**When to use `.add()`**:
+- Resources that belong together conceptually (e.g., app + config + volume)
+- You want atomic lifecycle management
+- Building reusable templates
+
+**When to use `.connect()`**:
+- Resources that reference each other (e.g., API depends on database)
+- Independent lifecycles (database may outlive API)
+- Need AI to understand dependencies for auto-configuration
+
+```python
+# Composition (.add) - One "web-app" resource with 3 children
+web_app = BlankResource(name="web-app", description="Complete web application")
+web_app.add(
+    DockerResource(description="nginx reverse proxy", ports=["80:80"]),
+    FileResource(description="nginx configuration"),
+    DockerResource(description="app container", ports=["8080:8080"])
+)
+
+# Connection (.connect) - 3 separate resources with dependencies
+db = DockerResource(name="postgres", description="database", ports=["5432:5432"])
+cache = DockerResource(name="redis", description="cache", ports=["6379:6379"])
+api = DockerResource(
+    name="api",
+    description="API server",
+    ports=["8000:8000"]
+).connect(db, cache)  # API depends on db + cache
+```
+
+### Creating Composite Resources
+
+Use `BlankResource` for pure composition (no implementation, just organization):
+
+```python
+from clockwork import BlankResource, DockerResource, FileResource
+
+# Simple composite
+monitoring = BlankResource(
+    name="monitoring-stack",
+    description="Complete monitoring solution"
+).add(
+    DockerResource(description="Prometheus metrics collector", ports=["9090:9090"]),
+    DockerResource(description="Grafana dashboard", ports=["3000:3000"]),
+    FileResource(description="Prometheus configuration")
+)
+
+# Chainable API - mix .add() and .connect()
+app = BlankResource(name="app", description="Full application stack")
+app.add(
+    DockerResource(description="application server", ports=["8080:8080"]),
+    FileResource(description="app config")
+).connect(monitoring)  # App depends on monitoring
+
+# Nested composites - composites can contain composites
+full_system = BlankResource(name="system", description="Complete system")
+full_system.add(monitoring, app)
+```
+
+### Two-Phase AI Completion
+
+Composites leverage a sophisticated two-phase completion process:
+
+**Phase 1: Composite-Level Planning**
+- AI sees the composite as a whole with all child descriptions
+- Plans how children should work together
+- Determines overall architecture and relationships
+
+**Phase 2: Child Completion**
+- Each child receives completion with parent context
+- AI knows about siblings and parent requirements
+- Can make coordinated decisions
+
+```python
+# The AI sees this holistically
+web_service = BlankResource(
+    name="web-service",
+    description="Production web service with caching and database"
+).add(
+    DockerResource(description="web server"),
+    DockerResource(description="cache layer"),
+    DockerResource(description="database")
+)
+
+# Phase 1: AI plans overall architecture
+# - Decides web server should be nginx
+# - Cache should be redis
+# - Database should be postgres
+# - Plans how they interconnect
+
+# Phase 2: AI completes each child
+# - Web server gets nginx config that connects to cache/db
+# - Cache gets appropriate memory settings
+# - Database gets appropriate volume mounts
+# - All receive coordinated network configuration
+```
+
+**Benefits**:
+- **Coherent systems**: Children are configured to work together
+- **Smart defaults**: AI picks compatible versions and configurations
+- **Context awareness**: Each child knows its role in the larger system
+
+### Post-Creation Field Access
+
+After composition, you can access and modify child properties using the `.children` property, which provides dict-style access:
+
+```python
+stack = BlankResource(name="app-stack", description="Application with database").add(
+    DockerResource(description="PostgreSQL database", name="db"),
+    DockerResource(description="FastAPI application", name="api")
+)
+
+# Dict-style access to children by name
+stack.children["db"].ports = ["5433:5432"]  # Change postgres port
+stack.children["api"].env_vars = {"DEBUG": "true"}  # Add env var
+
+# Safe access with default
+api = stack.children.get("api")  # Returns None if not found
+api = stack.children.get("api", fallback_resource)  # With default
+
+# Check if child exists
+if "db" in stack.children:
+    stack.children["db"].restart_policy = "always"
+
+# Iterate over children
+for name in stack.children.keys():
+    print(f"Child: {name}")
+
+for resource in stack.children.values():
+    print(f"Resource: {resource.name}")
+
+for name, resource in stack.children.items():
+    print(f"{name}: {resource.name}")
+```
+
+**The `.children` property returns a ChildrenCollection** (implements `Mapping` protocol):
+- **Dict-style access**: `children["name"]` - raises `KeyError` if not found
+- **Safe access**: `children.get("name", default)` - returns default if not found
+- **Membership test**: `"name" in children` - check if child exists
+- **Iteration**: `children.keys()`, `children.values()`, `children.items()`
+- **Read-only**: You can access and modify children's properties, but not add/remove children
+
+**Useful for**:
+- Overriding AI decisions
+- Dynamic configuration based on environment
+- Testing variations
+- Progressive enhancement
+
+**Best practices**:
+- Access children after initial composition
+- Use for environment-specific overrides
+- Document why you're overriding AI decisions
+- Consider if the description should be more specific instead
+
+### Pulumi Integration
+
+Composites compile to Pulumi ComponentResource with proper parent-child hierarchy:
+
+```python
+web_app = BlankResource(name="my-app", description="Web application").add(
+    DockerResource(description="nginx", name="web"),
+    DockerResource(description="postgres", name="db")
+)
+
+# Compiles to:
+# - ComponentResource: my-app
+#   - Container: my-app-web (namespaced under parent)
+#   - Container: my-app-db (namespaced under parent)
+```
+
+**Pulumi benefits**:
+- **Hierarchical state**: Resources organized in logical groups
+- **Resource naming**: Children automatically namespaced
+- **Dependency tracking**: Pulumi knows parent-child relationships
+- **Atomic operations**: Destroy parent removes all children
+- **State visualization**: `pulumi stack graph` shows hierarchy
+
+### Examples
+
+See `examples/composite-resources/` for complete examples:
+
+- **`basic_composite.py`**: Simple composite with BlankResource
+- **`nested_composites.py`**: Composites containing composites
+- **`web_app_composite.py`**: Real-world web application (nginx + app + db)
+- **`monitoring_stack.py`**: Prometheus + Grafana + Alertmanager
+- **`field_access.py`**: Modifying children post-composition
+
 ## Assertions: Functional Determinism
 
 Clockwork achieves **functional determinism** through validation - assertions verify behavior, not implementation.

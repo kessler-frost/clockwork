@@ -102,12 +102,28 @@ class AppleContainerResource(Resource):
             must_run=self.must_run,
         )
 
-        # Create and return the Pulumi resource
-        return AppleContainer(
+        # Build resource options for dependencies
+        dep_opts = self._build_dependency_options()
+
+        # Check if we have temporary compile options (from _compile_with_opts)
+        # This allows this resource to be a child in a composite
+        if hasattr(self, '_temp_compile_opts'):
+            # Merge with dependency options
+            opts = self._merge_resource_options(self._temp_compile_opts, dep_opts)
+        else:
+            opts = dep_opts if dep_opts else pulumi.ResourceOptions()
+
+        # Create Pulumi resource
+        container_resource = AppleContainer(
             resource_name=self.name,
             inputs=inputs,
-            opts=pulumi.ResourceOptions(),
+            opts=opts,
         )
+
+        # Store for dependency tracking
+        self._pulumi_resource = container_resource
+
+        return container_resource
 
     def get_connection_context(self) -> Dict[str, Any]:
         """Get connection context for this Apple Container resource.

@@ -223,6 +223,112 @@ uv run clockwork assert
 
 See [CLAUDE.md](./CLAUDE.md) for available assertion classes.
 
+## Composite Resources
+
+**Build reusable groups** of related resources with `BlankResource` - a lightweight container for organizing infrastructure into logical units.
+
+### Why Composite Resources?
+
+Composite resources let you:
+- **Group related resources** for organized deployment (e.g., database + cache + API)
+- **Create reusable patterns** that can be instantiated multiple times
+- **Manage complex stacks** with atomic lifecycle (deploy/destroy together)
+- **Build hierarchical structures** by nesting composites
+
+### Quick Example
+
+```python
+from clockwork.resources import BlankResource, DockerResource
+
+# Create a composite web application
+webapp = BlankResource(
+    name="simple-webapp",
+    description="Web application with database, cache, and API"
+)
+
+# Add resources to the composition
+webapp.add(
+    DockerResource(
+        name="postgres-db",
+        image="postgres:15-alpine",
+        ports=["5432:5432"]
+    ),
+    DockerResource(
+        name="redis-cache",
+        image="redis:7-alpine",
+        ports=["6379:6379"]
+    ),
+    DockerResource(
+        name="api-server",
+        description="Node.js API server",
+        ports=["3000:3000"]
+    )
+)
+
+# Access children using dict-style syntax
+postgres = webapp.children["postgres-db"]
+redis = webapp.children["redis-cache"]
+api = webapp.children["api-server"]
+
+# Establish dependencies for proper startup order
+api.connect(postgres)  # API depends on database
+api.connect(redis)     # API depends on cache
+```
+
+### Key Concepts
+
+**`.add()` creates compositions** - Resources added to a composite share an atomic lifecycle:
+- Deploy together as a logical unit
+- Destroy together when the composite is destroyed
+- Organized under a single parent in Pulumi's resource hierarchy
+
+**`.connect()` creates dependencies** - Resources have independent lifecycles but explicit ordering:
+- Each resource can be deployed/destroyed independently
+- Dependencies control deployment order (postgres → redis → api)
+- No parent-child relationship in Pulumi's hierarchy
+
+**When to use each**:
+- Use `.add()` when resources logically belong together (e.g., all parts of a web app)
+- Use `.connect()` when resources are independent but have ordering requirements
+
+### Accessing Children
+
+After adding resources to a composite, access them using the `.children` property with dict-style syntax:
+
+```python
+webapp = BlankResource(name="webapp", description="Web app").add(
+    DockerResource(name="db", image="postgres:15"),
+    DockerResource(name="cache", image="redis:7")
+)
+
+# Dict-style access
+db = webapp.children["db"]
+cache = webapp.children["cache"]
+
+# Safe access (returns None if not found)
+maybe_db = webapp.children.get("db")
+
+# Check existence
+if "db" in webapp.children:
+    webapp.children["db"].ports = ["5432:5432"]
+
+# Iterate over children
+for name, resource in webapp.children.items():
+    print(f"{name}: {resource.image}")
+```
+
+The `.children` property provides a read-only, dict-like interface for accessing child resources by name.
+
+### Examples
+
+See `examples/composite-resources/` directory for complete examples:
+- **simple-webapp/** - Basic composition with database, cache, and API
+- **nested-composites/** - Hierarchical compositions (frontend + backend)
+- **mixed-pattern/** - Combining `.add()` and `.connect()` patterns
+- **post-creation-overrides/** - Modifying resources after composition
+
+For detailed documentation on composite resources, see [CLAUDE.md](./CLAUDE.md).
+
 ## Configuration
 
 Clockwork uses `.env` files for configuration via Pydantic Settings.
@@ -262,6 +368,7 @@ uv run clockwork apply --model "anthropic/claude-haiku-4.5"
 - **Intelligent**: AI-powered completion adapts to your needs
 - **Functionally Deterministic**: Assertions validate behavior, ensuring reliable outcomes
 - **Type-safe**: Full IDE support with Pydantic validation
+- **Composite Resources**: Build higher-level abstractions by composing basic resources into reusable groups
 
 ## Examples
 
@@ -274,6 +381,12 @@ uv run clockwork destroy
 
 # Connected services (multi-service with dependencies)
 cd examples/connected-services
+uv run clockwork apply
+uv run clockwork assert
+uv run clockwork destroy
+
+# Composite resources (grouping and hierarchies)
+cd examples/composite-resources/simple-webapp
 uv run clockwork apply
 uv run clockwork assert
 uv run clockwork destroy

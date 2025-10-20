@@ -86,15 +86,15 @@ class GitRepoResource(Resource):
             raise ValueError(f"Resource not completed: name={self.name}, repo_url={self.repo_url}, dest={self.dest}, branch={self.branch}")
 
         # Build resource options for dependencies
-        opts = None
-        if self.connections:
-            # Get Pulumi resources from connected resources for dependency tracking
-            depends_on = []
-            for conn_resource in getattr(self, '_connection_resources', []):
-                if hasattr(conn_resource, '_pulumi_resource') and conn_resource._pulumi_resource is not None:
-                    depends_on.append(conn_resource._pulumi_resource)
-            if depends_on:
-                opts = pulumi.ResourceOptions(depends_on=depends_on)
+        dep_opts = self._build_dependency_options()
+
+        # Check if we have temporary compile options (from _compile_with_opts)
+        # This allows this resource to be a child in a composite
+        if hasattr(self, '_temp_compile_opts'):
+            # Merge with dependency options
+            opts = self._merge_resource_options(self._temp_compile_opts, dep_opts)
+        else:
+            opts = dep_opts
 
         # Create GitRepoInputs
         inputs = GitRepoInputs(

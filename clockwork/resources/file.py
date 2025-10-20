@@ -93,6 +93,7 @@ class FileResource(Resource):
             Pulumi File resource
         """
         from clockwork.pulumi_providers import File
+        import pulumi
 
         # Resolve file path and directory
         file_path, directory = self._resolve_file_path()
@@ -103,13 +104,30 @@ class FileResource(Resource):
         # Ensure mode is set (should be set after AI completion)
         mode = self.mode or "644"
 
+        # Build resource options for dependencies
+        dep_opts = self._build_dependency_options()
+
+        # Check if we have temporary compile options (from _compile_with_opts)
+        # This allows this resource to be a child in a composite
+        if hasattr(self, '_temp_compile_opts'):
+            # Merge with dependency options
+            opts = self._merge_resource_options(self._temp_compile_opts, dep_opts)
+        else:
+            opts = dep_opts
+
         # Create File resource using dynamic provider
-        return File(
+        file_resource = File(
             self.name,
             path=file_path,
             content=content,
             mode=mode,
+            opts=opts
         )
+
+        # Store for dependency tracking
+        self._pulumi_resource = file_resource
+
+        return file_resource
 
     def get_connection_context(self) -> Dict[str, Any]:
         """Get connection context for this File resource.

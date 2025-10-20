@@ -166,15 +166,76 @@ class ClockworkCore:
             logger.error(f"Traceback: {traceback.format_exc()}")
             raise RuntimeError(f"Resource completion failed: {e}") from e
 
+    def _flatten_resources(self, resources: List[Any]) -> List[Any]:
+        """Flatten resource hierarchy by recursively extracting all children.
+
+        This method handles composite resources by:
+        1. Recursively extracting all children from the children dict
+        2. Preserving parent-child relationships (stored in _parent/_children attrs)
+        3. Returning a flat list with hierarchy intact
+
+        Args:
+            resources: List of Resource objects (may include composites with children)
+
+        Returns:
+            Flattened list: [parent1, child1, child2, parent2, child3, ...]
+
+        Example:
+            # Given: parent1 has [child1, child2], parent2 has [child3]
+            # Returns: [parent1, child1, child2, parent2, child3]
+        """
+        flattened = []
+
+        for resource in resources:
+            # Add the parent resource
+            flattened.append(resource)
+            logger.debug(f"Flattened resource: {resource.name or resource.__class__.__name__}")
+
+            # Recursively add all children
+            if hasattr(resource, '_children'):
+                children = resource._children  # _children is already a list
+                if children:
+                    logger.debug(f"  Found {len(children)} children")
+                    # Recursively flatten children (in case of nested composites)
+                    flattened_children = self._flatten_resources(children)
+                    flattened.extend(flattened_children)
+
+        return flattened
+
+    def _add_implicit_parent_child_dependencies(self, resources: List[Any]) -> None:
+        """Add implicit dependencies from children to parents.
+
+        For each resource with a parent, this adds the parent to the child's
+        _connection_resources list. This ensures parents are deployed before children.
+
+        Args:
+            resources: Flattened list of Resource objects
+
+        Side Effects:
+            Modifies _connection_resources in-place for resources with parents
+        """
+        for resource in resources:
+            parent = resource._parent if hasattr(resource, '_parent') else None
+            if parent is not None:
+                # Add parent to connection resources if not already present
+                if parent not in resource._connection_resources:
+                    resource._connection_resources.append(parent)
+                    logger.debug(
+                        f"Added implicit dependency: {resource.name or resource.__class__.__name__} "
+                        f"→ {parent.name or parent.__class__.__name__} (parent)"
+                    )
+
     def _resolve_dependency_order(self, resources: List[Any]) -> List[Any]:
         """Resolve resource dependencies and return them in correct deployment order.
 
-        This method performs two critical operations:
-        1. Cycle Detection: Uses DFS to detect circular dependencies
-        2. Topological Sort: Orders resources so dependencies are deployed first
+        This method performs the following operations:
+        1. Flatten Resources: Extract all children from composite resources
+        2. Add Implicit Dependencies: Ensure children depend on their parents
+        3. Cycle Detection: Uses DFS to detect circular dependencies
+        4. Topological Sort: Orders resources so dependencies are deployed first
 
         Args:
-            resources: List of Resource objects (may have connections)
+            resources: List of Resource objects (may have connections and children)
 
         Returns:
             List of Resource objects in dependency order (dependencies first)
@@ -189,7 +250,16 @@ class ClockworkCore:
         if not resources:
             return resources
 
-        # First, detect cycles using DFS
+        # Step 1: Flatten composite resources
+        logger.debug("Flattening composite resources...")
+        resources = self._flatten_resources(resources)
+        logger.info(f"Flattened to {len(resources)} total resources")
+
+        # Step 2: Add implicit parent-child dependencies
+        logger.debug("Adding implicit parent-child dependencies...")
+        self._add_implicit_parent_child_dependencies(resources)
+
+        # Step 3: Detect cycles using DFS
         visited = set()
         rec_stack = set()
 
@@ -205,7 +275,14 @@ class ClockworkCore:
             """
             visited.add(id(resource))
             rec_stack.add(id(resource))
+
+            # Format resource name with parent context if available
             resource_name = resource.name or resource.__class__.__name__
+            parent = resource._parent if hasattr(resource, '_parent') else None
+            if parent is not None:
+                parent_name = parent.name or parent.__class__.__name__
+                resource_name = f"{parent_name}.{resource_name}"
+
             path.append(resource_name)
 
             # Use _connection_resources for actual Resource objects
@@ -214,8 +291,13 @@ class ClockworkCore:
                 if connected_id not in visited:
                     detect_cycle_dfs(connected, path)
                 elif connected_id in rec_stack:
-                    # Cycle detected
+                    # Cycle detected - format connected name with parent context
                     connected_name = connected.name or connected.__class__.__name__
+                    connected_parent = connected._parent if hasattr(connected, '_parent') else None
+                    if connected_parent is not None:
+                        connected_parent_name = connected_parent.name or connected_parent.__class__.__name__
+                        connected_name = f"{connected_parent_name}.{connected_name}"
+
                     cycle_path = path + [connected_name]
                     raise ValueError(
                         f"Dependency cycle detected: {' → '.join(cycle_path)}"
@@ -231,7 +313,7 @@ class ClockworkCore:
 
         logger.debug("No dependency cycles detected")
 
-        # Now perform topological sort using DFS
+        # Step 4: Perform topological sort using DFS
         visited_topo = set()
         result = []
 

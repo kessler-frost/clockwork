@@ -148,15 +148,15 @@ class DockerResource(Resource):
                 ))
 
         # Build resource options for dependencies
-        opts = None
-        if self._connection_resources:
-            # Get Pulumi resources from connected resources for dependency tracking
-            depends_on = []
-            for conn in self._connection_resources:
-                if hasattr(conn, '_pulumi_resource') and conn._pulumi_resource is not None:
-                    depends_on.append(conn._pulumi_resource)
-            if depends_on:
-                opts = pulumi.ResourceOptions(depends_on=depends_on)
+        dep_opts = self._build_dependency_options()
+
+        # Check if we have temporary compile options (from _compile_with_opts)
+        # This allows this resource to be a child in a composite
+        if hasattr(self, '_temp_compile_opts'):
+            # Merge with dependency options
+            opts = self._merge_resource_options(self._temp_compile_opts, dep_opts)
+        else:
+            opts = dep_opts
 
         # Create Pulumi Docker Container resource
         container = docker.Container(
