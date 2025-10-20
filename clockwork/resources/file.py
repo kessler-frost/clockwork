@@ -1,7 +1,9 @@
 """File resource for creating files with optional AI-generated content."""
 
-from typing import Optional, Dict, Any
+from typing import Any
+
 from pydantic import Field, model_validator
+
 from .base import Resource
 
 
@@ -20,13 +22,31 @@ class FileResource(Resource):
     """
 
     description: str
-    name: str | None = Field(None, description="Filename with extension", examples=["config.yaml", "README.md", "script.sh"])
-    content: str | None = Field(None, description="File content - can be markdown, code, config, or any text")
-    directory: str | None = Field(None, description="Directory path where file will be created", examples=[".", "scratch", "config"])
-    mode: str | None = Field(None, description="Unix file permissions in octal", examples=["644", "755", "600"])
-    path: str | None = Field(None, description="Full file path - overrides directory + name if provided")
+    name: str | None = Field(
+        None,
+        description="Filename with extension",
+        examples=["config.yaml", "README.md", "script.sh"],
+    )
+    content: str | None = Field(
+        None,
+        description="File content - can be markdown, code, config, or any text",
+    )
+    directory: str | None = Field(
+        None,
+        description="Directory path where file will be created",
+        examples=[".", "scratch", "config"],
+    )
+    mode: str | None = Field(
+        None,
+        description="Unix file permissions in octal",
+        examples=["644", "755", "600"],
+    )
+    path: str | None = Field(
+        None,
+        description="Full file path - overrides directory + name if provided",
+    )
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def validate_description(self):
         """Description is always required."""
         if not self.description:
@@ -42,10 +62,10 @@ class FileResource(Resource):
         # Otherwise, need completion for content at minimum
         # Also check if name, directory, mode need completion
         return (
-            self.content is None or
-            self.name is None or
-            self.directory is None or
-            self.mode is None
+            self.content is None
+            or self.name is None
+            or self.directory is None
+            or self.mode is None
         )
 
     def _resolve_file_path(self) -> tuple[str, str | None]:
@@ -65,7 +85,9 @@ class FileResource(Resource):
 
         # Ensure we have a name (should be set after AI completion)
         if not self.name:
-            raise ValueError("FileResource.name must be set before resolving path")
+            raise ValueError(
+                "FileResource.name must be set before resolving path"
+            )
 
         cwd = Path.cwd()
 
@@ -92,11 +114,11 @@ class FileResource(Resource):
         Returns:
             Pulumi File resource
         """
+
         from clockwork.pulumi_providers import File
-        import pulumi
 
         # Resolve file path and directory
-        file_path, directory = self._resolve_file_path()
+        file_path, _directory = self._resolve_file_path()
 
         # Use content directly (should be set after AI completion)
         content = self.content or ""
@@ -109,19 +131,17 @@ class FileResource(Resource):
 
         # Check if we have temporary compile options (from _compile_with_opts)
         # This allows this resource to be a child in a composite
-        if hasattr(self, '_temp_compile_opts'):
+        if hasattr(self, "_temp_compile_opts"):
             # Merge with dependency options
-            opts = self._merge_resource_options(self._temp_compile_opts, dep_opts)
+            opts = self._merge_resource_options(
+                self._temp_compile_opts, dep_opts
+            )
         else:
             opts = dep_opts
 
         # Create File resource using dynamic provider
         file_resource = File(
-            self.name,
-            path=file_path,
-            content=content,
-            mode=mode,
-            opts=opts
+            self.name, path=file_path, content=content, mode=mode, opts=opts
         )
 
         # Store for dependency tracking
@@ -129,7 +149,7 @@ class FileResource(Resource):
 
         return file_resource
 
-    def get_connection_context(self) -> Dict[str, Any]:
+    def get_connection_context(self) -> dict[str, Any]:
         """Get connection context for this File resource.
 
         Returns shareable fields that other resources can use when connected.
@@ -154,6 +174,7 @@ class FileResource(Resource):
         elif self.name and self.directory:
             # Can construct a relative path if both are available
             from pathlib import Path
+
             context["path"] = str(Path(self.directory) / self.name)
 
         # Add directory if specified

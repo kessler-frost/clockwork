@@ -155,7 +155,7 @@ def main():
 
     # Access children from the composite using dict-style syntax:
     db = webapp.children["postgres-db"]
-    api_svc = webapp.children["api-service"]
+    webapp.children["api-service"]
 
     # Verify child configuration:
     if "postgres-db" in webapp.children:

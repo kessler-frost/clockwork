@@ -1,8 +1,10 @@
 """Blank resource for pure composition - groups resources without additional functionality."""
 
-from typing import Dict, Any, List
+from typing import Any
+
 import pulumi
 from pydantic import Field, PrivateAttr
+
 from .base import Resource
 
 
@@ -54,10 +56,12 @@ class BlankResource(Resource):
     """
 
     name: str = Field(..., description="Unique identifier for this composition")
-    description: str | None = Field(None, description="What this composition represents")
+    description: str | None = Field(
+        None, description="What this composition represents"
+    )
     # Note: children property is inherited from Resource base class
     # It provides dict-style access to child resources by name
-    _children_resources: List["Resource"] = PrivateAttr(default_factory=list)
+    _children_resources: list["Resource"] = PrivateAttr(default_factory=list)
     _pulumi_resource: pulumi.Resource | None = None
 
     def __init__(self, **data):
@@ -120,12 +124,9 @@ class BlankResource(Resource):
         # Check if any child needs completion
         # Use _children list directly (not children property) since children without
         # names are filtered out of the property but still need completion checks
-        for child in self._children:
-            if child.needs_completion():
-                return True
-        return False
+        return any(child.needs_completion() for child in self._children)
 
-    def get_connection_context(self) -> Dict[str, Any]:
+    def get_connection_context(self) -> dict[str, Any]:
         """Get connection context including information about children.
 
         When other resources connect to a BlankResource, they can access
@@ -162,8 +163,7 @@ class BlankResource(Resource):
         # Use _children list to include all children, even those without names
         if len(self._children) > 0:
             children_contexts = [
-                child.get_connection_context()
-                for child in self._children
+                child.get_connection_context() for child in self._children
             ]
             context["children"] = children_contexts
 
@@ -198,9 +198,11 @@ class BlankResource(Resource):
 
         # Check if we have temporary compile options (from _compile_with_opts)
         # This allows composites to be nested
-        if hasattr(self, '_temp_compile_opts'):
+        if hasattr(self, "_temp_compile_opts"):
             # Merge with dependency options
-            opts = self._merge_resource_options(self._temp_compile_opts, dep_opts)
+            opts = self._merge_resource_options(
+                self._temp_compile_opts, dep_opts
+            )
         else:
             opts = dep_opts
 
@@ -210,7 +212,7 @@ class BlankResource(Resource):
             "clockwork:blank:BlankResource",
             self.name,
             {},  # Empty props dict for component
-            opts
+            opts,
         )
 
         # Store for dependency tracking
@@ -220,8 +222,11 @@ class BlankResource(Resource):
         # Use _children list directly (not children property) to include all children
         # including those that may not have names yet
         import logging
+
         for child in self._children:
-            logging.debug(f"Compiling child resource '{child.name}' under parent '{self.name}'")
+            logging.debug(
+                f"Compiling child resource '{child.name}' under parent '{self.name}'"
+            )
 
             # Create ResourceOptions with parent reference
             child_opts = pulumi.ResourceOptions(parent=component)

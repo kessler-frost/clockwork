@@ -211,14 +211,14 @@ def main():
     app_layer = full_stack.children["application-tier"]
 
     # Access level 3 resources from mid-level composites:
-    primary = db_tier.children["postgres-primary"]
-    replica = db_tier.children["postgres-replica"]
+    db_tier.children["postgres-primary"]
+    db_tier.children["postgres-replica"]
 
     # Navigate through the hierarchy:
-    api_from_root = full_stack.children["application-tier"].children["api-service"]
+    full_stack.children["application-tier"].children["api-service"]
 
     # Safe access with default values:
-    cache = app_layer.children.get("redis-cache", None)  # Returns None if not found
+    app_layer.children.get("redis-cache", None)  # Returns None if not found
 
     # Iterate over mid-level composites:
     print("\nTier-level structure:")

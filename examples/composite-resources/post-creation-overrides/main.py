@@ -220,6 +220,7 @@ def pattern_3_hybrid_approach():
     # Conditionally override specific fields post-creation
     # Example: Add debug mode based on environment variable
     import os
+
     if os.getenv("DEBUG_MODE") == "true":
         api.env_vars["DEBUG"] = "true"
         api.env_vars["LOG_LEVEL"] = "debug"
@@ -293,7 +294,9 @@ def pattern_4_shared_config():
         # Apply common config
         service.image = "node:18-alpine"
         service.restart_policy = common_restart_policy
-        service.env_vars = common_env.copy()  # Copy to avoid sharing dict reference
+        service.env_vars = (
+            common_env.copy()
+        )  # Copy to avoid sharing dict reference
 
         # Add common assertions
         service.assertions = [ContainerRunningAssert()]
@@ -305,12 +308,20 @@ def pattern_4_shared_config():
 
     webapp.children["api-service"].ports = ["8000:8000"]  # API
     webapp.children["api-service"].env_vars["SERVICE_TYPE"] = "api"
-    webapp.children["api-service"].assertions.append(PortAccessibleAssert(port=8000))
-    webapp.children["api-service"].assertions.append(HealthcheckAssert(url="http://localhost:8000/health"))
+    webapp.children["api-service"].assertions.append(
+        PortAccessibleAssert(port=8000)
+    )
+    webapp.children["api-service"].assertions.append(
+        HealthcheckAssert(url="http://localhost:8000/health")
+    )
 
-    webapp.children["worker-service"].env_vars["SERVICE_TYPE"] = "worker"  # Worker
+    webapp.children["worker-service"].env_vars["SERVICE_TYPE"] = (
+        "worker"  # Worker
+    )
 
-    webapp.children["scheduler-service"].env_vars["SERVICE_TYPE"] = "scheduler"  # Scheduler
+    webapp.children["scheduler-service"].env_vars["SERVICE_TYPE"] = (
+        "scheduler"  # Scheduler
+    )
 
     # You can also iterate using .items() for name + resource:
     print("\nConfigured services:")
@@ -355,16 +366,16 @@ def main():
     """Demonstrate all four patterns."""
 
     # Pattern 1: Constructor-based (most common)
-    webapp1 = pattern_1_constructor_config()
+    pattern_1_constructor_config()
 
     # Pattern 2: Post-creation overrides (flexible)
-    webapp2 = pattern_2_post_creation_overrides()
+    pattern_2_post_creation_overrides()
 
     # Pattern 3: Hybrid approach (balanced)
     webapp3 = pattern_3_hybrid_approach()
 
     # Pattern 4: Shared config (DRY)
-    webapp4 = pattern_4_shared_config()
+    pattern_4_shared_config()
 
     # For this demo, let's use Pattern 3 (hybrid) as it's most practical
     return webapp3
@@ -390,9 +401,9 @@ if __name__ == "__main__":
     # To destroy:
     # uv run clockwork destroy
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("Configuration Pattern Summary")
-    print("="*70)
+    print("=" * 70)
     print("""
     Pattern 1 (Constructor): Best for simple, static configurations
     Pattern 2 (Post-Creation): Best for dynamic, programmatic generation

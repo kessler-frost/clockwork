@@ -1,13 +1,17 @@
 """Pulumi dynamic provider for File resources."""
 
 import os
-import stat
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import pulumi
 from pulumi import Input, Output
-from pulumi.dynamic import CheckResult, CreateResult, DiffResult, ResourceProvider, UpdateResult
+from pulumi.dynamic import (
+    CreateResult,
+    DiffResult,
+    ResourceProvider,
+    UpdateResult,
+)
 
 
 class FileInputs:
@@ -72,7 +76,7 @@ class FileProvider(ResourceProvider):
                 },
             )
         except Exception as e:
-            raise Exception(f"Failed to create file {path}: {e}")
+            raise Exception(f"Failed to create file {path}: {e}") from e
 
     def update(
         self, id: str, old_props: dict[str, Any], new_props: dict[str, Any]
@@ -114,7 +118,7 @@ class FileProvider(ResourceProvider):
                 }
             )
         except Exception as e:
-            raise Exception(f"Failed to update file {path}: {e}")
+            raise Exception(f"Failed to update file {path}: {e}") from e
 
     def delete(self, id: str, props: dict[str, Any]) -> None:
         """
@@ -131,7 +135,7 @@ class FileProvider(ResourceProvider):
             if file_path.exists():
                 file_path.unlink()
         except Exception as e:
-            raise Exception(f"Failed to delete file {path}: {e}")
+            raise Exception(f"Failed to delete file {path}: {e}") from e
 
     def diff(
         self, id: str, old_props: dict[str, Any], new_props: dict[str, Any]

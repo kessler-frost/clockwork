@@ -1,10 +1,11 @@
 """Integration tests for the full pipeline."""
 
 import asyncio
-import pytest
-import subprocess
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock, AsyncMock
+from unittest.mock import AsyncMock, Mock, patch
+
+import pytest
+
 from clockwork.core import ClockworkCore
 from clockwork.resources import FileResource
 
@@ -13,7 +14,7 @@ def test_load_resources_from_file(tmp_path):
     """Test loading resources from a Python file."""
     # Create a test main.py
     main_file = tmp_path / "main.py"
-    main_file.write_text('''
+    main_file.write_text("""
 from clockwork.resources import FileResource
 
 test_file = FileResource(
@@ -21,12 +22,14 @@ test_file = FileResource(
     description="Test file",
     content="Test content"
 )
-''')
+""")
 
     # Mock the artifact generator to avoid requiring API key
-    with patch('clockwork.core.ResourceCompleter') as mock_generator:
+    with patch("clockwork.core.ResourceCompleter") as mock_generator:
         mock_instance = Mock()
-        mock_instance.complete = AsyncMock(return_value=[])  # Return completed resources
+        mock_instance.complete = AsyncMock(
+            return_value=[]
+        )  # Return completed resources
         mock_generator.return_value = mock_instance
 
         core = ClockworkCore(api_key="test-key")
@@ -40,7 +43,7 @@ test_file = FileResource(
 def test_load_multiple_resources(tmp_path):
     """Test loading multiple resources from a Python file."""
     main_file = tmp_path / "main.py"
-    main_file.write_text('''
+    main_file.write_text("""
 from clockwork.resources import FileResource
 
 readme = FileResource(
@@ -61,11 +64,13 @@ script = FileResource(
     content="Test content",
     mode="755"
 )
-''')
+""")
 
-    with patch('clockwork.core.ResourceCompleter') as mock_generator:
+    with patch("clockwork.core.ResourceCompleter") as mock_generator:
         mock_instance = Mock()
-        mock_instance.complete = AsyncMock(return_value=[])  # Return completed resources
+        mock_instance.complete = AsyncMock(
+            return_value=[]
+        )  # Return completed resources
         mock_generator.return_value = mock_instance
 
         core = ClockworkCore(api_key="test-key")
@@ -80,9 +85,11 @@ script = FileResource(
 
 def test_load_resources_file_not_found():
     """Test error handling when main file doesn't exist."""
-    with patch('clockwork.core.ResourceCompleter') as mock_generator:
+    with patch("clockwork.core.ResourceCompleter") as mock_generator:
         mock_instance = Mock()
-        mock_instance.complete = AsyncMock(return_value=[])  # Return completed resources
+        mock_instance.complete = AsyncMock(
+            return_value=[]
+        )  # Return completed resources
         mock_generator.return_value = mock_instance
 
         core = ClockworkCore(api_key="test-key")
@@ -94,15 +101,17 @@ def test_load_resources_file_not_found():
 def test_load_resources_no_resources_found(tmp_path):
     """Test error when no resources are defined in the file."""
     main_file = tmp_path / "main.py"
-    main_file.write_text('''
+    main_file.write_text("""
 # This file has no resources
 x = 42
 y = "hello"
-''')
+""")
 
-    with patch('clockwork.core.ResourceCompleter') as mock_generator:
+    with patch("clockwork.core.ResourceCompleter") as mock_generator:
         mock_instance = Mock()
-        mock_instance.complete = AsyncMock(return_value=[])  # Return completed resources
+        mock_instance.complete = AsyncMock(
+            return_value=[]
+        )  # Return completed resources
         mock_generator.return_value = mock_instance
 
         core = ClockworkCore(api_key="test-key")
@@ -114,7 +123,7 @@ y = "hello"
 def test_generate_mode(tmp_path):
     """Test generate (dry run) mode."""
     main_file = tmp_path / "main.py"
-    main_file.write_text('''
+    main_file.write_text("""
 from clockwork.resources import FileResource
 
 readme = FileResource(
@@ -122,21 +131,27 @@ readme = FileResource(
     description="Test readme",
     content="# Test"
 )
-''')
+""")
 
     # Mock the artifact generator and Pulumi compiler
-    with patch('clockwork.core.ResourceCompleter') as mock_generator, \
-         patch('clockwork.core.PulumiCompiler') as mock_compiler:
+    with (
+        patch("clockwork.core.ResourceCompleter") as mock_generator,
+        patch("clockwork.core.PulumiCompiler") as mock_compiler,
+    ):
         mock_instance = Mock()
+
         # Mock complete to return resources (simulating completion)
         async def mock_complete(resources):
             return resources
+
         mock_instance.complete = mock_complete
         mock_generator.return_value = mock_instance
 
         # Mock Pulumi preview
         mock_compiler_instance = Mock()
-        mock_compiler_instance.preview = AsyncMock(return_value={"preview": "success"})
+        mock_compiler_instance.preview = AsyncMock(
+            return_value={"preview": "success"}
+        )
         mock_compiler.return_value = mock_compiler_instance
 
         core = ClockworkCore(api_key="test-key")
@@ -150,35 +165,41 @@ readme = FileResource(
 def test_generate_mode_with_ai_generation(tmp_path):
     """Test generate mode with resources needing AI generation."""
     main_file = tmp_path / "main.py"
-    main_file.write_text('''
+    main_file.write_text("""
 from clockwork.resources import FileResource
 
 readme = FileResource(
     name="README.md",
     description="Generate a detailed project readme",
 )
-''')
+""")
 
     # Mock the resource completer and Pulumi compiler
-    with patch('clockwork.core.ResourceCompleter') as mock_generator, \
-         patch('clockwork.core.PulumiCompiler') as mock_compiler:
+    with (
+        patch("clockwork.core.ResourceCompleter") as mock_generator,
+        patch("clockwork.core.PulumiCompiler") as mock_compiler,
+    ):
         mock_instance = Mock()
+
         # Mock complete to simulate AI completing fields
         async def mock_complete(resources):
             for r in resources:
-                if hasattr(r, 'content') and r.content is None:
+                if hasattr(r, "content") and r.content is None:
                     r.content = "# Generated Content"
-                if hasattr(r, 'directory') and r.directory is None:
+                if hasattr(r, "directory") and r.directory is None:
                     r.directory = "."
-                if hasattr(r, 'mode') and r.mode is None:
+                if hasattr(r, "mode") and r.mode is None:
                     r.mode = "644"
             return resources
+
         mock_instance.complete = mock_complete
         mock_generator.return_value = mock_instance
 
         # Mock Pulumi preview
         mock_compiler_instance = Mock()
-        mock_compiler_instance.preview = AsyncMock(return_value={"preview": "success"})
+        mock_compiler_instance.preview = AsyncMock(
+            return_value={"preview": "success"}
+        )
         mock_compiler.return_value = mock_compiler_instance
 
         core = ClockworkCore(api_key="test-key")
@@ -192,7 +213,7 @@ readme = FileResource(
 def test_apply_with_dry_run(tmp_path):
     """Test apply with dry_run=True."""
     main_file = tmp_path / "main.py"
-    main_file.write_text('''
+    main_file.write_text("""
 from clockwork.resources import FileResource
 
 test_file = FileResource(
@@ -200,20 +221,26 @@ test_file = FileResource(
     description="Test",
     content="Static content"
 )
-''')
+""")
 
-    with patch('clockwork.core.ResourceCompleter') as mock_generator, \
-         patch('clockwork.core.PulumiCompiler') as mock_compiler:
+    with (
+        patch("clockwork.core.ResourceCompleter") as mock_generator,
+        patch("clockwork.core.PulumiCompiler") as mock_compiler,
+    ):
         mock_instance = Mock()
+
         # Mock complete to return resources (simulating completion)
         async def mock_complete(resources):
             return resources
+
         mock_instance.complete = mock_complete
         mock_generator.return_value = mock_instance
 
         # Mock Pulumi preview
         mock_compiler_instance = Mock()
-        mock_compiler_instance.preview = AsyncMock(return_value={"preview": "success"})
+        mock_compiler_instance.preview = AsyncMock(
+            return_value={"preview": "success"}
+        )
         mock_compiler.return_value = mock_compiler_instance
 
         core = ClockworkCore(api_key="test-key")
@@ -226,7 +253,7 @@ test_file = FileResource(
 def test_full_pipeline_integration(tmp_path):
     """Test the full pipeline: load -> generate -> compile -> deploy."""
     main_file = tmp_path / "main.py"
-    main_file.write_text('''
+    main_file.write_text("""
 from clockwork.resources import FileResource
 
 manual_file = FileResource(
@@ -240,33 +267,38 @@ ai_file = FileResource(
     description="Generate a markdown file about Python",
     content="Test content"
 )
-''')
+""")
 
     # Mock the artifact generator and Pulumi compiler
-    with patch('clockwork.core.ResourceCompleter') as mock_generator, \
-         patch('clockwork.core.PulumiCompiler') as mock_compiler:
-
+    with (
+        patch("clockwork.core.ResourceCompleter") as mock_generator,
+        patch("clockwork.core.PulumiCompiler") as mock_compiler,
+    ):
         # Setup artifact generator mock
         mock_gen_instance = Mock()
+
         # Mock complete to return resources with completed fields
         async def mock_complete(resources):
             # Simulate AI completing missing fields
             for r in resources:
-                if hasattr(r, 'content') and r.content is None:
+                if hasattr(r, "content") and r.content is None:
                     r.content = "AI-generated content"
-                if hasattr(r, 'name') and r.name is None:
+                if hasattr(r, "name") and r.name is None:
                     r.name = "ai-generated-name.md"
-                if hasattr(r, 'directory') and r.directory is None:
+                if hasattr(r, "directory") and r.directory is None:
                     r.directory = "."
-                if hasattr(r, 'mode') and r.mode is None:
+                if hasattr(r, "mode") and r.mode is None:
                     r.mode = "644"
             return resources
+
         mock_gen_instance.complete = mock_complete
         mock_generator.return_value = mock_gen_instance
 
         # Setup Pulumi compiler mock
         mock_compiler_instance = Mock()
-        mock_compiler_instance.apply = AsyncMock(return_value={"success": True, "outputs": {}})
+        mock_compiler_instance.apply = AsyncMock(
+            return_value={"success": True, "outputs": {}}
+        )
         mock_compiler.return_value = mock_compiler_instance
 
         # Run the pipeline
@@ -282,30 +314,27 @@ def test_artifact_generator_initialization():
     """Test that ClockworkCore properly initializes ResourceCompleter."""
     from clockwork.settings import get_settings
 
-    with patch('clockwork.core.ResourceCompleter') as mock_generator:
+    with patch("clockwork.core.ResourceCompleter") as mock_generator:
         mock_instance = Mock()
-        mock_instance.complete = AsyncMock(return_value=[])  # Return completed resources
+        mock_instance.complete = AsyncMock(
+            return_value=[]
+        )  # Return completed resources
         mock_generator.return_value = mock_instance
 
-        core = ClockworkCore(
-            api_key="test-key",
-            model="custom-model"
-        )
+        ClockworkCore(api_key="test-key", model="custom-model")
 
         # Verify ResourceCompleter was called with correct params
         # base_url should come from settings when not provided
         settings = get_settings()
         mock_generator.assert_called_once_with(
-            api_key="test-key",
-            model="custom-model",
-            base_url=settings.base_url
+            api_key="test-key", model="custom-model", base_url=settings.base_url
         )
 
 
 def test_resources_with_mixed_content(tmp_path):
     """Test pipeline with mix of user-provided and AI-generated content."""
     main_file = tmp_path / "main.py"
-    main_file.write_text('''
+    main_file.write_text("""
 from clockwork.resources import FileResource
 
 # User-provided content
@@ -321,27 +350,35 @@ dynamic_file = FileResource(
     description="Generate documentation about Docker",
     content="Test content"
 )
-''')
+""")
 
-    with patch('clockwork.core.ResourceCompleter') as mock_generator, \
-         patch('clockwork.core.PulumiCompiler') as mock_compiler:
+    with (
+        patch("clockwork.core.ResourceCompleter") as mock_generator,
+        patch("clockwork.core.PulumiCompiler") as mock_compiler,
+    ):
         mock_instance = Mock()
+
         # Mock complete to simulate AI filling content
         async def mock_complete(resources):
             for r in resources:
-                if hasattr(r, 'content') and r.content is None:
-                    r.content = "# Docker\n\nDocker is a containerization platform."
-                if hasattr(r, 'directory') and r.directory is None:
+                if hasattr(r, "content") and r.content is None:
+                    r.content = (
+                        "# Docker\n\nDocker is a containerization platform."
+                    )
+                if hasattr(r, "directory") and r.directory is None:
                     r.directory = "."
-                if hasattr(r, 'mode') and r.mode is None:
+                if hasattr(r, "mode") and r.mode is None:
                     r.mode = "644"
             return resources
+
         mock_instance.complete = mock_complete
         mock_generator.return_value = mock_instance
 
         # Mock Pulumi preview
         mock_compiler_instance = Mock()
-        mock_compiler_instance.preview = AsyncMock(return_value={"preview": "success"})
+        mock_compiler_instance.preview = AsyncMock(
+            return_value={"preview": "success"}
+        )
         mock_compiler.return_value = mock_compiler_instance
 
         core = ClockworkCore(api_key="test-key")
@@ -354,7 +391,7 @@ dynamic_file = FileResource(
 def test_destroy_file_resources(tmp_path):
     """Test destroying FileResources."""
     main_file = tmp_path / "main.py"
-    main_file.write_text('''
+    main_file.write_text("""
 from clockwork.resources import FileResource
 
 test_file = FileResource(
@@ -362,28 +399,33 @@ test_file = FileResource(
     description="Test file",
     content="Test content"
 )
-''')
+""")
 
     # Mock the resource completer and Pulumi compiler
-    with patch('clockwork.core.ResourceCompleter') as mock_generator, \
-         patch('clockwork.core.PulumiCompiler') as mock_compiler:
-
+    with (
+        patch("clockwork.core.ResourceCompleter") as mock_generator,
+        patch("clockwork.core.PulumiCompiler") as mock_compiler,
+    ):
         # Setup resource completer mock
         mock_gen_instance = Mock()
+
         async def mock_complete(resources):
             # Complete any missing fields
             for r in resources:
-                if hasattr(r, 'directory') and r.directory is None:
+                if hasattr(r, "directory") and r.directory is None:
                     r.directory = "."
-                if hasattr(r, 'mode') and r.mode is None:
+                if hasattr(r, "mode") and r.mode is None:
                     r.mode = "644"
             return resources
+
         mock_gen_instance.complete = mock_complete
         mock_generator.return_value = mock_gen_instance
 
         # Setup Pulumi compiler mock
         mock_compiler_instance = Mock()
-        mock_compiler_instance.destroy = AsyncMock(return_value={"success": True})
+        mock_compiler_instance.destroy = AsyncMock(
+            return_value={"success": True}
+        )
         mock_compiler.return_value = mock_compiler_instance
 
         # Run destroy
@@ -398,7 +440,7 @@ test_file = FileResource(
 def test_destroy_with_dry_run(tmp_path):
     """Test destroy in dry run mode."""
     main_file = tmp_path / "main.py"
-    main_file.write_text('''
+    main_file.write_text("""
 from clockwork.resources import FileResource
 
 readme = FileResource(
@@ -406,19 +448,23 @@ readme = FileResource(
     description="Test readme",
     content="# Test"
 )
-''')
+""")
 
-    with patch('clockwork.core.ResourceCompleter') as mock_generator, \
-         patch('clockwork.core.PulumiCompiler') as mock_compiler:
+    with (
+        patch("clockwork.core.ResourceCompleter") as mock_generator,
+        patch("clockwork.core.PulumiCompiler") as mock_compiler,
+    ):
         mock_instance = Mock()
+
         # Mock complete to return resources with fields filled
         async def mock_complete(resources):
             for r in resources:
-                if hasattr(r, 'directory') and r.directory is None:
+                if hasattr(r, "directory") and r.directory is None:
                     r.directory = "."
-                if hasattr(r, 'mode') and r.mode is None:
+                if hasattr(r, "mode") and r.mode is None:
                     r.mode = "644"
             return resources
+
         mock_instance.complete = mock_complete
         mock_generator.return_value = mock_instance
 
@@ -438,7 +484,7 @@ readme = FileResource(
 def test_destroy_mixed_resources(tmp_path):
     """Test destroying both files."""
     main_file = tmp_path / "main.py"
-    main_file.write_text('''
+    main_file.write_text("""
 from clockwork.resources import FileResource
 
 # User-provided content
@@ -453,33 +499,38 @@ dynamic_file = FileResource(
     name="dynamic.md",
     description="Generate documentation"
 )
-''')
+""")
 
     # Mock the artifact generator and Pulumi compiler
-    with patch('clockwork.core.ResourceCompleter') as mock_generator, \
-         patch('clockwork.core.PulumiCompiler') as mock_compiler:
-
+    with (
+        patch("clockwork.core.ResourceCompleter") as mock_generator,
+        patch("clockwork.core.PulumiCompiler") as mock_compiler,
+    ):
         # Setup artifact generator mock
         mock_gen_instance = Mock()
+
         # Mock complete to return resources with completed fields
         async def mock_complete(resources):
             # Simulate AI completing missing fields
             for r in resources:
-                if hasattr(r, 'content') and r.content is None:
+                if hasattr(r, "content") and r.content is None:
                     r.content = "AI-generated content"
-                if hasattr(r, 'name') and r.name is None:
+                if hasattr(r, "name") and r.name is None:
                     r.name = "ai-generated-name.md"
-                if hasattr(r, 'directory') and r.directory is None:
+                if hasattr(r, "directory") and r.directory is None:
                     r.directory = "."
-                if hasattr(r, 'mode') and r.mode is None:
+                if hasattr(r, "mode") and r.mode is None:
                     r.mode = "644"
             return resources
+
         mock_gen_instance.complete = mock_complete
         mock_generator.return_value = mock_gen_instance
 
         # Setup Pulumi compiler mock
         mock_compiler_instance = Mock()
-        mock_compiler_instance.destroy = AsyncMock(return_value={"success": True})
+        mock_compiler_instance.destroy = AsyncMock(
+            return_value={"success": True}
+        )
         mock_compiler.return_value = mock_compiler_instance
 
         # Run destroy
@@ -499,7 +550,7 @@ dynamic_file = FileResource(
 def test_assert_command_with_object_assertions(tmp_path):
     """Test clockwork assert command with BaseAssertion objects."""
     main_file = tmp_path / "main.py"
-    main_file.write_text('''
+    main_file.write_text("""
 from clockwork.resources import FileResource
 from clockwork.assertions import FileExistsAssert, FilePermissionsAssert
 
@@ -512,15 +563,16 @@ test_file = FileResource(
         FilePermissionsAssert(path="test.txt", mode="644")
     ]
 )
-''')
+""")
 
-    with patch('clockwork.core.ResourceCompleter') as mock_artifact_gen:
-
+    with patch("clockwork.core.ResourceCompleter") as mock_artifact_gen:
         # Setup artifact generator mock
         mock_artifact_instance = Mock()
+
         # Mock complete to return resources
         async def mock_complete(resources):
             return resources
+
         mock_artifact_instance.complete = mock_complete
         mock_artifact_gen.return_value = mock_artifact_instance
 
@@ -537,7 +589,7 @@ test_file = FileResource(
 def test_assert_command_with_no_assertions(tmp_path):
     """Test assert command with resources that have no assertions."""
     main_file = tmp_path / "main.py"
-    main_file.write_text('''
+    main_file.write_text("""
 from clockwork.resources import FileResource
 
 test_file = FileResource(
@@ -545,14 +597,15 @@ test_file = FileResource(
     description="Test",
     content="Test"
 )
-''')
+""")
 
-    with patch('clockwork.core.ResourceCompleter') as mock_artifact_gen:
-
+    with patch("clockwork.core.ResourceCompleter") as mock_artifact_gen:
         mock_artifact_instance = Mock()
+
         # Mock complete to return resources
         async def mock_complete(resources):
             return resources
+
         mock_artifact_instance.complete = mock_complete
         mock_artifact_gen.return_value = mock_artifact_instance
 
@@ -567,7 +620,7 @@ test_file = FileResource(
 def test_assert_command_failure_handling(tmp_path):
     """Test that assert command properly handles assertion failures."""
     main_file = tmp_path / "main.py"
-    main_file.write_text('''
+    main_file.write_text("""
 from clockwork.resources import FileResource
 from clockwork.assertions import FileExistsAssert
 
@@ -577,14 +630,15 @@ test_file = FileResource(
     content="Test",
     assertions=[FileExistsAssert(path="/nonexistent/file.txt")]
 )
-''')
+""")
 
-    with patch('clockwork.core.ResourceCompleter') as mock_artifact_gen:
-
+    with patch("clockwork.core.ResourceCompleter") as mock_artifact_gen:
         mock_artifact_instance = Mock()
+
         # Mock complete to return resources
         async def mock_complete(resources):
             return resources
+
         mock_artifact_instance.complete = mock_complete
         mock_artifact_gen.return_value = mock_artifact_instance
 
@@ -599,9 +653,11 @@ test_file = FileResource(
 
 def test_assert_command_no_main_file():
     """Test assert command error when no main.py exists."""
-    with patch('clockwork.core.ResourceCompleter') as mock_generator:
+    with patch("clockwork.core.ResourceCompleter") as mock_generator:
         mock_instance = Mock()
-        mock_instance.complete = AsyncMock(return_value=[])  # Return completed resources
+        mock_instance.complete = AsyncMock(
+            return_value=[]
+        )  # Return completed resources
         mock_generator.return_value = mock_instance
 
         core = ClockworkCore(api_key="test-key")
@@ -613,7 +669,7 @@ def test_assert_command_no_main_file():
 def test_assert_multiple_resources_with_assertions(tmp_path):
     """Test assert command with multiple resources."""
     main_file = tmp_path / "main.py"
-    main_file.write_text('''
+    main_file.write_text("""
 from clockwork.resources import FileResource
 from clockwork.assertions import FileExistsAssert, FilePermissionsAssert
 
@@ -633,14 +689,15 @@ file2 = FileResource(
         FilePermissionsAssert(path="file2.txt", mode="644")
     ]
 )
-''')
+""")
 
-    with patch('clockwork.core.ResourceCompleter') as mock_artifact_gen:
-
+    with patch("clockwork.core.ResourceCompleter") as mock_artifact_gen:
         mock_artifact_instance = Mock()
+
         # Mock complete to return resources
         async def mock_complete(resources):
             return resources
+
         mock_artifact_instance.complete = mock_complete
         mock_artifact_gen.return_value = mock_artifact_instance
 

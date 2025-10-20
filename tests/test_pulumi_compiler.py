@@ -9,12 +9,13 @@ This module tests the Pulumi compilation system including:
 """
 
 import asyncio
-import pytest
-from unittest.mock import Mock, MagicMock, patch, AsyncMock
-import pulumi
+from unittest.mock import MagicMock, patch
 
-from clockwork.resources import DockerResource, FileResource, BlankResource
+import pulumi
+import pytest
+
 from clockwork.pulumi_compiler import PulumiCompiler
+from clockwork.resources import BlankResource, DockerResource
 
 
 @pytest.fixture(autouse=True)
@@ -29,7 +30,7 @@ def event_loop():
 class TestCompositeCompilation:
     """Tests for compiling composite resources to Pulumi ComponentResource."""
 
-    @patch('pulumi.ComponentResource')
+    @patch("pulumi.ComponentResource")
     def test_blank_resource_creates_component(self, mock_component):
         """Test that BlankResource creates a Pulumi ComponentResource."""
         # Setup mock
@@ -51,7 +52,7 @@ class TestCompositeCompilation:
         assert call_args[0][0] == "clockwork:blank:BlankResource"
         assert call_args[0][1] == "backend"
 
-    @patch('pulumi.ComponentResource')
+    @patch("pulumi.ComponentResource")
     def test_composite_with_children_creates_hierarchy(self, mock_component):
         """Test that composite with children creates proper Pulumi hierarchy."""
         # Setup mocks
@@ -63,7 +64,7 @@ class TestCompositeCompilation:
             description="Database",
             name="db",
             image="postgres:15",
-            ports=["5432:5432"]
+            ports=["5432:5432"],
         )
 
         backend = BlankResource(name="backend", description="Backend")
@@ -71,7 +72,7 @@ class TestCompositeCompilation:
 
         # Mock db.to_pulumi to avoid actual Pulumi calls
         db_resource_mock = MagicMock()
-        with patch.object(db, 'to_pulumi', return_value=db_resource_mock) as mock_to_pulumi:
+        with patch.object(db, "to_pulumi", return_value=db_resource_mock):
             # Compile composite
             result = backend.to_pulumi()
 
@@ -82,7 +83,7 @@ class TestCompositeCompilation:
             # Verify child's to_pulumi was not called directly
             # (it should be called via _compile_with_opts)
 
-    @patch('pulumi.ComponentResource')
+    @patch("pulumi.ComponentResource")
     def test_nested_composite_creates_nested_components(self, mock_component):
         """Test nested composites create nested ComponentResources."""
         # Setup mock
@@ -93,7 +94,7 @@ class TestCompositeCompilation:
             description="Database",
             name="db",
             image="postgres:15",
-            ports=["5432:5432"]
+            ports=["5432:5432"],
         )
 
         backend = BlankResource(name="backend", description="Backend")
@@ -103,20 +104,22 @@ class TestCompositeCompilation:
         app.add(backend)
 
         # Mock child to_pulumi methods
-        with patch.object(db, 'to_pulumi', return_value=MagicMock()):
-            with patch.object(backend, 'to_pulumi', wraps=backend.to_pulumi):
-                # Compile top-level composite
-                result = app.to_pulumi()
+        with (
+            patch.object(db, "to_pulumi", return_value=MagicMock()),
+            patch.object(backend, "to_pulumi", wraps=backend.to_pulumi),
+        ):
+            # Compile top-level composite
+            app.to_pulumi()
 
-                # Verify ComponentResource was created for app
-                assert mock_component.called
+            # Verify ComponentResource was created for app
+            assert mock_component.called
 
 
 class TestParentChildReferences:
     """Tests for correct parent references in Pulumi resources."""
 
-    @patch('pulumi.ComponentResource')
-    @patch('pulumi.ResourceOptions')
+    @patch("pulumi.ComponentResource")
+    @patch("pulumi.ResourceOptions")
     def test_child_has_parent_reference(self, mock_opts, mock_component):
         """Test that child resource receives parent in ResourceOptions."""
         # Setup mocks
@@ -128,14 +131,14 @@ class TestParentChildReferences:
             description="Database",
             name="db",
             image="postgres:15",
-            ports=["5432:5432"]
+            ports=["5432:5432"],
         )
 
         backend = BlankResource(name="backend", description="Backend")
         backend.add(db)
 
         # Mock child compilation
-        with patch.object(db, '_compile_with_opts') as mock_compile:
+        with patch.object(db, "_compile_with_opts") as mock_compile:
             # Compile composite
             backend.to_pulumi()
 
@@ -145,7 +148,7 @@ class TestParentChildReferences:
             assert isinstance(call_args, pulumi.ResourceOptions)
             assert call_args.parent == component_mock
 
-    @patch('pulumi.ComponentResource')
+    @patch("pulumi.ComponentResource")
     def test_multiple_children_have_same_parent(self, mock_component):
         """Test that all children receive same parent reference."""
         # Setup mock
@@ -157,34 +160,36 @@ class TestParentChildReferences:
             description="Database",
             name="db",
             image="postgres:15",
-            ports=["5432:5432"]
+            ports=["5432:5432"],
         )
         cache = DockerResource(
             description="Cache",
             name="cache",
             image="redis:7",
-            ports=["6379:6379"]
+            ports=["6379:6379"],
         )
 
         backend = BlankResource(name="backend", description="Backend")
         backend.add(db, cache)
 
         # Mock children compilation
-        with patch.object(db, '_compile_with_opts') as mock_db_compile:
-            with patch.object(cache, '_compile_with_opts') as mock_cache_compile:
-                # Compile composite
-                backend.to_pulumi()
+        with (
+            patch.object(db, "_compile_with_opts") as mock_db_compile,
+            patch.object(cache, "_compile_with_opts") as mock_cache_compile,
+        ):
+            # Compile composite
+            backend.to_pulumi()
 
-                # Verify both children got parent reference
-                assert mock_db_compile.called
-                assert mock_cache_compile.called
+            # Verify both children got parent reference
+            assert mock_db_compile.called
+            assert mock_cache_compile.called
 
-                db_parent = mock_db_compile.call_args[0][0].parent
-                cache_parent = mock_cache_compile.call_args[0][0].parent
+            db_parent = mock_db_compile.call_args[0][0].parent
+            cache_parent = mock_cache_compile.call_args[0][0].parent
 
-                # Both should have same parent (the component)
-                assert db_parent == component_mock
-                assert cache_parent == component_mock
+            # Both should have same parent (the component)
+            assert db_parent == component_mock
+            assert cache_parent == component_mock
 
 
 class TestDependencyOptions:
@@ -196,7 +201,7 @@ class TestDependencyOptions:
             description="Standalone service",
             name="standalone",
             image="alpine:latest",
-            ports=["8080:80"]
+            ports=["8080:80"],
         )
 
         opts = resource._build_dependency_options()
@@ -209,7 +214,7 @@ class TestDependencyOptions:
             description="Database",
             name="db",
             image="postgres:15",
-            ports=["5432:5432"]
+            ports=["5432:5432"],
         )
 
         # Mock db's Pulumi resource
@@ -220,7 +225,7 @@ class TestDependencyOptions:
             name="api",
             image="node:20",
             ports=["3000:3000"],
-            connections=[db]
+            connections=[db],
         )
 
         opts = api._build_dependency_options()
@@ -238,7 +243,7 @@ class TestDependencyOptions:
             description="Database",
             name="db",
             image="postgres:15",
-            ports=["5432:5432"]
+            ports=["5432:5432"],
         )
         db._pulumi_resource = MagicMock()
 
@@ -246,7 +251,7 @@ class TestDependencyOptions:
             description="Cache",
             name="cache",
             image="redis:7",
-            ports=["6379:6379"]
+            ports=["6379:6379"],
         )
         cache._pulumi_resource = MagicMock()
 
@@ -255,7 +260,7 @@ class TestDependencyOptions:
             name="api",
             image="node:20",
             ports=["3000:3000"],
-            connections=[db, cache]
+            connections=[db, cache],
         )
 
         opts = api._build_dependency_options()
@@ -272,7 +277,7 @@ class TestDependencyOptions:
             description="Test",
             name="test",
             image="alpine:latest",
-            ports=["8080:80"]
+            ports=["8080:80"],
         )
 
         merged = resource._merge_resource_options(None, None)
@@ -284,7 +289,7 @@ class TestDependencyOptions:
             description="Test",
             name="test",
             image="alpine:latest",
-            ports=["8080:80"]
+            ports=["8080:80"],
         )
 
         parent_mock = MagicMock()
@@ -299,7 +304,7 @@ class TestDependencyOptions:
             description="Test",
             name="test",
             image="alpine:latest",
-            ports=["8080:80"]
+            ports=["8080:80"],
         )
 
         dep_mock = MagicMock()
@@ -314,7 +319,7 @@ class TestDependencyOptions:
             description="Test",
             name="test",
             image="alpine:latest",
-            ports=["8080:80"]
+            ports=["8080:80"],
         )
 
         parent_mock = MagicMock()
@@ -336,7 +341,7 @@ class TestDependencyOptions:
             description="Test",
             name="test",
             image="alpine:latest",
-            ports=["8080:80"]
+            ports=["8080:80"],
         )
 
         dep1_mock = MagicMock()
@@ -363,14 +368,14 @@ class TestCompileWithOpts:
             description="Database",
             name="db",
             image="postgres:15",
-            ports=["5432:5432"]
+            ports=["5432:5432"],
         )
 
         parent_mock = MagicMock()
         parent_opts = pulumi.ResourceOptions(parent=parent_mock)
 
         # Mock to_pulumi to verify options are passed
-        with patch.object(db, 'to_pulumi') as mock_to_pulumi:
+        with patch.object(db, "to_pulumi") as mock_to_pulumi:
             mock_to_pulumi.return_value = MagicMock()
             db._compile_with_opts(parent_opts)
 
@@ -387,7 +392,7 @@ class TestCompileWithOpts:
             description="Cache",
             name="cache",
             image="redis:7",
-            ports=["6379:6379"]
+            ports=["6379:6379"],
         )
         cache._pulumi_resource = MagicMock()
 
@@ -396,14 +401,14 @@ class TestCompileWithOpts:
             name="db",
             image="postgres:15",
             ports=["5432:5432"],
-            connections=[cache]
+            connections=[cache],
         )
 
         parent_mock = MagicMock()
         parent_opts = pulumi.ResourceOptions(parent=parent_mock)
 
         # Mock to_pulumi
-        with patch.object(db, 'to_pulumi') as mock_to_pulumi:
+        with patch.object(db, "to_pulumi") as mock_to_pulumi:
             mock_to_pulumi.return_value = MagicMock()
             db._compile_with_opts(parent_opts)
 
@@ -416,23 +421,23 @@ class TestCompileWithOpts:
             description="Database",
             name="db",
             image="postgres:15",
-            ports=["5432:5432"]
+            ports=["5432:5432"],
         )
 
         parent_opts = pulumi.ResourceOptions(parent=MagicMock())
 
         # Mock to_pulumi
-        with patch.object(db, 'to_pulumi', return_value=MagicMock()):
+        with patch.object(db, "to_pulumi", return_value=MagicMock()):
             db._compile_with_opts(parent_opts)
 
         # Verify _temp_compile_opts was cleaned up
-        assert not hasattr(db, '_temp_compile_opts')
+        assert not hasattr(db, "_temp_compile_opts")
 
 
 class TestRecursiveCompilation:
     """Tests for recursive compilation of nested composites."""
 
-    @patch('pulumi.ComponentResource')
+    @patch("pulumi.ComponentResource")
     def test_nested_composite_recursive_compilation(self, mock_component):
         """Test that nested composites are compiled recursively."""
         # Setup mocks
@@ -443,7 +448,7 @@ class TestRecursiveCompilation:
             description="Database",
             name="db",
             image="postgres:15",
-            ports=["5432:5432"]
+            ports=["5432:5432"],
         )
 
         inner = BlankResource(name="inner", description="Inner")
@@ -453,14 +458,14 @@ class TestRecursiveCompilation:
         outer.add(inner)
 
         # Mock child to_pulumi methods
-        with patch.object(db, 'to_pulumi', return_value=MagicMock()):
+        with patch.object(db, "to_pulumi", return_value=MagicMock()):
             # Compile outer composite
             outer.to_pulumi()
 
             # Verify ComponentResource was created multiple times (outer and inner)
             assert mock_component.call_count >= 2
 
-    @patch('pulumi.ComponentResource')
+    @patch("pulumi.ComponentResource")
     def test_composite_compiles_children_in_order(self, mock_component):
         """Test that composite compiles children respecting dependency order."""
         # Setup mock
@@ -471,7 +476,7 @@ class TestRecursiveCompilation:
             description="Database",
             name="db",
             image="postgres:15",
-            ports=["5432:5432"]
+            ports=["5432:5432"],
         )
 
         api = DockerResource(
@@ -479,7 +484,7 @@ class TestRecursiveCompilation:
             name="api",
             image="node:20",
             ports=["3000:3000"],
-            connections=[db]
+            connections=[db],
         )
 
         backend = BlankResource(name="backend", description="Backend")
@@ -496,25 +501,27 @@ class TestRecursiveCompilation:
             compilation_order.append("api")
             return MagicMock()
 
-        with patch.object(db, 'to_pulumi', side_effect=track_db_compile):
-            with patch.object(api, 'to_pulumi', side_effect=track_api_compile):
-                # Note: The composite's to_pulumi doesn't enforce ordering,
-                # that's handled by the resolver. This test just verifies
-                # that both children are compiled.
-                backend.to_pulumi()
+        with (
+            patch.object(db, "to_pulumi", side_effect=track_db_compile),
+            patch.object(api, "to_pulumi", side_effect=track_api_compile),
+        ):
+            # Note: The composite's to_pulumi doesn't enforce ordering,
+            # that's handled by the resolver. This test just verifies
+            # that both children are compiled.
+            backend.to_pulumi()
 
 
 class TestPulumiCompilerIntegration:
     """Integration tests for PulumiCompiler with composites."""
 
-    @patch('pulumi.automation.create_or_select_stack')
+    @patch("pulumi.automation.create_or_select_stack")
     async def test_compiler_handles_composite_resources(self, mock_stack):
         """Test that PulumiCompiler correctly handles composite resources."""
         # Setup mock stack
         mock_stack_instance = MagicMock()
-        mock_stack_instance.preview = MagicMock(return_value=MagicMock(
-            change_summary={"create": 3}
-        ))
+        mock_stack_instance.preview = MagicMock(
+            return_value=MagicMock(change_summary={"create": 3})
+        )
         mock_stack.return_value = mock_stack_instance
 
         # Create composite with children
@@ -522,13 +529,13 @@ class TestPulumiCompilerIntegration:
             description="Database",
             name="db",
             image="postgres:15",
-            ports=["5432:5432"]
+            ports=["5432:5432"],
         )
         cache = DockerResource(
             description="Cache",
             name="cache",
             image="redis:7",
-            ports=["6379:6379"]
+            ports=["6379:6379"],
         )
 
         backend = BlankResource(name="backend", description="Backend")
@@ -543,14 +550,16 @@ class TestPulumiCompilerIntegration:
         # Verify program function was created
         assert callable(program)
 
-    @patch('pulumi.automation.create_or_select_stack')
+    @patch("pulumi.automation.create_or_select_stack")
     async def test_compiler_preview_with_composites(self, mock_stack):
         """Test compiler preview with composite resources."""
         # Setup mock stack
         mock_stack_instance = MagicMock()
-        mock_stack_instance.preview = MagicMock(return_value=MagicMock(
-            change_summary={"create": 3, "update": 0, "delete": 0}
-        ))
+        mock_stack_instance.preview = MagicMock(
+            return_value=MagicMock(
+                change_summary={"create": 3, "update": 0, "delete": 0}
+            )
+        )
         mock_stack.return_value = mock_stack_instance
 
         # Create composite
@@ -558,7 +567,7 @@ class TestPulumiCompilerIntegration:
             description="Database",
             name="db",
             image="postgres:15",
-            ports=["5432:5432"]
+            ports=["5432:5432"],
         )
 
         backend = BlankResource(name="backend", description="Backend")
@@ -566,7 +575,7 @@ class TestPulumiCompilerIntegration:
 
         # Create compiler and preview
         compiler = PulumiCompiler()
-        result = await compiler.preview([backend], "test-project")
+        await compiler.preview([backend], "test-project")
 
         # Verify preview was called
         assert mock_stack_instance.preview.called
@@ -575,7 +584,7 @@ class TestPulumiCompilerIntegration:
 class TestCompositeOutputs:
     """Tests for Pulumi outputs from composite resources."""
 
-    @patch('pulumi.ComponentResource')
+    @patch("pulumi.ComponentResource")
     def test_composite_registers_outputs(self, mock_component):
         """Test that composite calls register_outputs."""
         # Setup mock
@@ -591,7 +600,7 @@ class TestCompositeOutputs:
         # Verify register_outputs was called
         assert component_mock.register_outputs.called
 
-    @patch('pulumi.ComponentResource')
+    @patch("pulumi.ComponentResource")
     def test_composite_stores_pulumi_resource(self, mock_component):
         """Test that composite stores _pulumi_resource for dependency tracking."""
         # Setup mock

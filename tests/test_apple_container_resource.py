@@ -1,15 +1,17 @@
 """Tests for AppleContainerResource."""
 
-import pytest
 from unittest.mock import Mock, patch
+
+import pytest
+from pydantic import ValidationError
+
 from clockwork.resources import AppleContainerResource
 
 
 def test_apple_container_resource_basic():
     """Test basic AppleContainerResource instantiation."""
     container = AppleContainerResource(
-        name="test-container",
-        description="Test container"
+        name="test-container", description="Test container"
     )
 
     assert container.name == "test-container"
@@ -28,7 +30,7 @@ def test_apple_container_resource_with_image():
         name="redis",
         description="Redis cache",
         image="redis:7-alpine",
-        ports=["6379:6379"]
+        ports=["6379:6379"],
     )
 
     assert container.name == "redis"
@@ -44,28 +46,25 @@ def test_apple_container_resource_full_config():
         image="postgres:16-alpine",
         ports=["5432:5432"],
         volumes=["pg_data:/var/lib/postgresql/data"],
-        env_vars={
-            "POSTGRES_PASSWORD": "secret",
-            "POSTGRES_USER": "admin"
-        },
-        networks=["backend"]
+        env_vars={"POSTGRES_PASSWORD": "secret", "POSTGRES_USER": "admin"},
+        networks=["backend"],
     )
 
     assert container.name == "postgres"
     assert container.image == "postgres:16-alpine"
     assert container.ports == ["5432:5432"]
     assert container.volumes == ["pg_data:/var/lib/postgresql/data"]
-    assert container.env_vars == {"POSTGRES_PASSWORD": "secret", "POSTGRES_USER": "admin"}
+    assert container.env_vars == {
+        "POSTGRES_PASSWORD": "secret",
+        "POSTGRES_USER": "admin",
+    }
     assert container.networks == ["backend"]
     assert container.must_run is True
 
 
 def test_needs_completion_no_image():
     """Test needs_completion() returns True when no image specified."""
-    container = AppleContainerResource(
-        name="nginx",
-        description="Web server"
-    )
+    container = AppleContainerResource(name="nginx", description="Web server")
 
     assert container.needs_completion() is True
 
@@ -79,7 +78,7 @@ def test_needs_completion_with_all_fields():
         ports=[],
         volumes=[],
         env_vars={},
-        networks=[]
+        networks=[],
     )
 
     assert container.needs_completion() is False
@@ -94,11 +93,13 @@ def test_to_pulumi_with_complete_fields():
         ports=["6379:6379"],
         volumes=["redis_data:/data"],
         env_vars={"REDIS_PASSWORD": "secret"},
-        networks=["cache"]
+        networks=["cache"],
     )
 
     # Mock AppleContainer to avoid actual Pulumi initialization
-    with patch('clockwork.pulumi_providers.apple_container.AppleContainer') as mock_container:
+    with patch(
+        "clockwork.pulumi_providers.apple_container.AppleContainer"
+    ) as mock_container:
         mock_instance = Mock()
         mock_container.return_value = mock_instance
 
@@ -112,15 +113,16 @@ def test_to_pulumi_with_complete_fields():
 def test_to_pulumi_with_completed_fields():
     """Test to_pulumi() with AI-completed fields."""
     container = AppleContainerResource(
-        name="nginx-ai",
-        description="Web server for static content"
+        name="nginx-ai", description="Web server for static content"
     )
 
     # Simulate AI completion
     container.image = "nginx:latest"
     container.ports = []
 
-    with patch('clockwork.pulumi_providers.apple_container.AppleContainer') as mock_container:
+    with patch(
+        "clockwork.pulumi_providers.apple_container.AppleContainer"
+    ) as mock_container:
         mock_instance = Mock()
         mock_container.return_value = mock_instance
 
@@ -133,8 +135,7 @@ def test_to_pulumi_with_completed_fields():
 def test_to_pulumi_missing_fields_raises_error():
     """Test to_pulumi() raises error when required fields are not completed."""
     container = AppleContainerResource(
-        name="missing",
-        description="Container with missing fields"
+        name="missing", description="Container with missing fields"
     )
 
     # Should raise error when required fields are not completed
@@ -149,7 +150,7 @@ def test_apple_container_resource_must_run_false():
         description="Container that exists but doesn't run",
         image="alpine:latest",
         ports=[],
-        must_run=False
+        must_run=False,
     )
 
     # Verify the must_run flag is set correctly
@@ -158,7 +159,7 @@ def test_apple_container_resource_must_run_false():
 
 def test_pydantic_validation():
     """Test Pydantic validation enforces required description field."""
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         # Missing required 'description' field
         AppleContainerResource(name="test")
 
@@ -170,7 +171,7 @@ def test_get_connection_context():
         description="PostgreSQL database",
         image="postgres:15",
         ports=["5432:5432"],
-        env_vars={"POSTGRES_PASSWORD": "secret"}
+        env_vars={"POSTGRES_PASSWORD": "secret"},
     )
 
     context = container.get_connection_context()
@@ -188,7 +189,7 @@ def test_get_connection_context_minimal():
         name="minimal",
         description="Minimal container",
         image="alpine:latest",
-        ports=[]
+        ports=[],
     )
 
     context = container.get_connection_context()
@@ -211,7 +212,7 @@ def test_to_pulumi_inputs_creation():
         ports=["80:80"],
         volumes=["/data:/data"],
         env_vars={"KEY": "value"},
-        networks=["frontend"]
+        networks=["frontend"],
     )
 
     # We can't easily test the internal inputs creation without mocking,

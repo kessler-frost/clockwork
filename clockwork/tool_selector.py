@@ -8,7 +8,7 @@ web search, filesystem access, and other integrations.
 
 import logging
 import shutil
-from typing import Any, Dict, List, Optional
+from typing import Any, ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -39,9 +39,9 @@ class ToolSelector:
     """
 
     # Tool registry - lazy loaded on first use
-    _tool_registry: Dict[str, Any | None] = {
+    _tool_registry: ClassVar[dict[str, Any | None]] = {
         "duckduckgo_search": None,  # Lazy load
-        "filesystem_mcp": None,     # Lazy load
+        "filesystem_mcp": None,  # Lazy load
     }
 
     def __init__(self, enable_mcp: bool = False):
@@ -55,10 +55,8 @@ class ToolSelector:
         logger.debug(f"ToolSelector initialized (MCP enabled: {enable_mcp})")
 
     def select_tools_for_resource(
-        self,
-        resource: Any,
-        context: str = ""
-    ) -> List[Any]:
+        self, resource: Any, context: str = ""
+    ) -> list[Any]:
         """Select appropriate tools for a resource based on type and context.
 
         Main entry point for tool selection. Combines resource-specific tools
@@ -106,7 +104,7 @@ class ToolSelector:
 
         return unique_tools
 
-    def _get_resource_type_tools(self, resource: Any) -> List[Any]:
+    def _get_resource_type_tools(self, resource: Any) -> list[Any]:
         """Get tools specific to the resource type.
 
         Maps resource types to relevant tools:
@@ -139,13 +137,10 @@ class ToolSelector:
                     tools.append(fs_mcp)
 
         # Container resources benefit from web search for image suggestions
-        elif resource_type in ["DockerResource", "AppleContainerResource"]:
-            search_tool = self._get_tool("duckduckgo_search")
-            if search_tool:
-                tools.append(search_tool)
-
-        # Git resources benefit from web search for finding repos
-        elif resource_type == "GitRepoResource":
+        elif (
+            resource_type in ["DockerResource", "AppleContainerResource"]
+            or resource_type == "GitRepoResource"
+        ):
             search_tool = self._get_tool("duckduckgo_search")
             if search_tool:
                 tools.append(search_tool)
@@ -158,7 +153,7 @@ class ToolSelector:
 
         return tools
 
-    def _get_context_tools(self, context: str) -> List[Any]:
+    def _get_context_tools(self, context: str) -> list[Any]:
         """Get tools based on context keywords.
 
         Analyzes the context string for keywords that suggest specific tool needs:
@@ -179,7 +174,14 @@ class ToolSelector:
         context_lower = context.lower()
 
         # Web search indicators
-        search_keywords = ["search", "research", "latest", "current", "recent", "today"]
+        search_keywords = [
+            "search",
+            "research",
+            "latest",
+            "current",
+            "recent",
+            "today",
+        ]
         if any(keyword in context_lower for keyword in search_keywords):
             search_tool = self._get_tool("duckduckgo_search")
             if search_tool:
@@ -208,7 +210,10 @@ class ToolSelector:
             Tool instance, or None if tool is unavailable
         """
         # Check if tool is already loaded
-        if tool_name in self._tool_registry and self._tool_registry[tool_name] is not None:
+        if (
+            tool_name in self._tool_registry
+            and self._tool_registry[tool_name] is not None
+        ):
             return self._tool_registry[tool_name]
 
         # Lazy load the tool
@@ -233,7 +238,10 @@ class ToolSelector:
             DuckDuckGo search tool instance, or None if unavailable
         """
         try:
-            from pydantic_ai.common_tools.duckduckgo import duckduckgo_search_tool
+            from pydantic_ai.common_tools.duckduckgo import (
+                duckduckgo_search_tool,
+            )
+
             logger.debug("Loaded duckduckgo_search_tool")
             return duckduckgo_search_tool()
         except ImportError as e:
@@ -259,16 +267,17 @@ class ToolSelector:
             return None
 
         try:
-            from pydantic_ai.mcp import MCPServerStdio
-
             # Note: This creates a filesystem MCP for the current working directory
             # In production, you'd want to make this configurable
             import os
+
+            from pydantic_ai.mcp import MCPServerStdio
+
             cwd = os.getcwd()
 
             mcp = MCPServerStdio(
-                'npx',
-                args=['-y', '@modelcontextprotocol/server-filesystem', cwd]
+                "npx",
+                args=["-y", "@modelcontextprotocol/server-filesystem", cwd],
             )
             logger.debug(f"Loaded filesystem MCP for directory: {cwd}")
             return mcp
@@ -294,7 +303,7 @@ class ToolSelector:
         self._tool_registry[name] = tool
         logger.debug(f"Registered custom tool: {name}")
 
-    def get_available_tools(self) -> Dict[str, Any]:
+    def get_available_tools(self) -> dict[str, Any]:
         """Get all available tools in the registry.
 
         Returns:

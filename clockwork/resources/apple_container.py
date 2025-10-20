@@ -1,9 +1,11 @@
 """Apple Container resource for running containers with optional AI-suggested images."""
 
-from typing import Optional, Dict, Any, List
-from pydantic import Field
-from .base import Resource
+from typing import Any
+
 import pulumi
+from pydantic import Field
+
+from .base import Resource
 
 
 class AppleContainerResource(Resource):
@@ -39,13 +41,43 @@ class AppleContainerResource(Resource):
     """
 
     description: str
-    name: str | None = Field(None, description="Container name - must be unique", examples=["nginx-server", "postgres-db", "redis-cache"])
-    image: str | None = Field(None, description="Container image with tag - prefer official, well-maintained images", examples=["nginx:alpine", "postgres:15-alpine", "redis:7-alpine"])
-    ports: List[str] | None = Field(None, description="Port mappings in 'host:container' format", examples=[["8080:80"], ["5432:5432", "5433:5432"]])
-    volumes: List[str] = Field(default_factory=list, description="Volume mounts in 'host:container' or 'host:container:ro' format", examples=[["./data:/data"], ["./config:/etc/nginx:ro"]])
-    env_vars: Dict[str, str] = Field(default_factory=dict, description="Environment variables as key-value pairs", examples=[{"DEBUG": "1"}, {"POSTGRES_PASSWORD": "secret", "POSTGRES_DB": "myapp"}])
-    networks: List[str] = Field(default_factory=list, description="Networks to attach container to", examples=[["backend"], ["frontend", "backend"]])
-    must_run: bool = Field(default=True, description="Whether the container must be running after creation")
+    name: str | None = Field(
+        None,
+        description="Container name - must be unique",
+        examples=["nginx-server", "postgres-db", "redis-cache"],
+    )
+    image: str | None = Field(
+        None,
+        description="Container image with tag - prefer official, well-maintained images",
+        examples=["nginx:alpine", "postgres:15-alpine", "redis:7-alpine"],
+    )
+    ports: list[str] | None = Field(
+        None,
+        description="Port mappings in 'host:container' format",
+        examples=[["8080:80"], ["5432:5432", "5433:5432"]],
+    )
+    volumes: list[str] = Field(
+        default_factory=list,
+        description="Volume mounts in 'host:container' or 'host:container:ro' format",
+        examples=[["./data:/data"], ["./config:/etc/nginx:ro"]],
+    )
+    env_vars: dict[str, str] = Field(
+        default_factory=dict,
+        description="Environment variables as key-value pairs",
+        examples=[
+            {"DEBUG": "1"},
+            {"POSTGRES_PASSWORD": "secret", "POSTGRES_DB": "myapp"},
+        ],
+    )
+    networks: list[str] = Field(
+        default_factory=list,
+        description="Networks to attach container to",
+        examples=[["backend"], ["frontend", "backend"]],
+    )
+    must_run: bool = Field(
+        default=True,
+        description="Whether the container must be running after creation",
+    )
 
     def needs_completion(self) -> bool:
         """Returns True if any critical field needs AI completion.
@@ -56,11 +88,7 @@ class AppleContainerResource(Resource):
         Returns:
             bool: True if any critical field needs completion, False otherwise
         """
-        return (
-            self.name is None or
-            self.image is None or
-            self.ports is None
-        )
+        return self.name is None or self.image is None or self.ports is None
 
     def to_pulumi(self):
         """Create Pulumi AppleContainer resource.
@@ -107,9 +135,11 @@ class AppleContainerResource(Resource):
 
         # Check if we have temporary compile options (from _compile_with_opts)
         # This allows this resource to be a child in a composite
-        if hasattr(self, '_temp_compile_opts'):
+        if hasattr(self, "_temp_compile_opts"):
             # Merge with dependency options
-            opts = self._merge_resource_options(self._temp_compile_opts, dep_opts)
+            opts = self._merge_resource_options(
+                self._temp_compile_opts, dep_opts
+            )
         else:
             opts = dep_opts if dep_opts else pulumi.ResourceOptions()
 
@@ -125,7 +155,7 @@ class AppleContainerResource(Resource):
 
         return container_resource
 
-    def get_connection_context(self) -> Dict[str, Any]:
+    def get_connection_context(self) -> dict[str, Any]:
         """Get connection context for this Apple Container resource.
 
         Returns shareable fields that other resources can use when connected.

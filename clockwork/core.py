@@ -12,10 +12,10 @@ import logging
 import shutil
 import traceback
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from .resource_completer import ResourceCompleter
 from .pulumi_compiler import PulumiCompiler
+from .resource_completer import ResourceCompleter
 from .settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ class ClockworkCore:
         self,
         api_key: str | None = None,
         model: str | None = None,
-        base_url: str | None = None
+        base_url: str | None = None,
     ):
         """
         Initialize ClockworkCore.
@@ -47,15 +47,15 @@ class ClockworkCore:
         base_url = base_url or settings.base_url
 
         self.resource_completer = ResourceCompleter(
-            api_key=api_key,
-            model=model,
-            base_url=base_url
+            api_key=api_key, model=model, base_url=base_url
         )
         self.pulumi_compiler = PulumiCompiler()
 
         logger.info("ClockworkCore initialized")
 
-    async def apply(self, main_file: Path, dry_run: bool = False) -> Dict[str, Any]:
+    async def apply(
+        self, main_file: Path, dry_run: bool = False
+    ) -> dict[str, Any]:
         """
         Full pipeline: load → complete → deploy with Pulumi.
 
@@ -74,7 +74,7 @@ class ClockworkCore:
 
         # 2. Resolve dependency order (checks for cycles and sorts topologically)
         resources = self._resolve_dependency_order(resources)
-        logger.info(f"Resolved resource dependencies in deployment order")
+        logger.info("Resolved resource dependencies in deployment order")
 
         # 3. Complete resources (AI stage)
         completed_resources = await self._complete_resources_safe(resources)
@@ -85,20 +85,24 @@ class ClockworkCore:
         # 5. Execute Pulumi deploy (or preview if dry run)
         if dry_run:
             logger.info("Dry run - running preview only")
-            result = await self.pulumi_compiler.preview(completed_resources, project_name)
+            result = await self.pulumi_compiler.preview(
+                completed_resources, project_name
+            )
             return {
                 "dry_run": True,
                 "resources": len(resources),
                 "completed_resources": len(completed_resources),
-                "preview": result
+                "preview": result,
             }
 
-        result = await self.pulumi_compiler.apply(completed_resources, project_name)
+        result = await self.pulumi_compiler.apply(
+            completed_resources, project_name
+        )
         logger.info("Clockwork pipeline complete")
 
         return result
 
-    async def plan(self, main_file: Path) -> Dict[str, Any]:
+    async def plan(self, main_file: Path) -> dict[str, Any]:
         """
         Plan mode: complete resources and preview Pulumi changes without deploying.
 
@@ -110,7 +114,7 @@ class ClockworkCore:
         """
         return await self.apply(main_file, dry_run=True)
 
-    def _load_resources(self, main_file: Path) -> List[Any]:
+    def _load_resources(self, main_file: Path) -> list[Any]:
         """
         Load resources from main.py by executing it.
 
@@ -145,7 +149,7 @@ class ClockworkCore:
 
         return resources
 
-    async def _complete_resources_safe(self, resources: List[Any]) -> List[Any]:
+    async def _complete_resources_safe(self, resources: list[Any]) -> list[Any]:
         """Complete resources with error handling and logging.
 
         Args:
@@ -158,7 +162,9 @@ class ClockworkCore:
             RuntimeError: If resource completion fails
         """
         try:
-            completed_resources = await self.resource_completer.complete(resources)
+            completed_resources = await self.resource_completer.complete(
+                resources
+            )
             logger.info(f"Completed {len(completed_resources)} resources")
             return completed_resources
         except Exception as e:
@@ -166,7 +172,7 @@ class ClockworkCore:
             logger.error(f"Traceback: {traceback.format_exc()}")
             raise RuntimeError(f"Resource completion failed: {e}") from e
 
-    def _flatten_resources(self, resources: List[Any]) -> List[Any]:
+    def _flatten_resources(self, resources: list[Any]) -> list[Any]:
         """Flatten resource hierarchy by recursively extracting all children.
 
         This method handles composite resources by:
@@ -189,10 +195,12 @@ class ClockworkCore:
         for resource in resources:
             # Add the parent resource
             flattened.append(resource)
-            logger.debug(f"Flattened resource: {resource.name or resource.__class__.__name__}")
+            logger.debug(
+                f"Flattened resource: {resource.name or resource.__class__.__name__}"
+            )
 
             # Recursively add all children
-            if hasattr(resource, '_children'):
+            if hasattr(resource, "_children"):
                 children = resource._children  # _children is already a list
                 if children:
                     logger.debug(f"  Found {len(children)} children")
@@ -202,7 +210,9 @@ class ClockworkCore:
 
         return flattened
 
-    def _add_implicit_parent_child_dependencies(self, resources: List[Any]) -> None:
+    def _add_implicit_parent_child_dependencies(
+        self, resources: list[Any]
+    ) -> None:
         """Add implicit dependencies from children to parents.
 
         For each resource with a parent, this adds the parent to the child's
@@ -215,17 +225,19 @@ class ClockworkCore:
             Modifies _connection_resources in-place for resources with parents
         """
         for resource in resources:
-            parent = resource._parent if hasattr(resource, '_parent') else None
-            if parent is not None:
-                # Add parent to connection resources if not already present
-                if parent not in resource._connection_resources:
-                    resource._connection_resources.append(parent)
-                    logger.debug(
-                        f"Added implicit dependency: {resource.name or resource.__class__.__name__} "
-                        f"→ {parent.name or parent.__class__.__name__} (parent)"
-                    )
+            parent = resource._parent if hasattr(resource, "_parent") else None
+            # Add parent to connection resources if not already present
+            if (
+                parent is not None
+                and parent not in resource._connection_resources
+            ):
+                resource._connection_resources.append(parent)
+                logger.debug(
+                    f"Added implicit dependency: {resource.name or resource.__class__.__name__} "
+                    f"→ {parent.name or parent.__class__.__name__} (parent)"
+                )
 
-    def _resolve_dependency_order(self, resources: List[Any]) -> List[Any]:
+    def _resolve_dependency_order(self, resources: list[Any]) -> list[Any]:
         """Resolve resource dependencies and return them in correct deployment order.
 
         This method performs the following operations:
@@ -263,7 +275,7 @@ class ClockworkCore:
         visited = set()
         rec_stack = set()
 
-        def detect_cycle_dfs(resource: Any, path: List[str]) -> None:
+        def detect_cycle_dfs(resource: Any, path: list[str]) -> None:
             """DFS to detect cycles in resource dependencies.
 
             Args:
@@ -278,7 +290,7 @@ class ClockworkCore:
 
             # Format resource name with parent context if available
             resource_name = resource.name or resource.__class__.__name__
-            parent = resource._parent if hasattr(resource, '_parent') else None
+            parent = resource._parent if hasattr(resource, "_parent") else None
             if parent is not None:
                 parent_name = parent.name or parent.__class__.__name__
                 resource_name = f"{parent_name}.{resource_name}"
@@ -292,13 +304,24 @@ class ClockworkCore:
                     detect_cycle_dfs(connected, path)
                 elif connected_id in rec_stack:
                     # Cycle detected - format connected name with parent context
-                    connected_name = connected.name or connected.__class__.__name__
-                    connected_parent = connected._parent if hasattr(connected, '_parent') else None
+                    connected_name = (
+                        connected.name or connected.__class__.__name__
+                    )
+                    connected_parent = (
+                        connected._parent
+                        if hasattr(connected, "_parent")
+                        else None
+                    )
                     if connected_parent is not None:
-                        connected_parent_name = connected_parent.name or connected_parent.__class__.__name__
-                        connected_name = f"{connected_parent_name}.{connected_name}"
+                        connected_parent_name = (
+                            connected_parent.name
+                            or connected_parent.__class__.__name__
+                        )
+                        connected_name = (
+                            f"{connected_parent_name}.{connected_name}"
+                        )
 
-                    cycle_path = path + [connected_name]
+                    cycle_path = [*path, connected_name]
                     raise ValueError(
                         f"Dependency cycle detected: {' → '.join(cycle_path)}"
                     )
@@ -345,7 +368,7 @@ class ClockworkCore:
 
         return result
 
-    def _extract_working_directories(self, resources: List[Any]) -> set[Path]:
+    def _extract_working_directories(self, resources: list[Any]) -> set[Path]:
         """Extract unique top-level working directories from resources.
 
         Args:
@@ -359,14 +382,16 @@ class ClockworkCore:
 
         for resource in resources:
             # Extract directory from FileResource
-            if hasattr(resource, 'directory') and resource.directory:
+            if hasattr(resource, "directory") and resource.directory:
                 dir_path = Path(resource.directory)
                 if not dir_path.is_absolute():
                     dir_path = cwd / dir_path
                 # Get top-level directory relative to cwd
                 try:
                     rel_path = dir_path.relative_to(cwd)
-                    top_level = cwd / rel_path.parts[0] if rel_path.parts else None
+                    top_level = (
+                        cwd / rel_path.parts[0] if rel_path.parts else None
+                    )
                     if top_level and top_level != cwd:
                         directories.add(top_level)
                 except ValueError:
@@ -374,14 +399,16 @@ class ClockworkCore:
                     pass
 
             # Extract directory from GitRepoResource
-            if hasattr(resource, 'dest') and resource.dest:
+            if hasattr(resource, "dest") and resource.dest:
                 dest_path = Path(resource.dest)
                 if not dest_path.is_absolute():
                     dest_path = cwd / dest_path
                 # Get top-level directory relative to cwd
                 try:
                     rel_path = dest_path.relative_to(cwd)
-                    top_level = cwd / rel_path.parts[0] if rel_path.parts else None
+                    top_level = (
+                        cwd / rel_path.parts[0] if rel_path.parts else None
+                    )
                     if top_level and top_level != cwd:
                         directories.add(top_level)
                 except ValueError:
@@ -390,7 +417,9 @@ class ClockworkCore:
 
         return directories
 
-    async def destroy(self, main_file: Path, dry_run: bool = False, keep_files: bool = False) -> Dict[str, Any]:
+    async def destroy(
+        self, main_file: Path, dry_run: bool = False, keep_files: bool = False
+    ) -> dict[str, Any]:
         """
         Destroy pipeline: destroy infrastructure using Pulumi and clean up working directories.
 
@@ -417,7 +446,7 @@ class ClockworkCore:
             return {
                 "dry_run": True,
                 "project_name": project_name,
-                "working_directories_to_delete": [str(d) for d in working_dirs]
+                "working_directories_to_delete": [str(d) for d in working_dirs],
             }
 
         result = await self.pulumi_compiler.destroy(project_name)
@@ -425,8 +454,12 @@ class ClockworkCore:
         # Clean up working directories after successful destroy (unless keep_files is True)
         if result.get("success", False):
             if keep_files:
-                logger.info("Keeping working directories (--keep-files flag set)")
-                result["working_directories_kept"] = [str(d) for d in working_dirs]
+                logger.info(
+                    "Keeping working directories (--keep-files flag set)"
+                )
+                result["working_directories_kept"] = [
+                    str(d) for d in working_dirs
+                ]
             else:
                 for directory in working_dirs:
                     if directory.exists():
@@ -438,7 +471,9 @@ class ClockworkCore:
 
         return result
 
-    async def assert_resources(self, main_file: Path, dry_run: bool = False) -> Dict[str, Any]:
+    async def assert_resources(
+        self, main_file: Path, dry_run: bool = False
+    ) -> dict[str, Any]:
         """
         Full assertion pipeline: load → complete → run assertions directly.
 
@@ -457,7 +492,7 @@ class ClockworkCore:
 
         # 2. Resolve dependency order (checks for cycles and sorts topologically)
         resources = self._resolve_dependency_order(resources)
-        logger.info(f"Resolved resource dependencies in deployment order")
+        logger.info("Resolved resource dependencies in deployment order")
 
         # 3. Complete resources if needed (AI stage)
         completed_resources = await self._complete_resources_safe(resources)
@@ -473,18 +508,14 @@ class ClockworkCore:
             return {
                 "dry_run": True,
                 "resources": len(resources),
-                "total_assertions": assertion_count
+                "total_assertions": assertion_count,
             }
 
         # Import assertion base class
         from .assertions.base import BaseAssertion
 
         # Run assertions for each resource
-        results = {
-            "passed": [],
-            "failed": [],
-            "total": 0
-        }
+        results = {"passed": [], "failed": [], "total": 0}
 
         for resource in completed_resources:
             if not resource.assertions:
@@ -495,11 +526,15 @@ class ClockworkCore:
 
             for assertion in resource.assertions:
                 if not isinstance(assertion, BaseAssertion):
-                    logger.warning(f"Skipping non-BaseAssertion: {type(assertion)}")
+                    logger.warning(
+                        f"Skipping non-BaseAssertion: {type(assertion)}"
+                    )
                     continue
 
                 results["total"] += 1
-                assertion_desc = assertion.description or assertion.__class__.__name__
+                assertion_desc = (
+                    assertion.description or assertion.__class__.__name__
+                )
 
                 try:
                     logger.info(f"  Checking: {assertion_desc}")
@@ -507,25 +542,31 @@ class ClockworkCore:
                     passed = await assertion.check(resource)
 
                     if passed:
-                        results["passed"].append({
-                            "resource": resource_name,
-                            "assertion": assertion_desc
-                        })
+                        results["passed"].append(
+                            {
+                                "resource": resource_name,
+                                "assertion": assertion_desc,
+                            }
+                        )
                         logger.info(f"  ✓ Passed: {assertion_desc}")
                     else:
-                        results["failed"].append({
-                            "resource": resource_name,
-                            "assertion": assertion_desc,
-                            "error": "Assertion check returned False"
-                        })
+                        results["failed"].append(
+                            {
+                                "resource": resource_name,
+                                "assertion": assertion_desc,
+                                "error": "Assertion check returned False",
+                            }
+                        )
                         logger.error(f"  ✗ Failed: {assertion_desc}")
 
                 except Exception as e:
-                    results["failed"].append({
-                        "resource": resource_name,
-                        "assertion": assertion_desc,
-                        "error": str(e)
-                    })
+                    results["failed"].append(
+                        {
+                            "resource": resource_name,
+                            "assertion": assertion_desc,
+                            "error": str(e),
+                        }
+                    )
                     logger.error(f"  ✗ Failed: {assertion_desc} - {e}")
 
         logger.info("Clockwork assertion pipeline complete")
@@ -536,6 +577,5 @@ class ClockworkCore:
             "passed": len(results["passed"]),
             "failed": len(results["failed"]),
             "total": results["total"],
-            "details": results
+            "details": results,
         }
-

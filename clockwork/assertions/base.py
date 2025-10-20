@@ -1,7 +1,11 @@
 """Base assertion classes for Clockwork."""
 
-from typing import Any, Optional
+from typing import TYPE_CHECKING
+
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from clockwork.resources.base import Resource
 
 
 class BaseAssertion(BaseModel):

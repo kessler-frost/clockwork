@@ -2,10 +2,9 @@
 
 import hashlib
 import re
-from typing import Any, Optional
 from pathlib import Path
+
 from .base import BaseAssertion
-from .utils import escape_shell_pattern
 
 
 def _resolve_path_for_assertion(path_str: str) -> str:

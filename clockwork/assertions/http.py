@@ -1,10 +1,14 @@
 """HTTP-based assertions for web services and APIs."""
 
-import httpx
 import socket
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Literal
+
+import httpx
+
 from .base import BaseAssertion
 
+if TYPE_CHECKING:
+    from clockwork.resources.base import Resource
 
 # Module-level shared HTTP client for connection pooling
 _http_client: httpx.AsyncClient | None = None
@@ -26,7 +30,9 @@ def get_http_client() -> httpx.AsyncClient:
     if _http_client is None:
         _http_client = httpx.AsyncClient(
             timeout=30.0,
-            limits=httpx.Limits(max_connections=10, max_keepalive_connections=5)
+            limits=httpx.Limits(
+                max_connections=10, max_keepalive_connections=5
+            ),
         )
     return _http_client
 

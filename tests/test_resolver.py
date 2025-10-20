@@ -10,10 +10,9 @@ This module tests the dependency resolution system including:
 """
 
 import pytest
-from unittest.mock import patch
 
-from clockwork.resources import DockerResource, FileResource, BlankResource
 from clockwork.core import ClockworkCore
+from clockwork.resources import BlankResource, DockerResource, FileResource
 
 
 class TestCompositeFlattening:
@@ -22,8 +21,12 @@ class TestCompositeFlattening:
     def test_flatten_single_composite(self):
         """Test flattening a composite with children extracts all resources."""
         # Create composite with children
-        db = DockerResource(description="Database", name="db", image="postgres:15")
-        cache = DockerResource(description="Cache", name="cache", image="redis:7")
+        db = DockerResource(
+            description="Database", name="db", image="postgres:15"
+        )
+        cache = DockerResource(
+            description="Cache", name="cache", image="redis:7"
+        )
 
         backend = BlankResource(name="backend", description="Backend services")
         backend.add(db, cache)
@@ -40,15 +43,25 @@ class TestCompositeFlattening:
     def test_flatten_multiple_composites(self):
         """Test flattening multiple composites."""
         # First composite
-        db = DockerResource(description="Database", name="db", image="postgres:15")
-        cache = DockerResource(description="Cache", name="cache", image="redis:7")
+        db = DockerResource(
+            description="Database", name="db", image="postgres:15"
+        )
+        cache = DockerResource(
+            description="Cache", name="cache", image="redis:7"
+        )
         backend = BlankResource(name="backend", description="Backend services")
         backend.add(db, cache)
 
         # Second composite
-        nginx = DockerResource(description="Web server", name="nginx", image="nginx:latest")
-        cdn = FileResource(description="CDN config", name="cdn.conf", content="...")
-        frontend = BlankResource(name="frontend", description="Frontend services")
+        nginx = DockerResource(
+            description="Web server", name="nginx", image="nginx:latest"
+        )
+        cdn = FileResource(
+            description="CDN config", name="cdn.conf", content="..."
+        )
+        frontend = BlankResource(
+            name="frontend", description="Frontend services"
+        )
         frontend.add(nginx, cdn)
 
         core = ClockworkCore(api_key="test", model="test")
@@ -68,8 +81,12 @@ class TestCompositeFlattening:
     def test_flatten_nested_composites(self):
         """Test flattening nested composites (composites containing composites)."""
         # Innermost resources
-        db = DockerResource(description="Database", name="db", image="postgres:15")
-        cache = DockerResource(description="Cache", name="cache", image="redis:7")
+        db = DockerResource(
+            description="Database", name="db", image="postgres:15"
+        )
+        cache = DockerResource(
+            description="Cache", name="cache", image="redis:7"
+        )
 
         # Middle layer composite
         backend = BlankResource(name="backend", description="Backend services")
@@ -96,10 +113,14 @@ class TestCompositeFlattening:
     def test_flatten_mixed_primitives_and_composites(self):
         """Test flattening mix of primitive and composite resources."""
         # Standalone primitives
-        config = FileResource(description="Config", name="config.yaml", content="...")
+        config = FileResource(
+            description="Config", name="config.yaml", content="..."
+        )
 
         # Composite with children
-        db = DockerResource(description="Database", name="db", image="postgres:15")
+        db = DockerResource(
+            description="Database", name="db", image="postgres:15"
+        )
         backend = BlankResource(name="backend", description="Backend")
         backend.add(db)
 
@@ -125,12 +146,14 @@ class TestCompositeFlattening:
 
     def test_flatten_preserves_hierarchy(self):
         """Test that flattening preserves parent-child relationships."""
-        db = DockerResource(description="Database", name="db", image="postgres:15")
+        db = DockerResource(
+            description="Database", name="db", image="postgres:15"
+        )
         backend = BlankResource(name="backend", description="Backend")
         backend.add(db)
 
         core = ClockworkCore(api_key="test", model="test")
-        flattened = core._flatten_resources([backend])
+        core._flatten_resources([backend])
 
         # Verify parent-child relationship is preserved
         assert db.parent == backend
@@ -142,7 +165,9 @@ class TestImplicitParentChildDependencies:
 
     def test_add_implicit_dependency_parent_to_child(self):
         """Test that child has implicit dependency on parent after resolution."""
-        db = DockerResource(description="Database", name="db", image="postgres:15")
+        db = DockerResource(
+            description="Database", name="db", image="postgres:15"
+        )
         backend = BlankResource(name="backend", description="Backend")
         backend.add(db)
 
@@ -157,7 +182,9 @@ class TestImplicitParentChildDependencies:
 
     def test_implicit_dependencies_nested_composites(self):
         """Test implicit dependencies in nested composites."""
-        db = DockerResource(description="Database", name="db", image="postgres:15")
+        db = DockerResource(
+            description="Database", name="db", image="postgres:15"
+        )
         backend = BlankResource(name="backend", description="Backend")
         backend.add(db)
 
@@ -178,8 +205,12 @@ class TestImplicitParentChildDependencies:
 
     def test_implicit_dependencies_multiple_children(self):
         """Test implicit dependencies with multiple children."""
-        db = DockerResource(description="Database", name="db", image="postgres:15")
-        cache = DockerResource(description="Cache", name="cache", image="redis:7")
+        db = DockerResource(
+            description="Database", name="db", image="postgres:15"
+        )
+        cache = DockerResource(
+            description="Cache", name="cache", image="redis:7"
+        )
         api = DockerResource(description="API", name="api", image="node:20")
 
         backend = BlankResource(name="backend", description="Backend")
@@ -203,14 +234,15 @@ class TestCrossCompositConnections:
     def test_cross_composite_connection(self):
         """Test connection from child in composite A to child in composite B."""
         # Composite A
-        db = DockerResource(description="Database", name="db", image="postgres:15")
+        db = DockerResource(
+            description="Database", name="db", image="postgres:15"
+        )
         backend = BlankResource(name="backend", description="Backend")
         backend.add(db)
 
         # Composite B (API connects to db in composite A)
         api = DockerResource(
-            description="API", name="api", image="node:20",
-            connections=[db]
+            description="API", name="api", image="node:20", connections=[db]
         )
         services = BlankResource(name="services", description="Services")
         services.add(api)
@@ -219,9 +251,13 @@ class TestCrossCompositConnections:
         ordered = core._resolve_dependency_order([backend, services])
 
         # Find indices
-        idx_backend = next(i for i, r in enumerate(ordered) if r.name == "backend")
+        idx_backend = next(
+            i for i, r in enumerate(ordered) if r.name == "backend"
+        )
         idx_db = next(i for i, r in enumerate(ordered) if r.name == "db")
-        idx_services = next(i for i, r in enumerate(ordered) if r.name == "services")
+        idx_services = next(
+            i for i, r in enumerate(ordered) if r.name == "services"
+        )
         idx_api = next(i for i, r in enumerate(ordered) if r.name == "api")
 
         # db should come before api (explicit connection)
@@ -236,15 +272,21 @@ class TestCrossCompositConnections:
     def test_multiple_cross_composite_connections(self):
         """Test multiple connections across composite boundaries."""
         # Composite A
-        db = DockerResource(description="Database", name="db", image="postgres:15")
-        cache = DockerResource(description="Cache", name="cache", image="redis:7")
+        db = DockerResource(
+            description="Database", name="db", image="postgres:15"
+        )
+        cache = DockerResource(
+            description="Cache", name="cache", image="redis:7"
+        )
         backend = BlankResource(name="backend", description="Backend")
         backend.add(db, cache)
 
         # Composite B (API connects to both db and cache)
         api = DockerResource(
-            description="API", name="api", image="node:20",
-            connections=[db, cache]
+            description="API",
+            name="api",
+            image="node:20",
+            connections=[db, cache],
         )
         services = BlankResource(name="services", description="Services")
         services.add(api)
@@ -264,14 +306,15 @@ class TestCrossCompositConnections:
     def test_bidirectional_cross_composite_cycle_detection(self):
         """Test cycle detection across composite boundaries."""
         # Composite A
-        db = DockerResource(description="Database", name="db", image="postgres:15")
+        db = DockerResource(
+            description="Database", name="db", image="postgres:15"
+        )
         backend = BlankResource(name="backend", description="Backend")
         backend.add(db)
 
         # Composite B (API connects to db)
         api = DockerResource(
-            description="API", name="api", image="node:20",
-            connections=[db]
+            description="API", name="api", image="node:20", connections=[db]
         )
         services = BlankResource(name="services", description="Services")
         services.add(api)
@@ -283,7 +326,7 @@ class TestCrossCompositConnections:
         core = ClockworkCore(api_key="test", model="test")
 
         # Should detect cycle
-        with pytest.raises(ValueError, match="[Cc]ycle|[Cc]ircular"):
+        with pytest.raises(ValueError, match=r"[Cc]ycle|[Cc]ircular"):
             core._resolve_dependency_order([backend, services])
 
 
@@ -293,10 +336,11 @@ class TestCycleDetectionComposites:
     def test_simple_composite_cycle(self):
         """Test detection of cycle within composite."""
         # Create resources that reference each other
-        db = DockerResource(description="Database", name="db", image="postgres:15")
+        db = DockerResource(
+            description="Database", name="db", image="postgres:15"
+        )
         api = DockerResource(
-            description="API", name="api", image="node:20",
-            connections=[db]
+            description="API", name="api", image="node:20", connections=[db]
         )
 
         # Add to composite first
@@ -309,18 +353,22 @@ class TestCycleDetectionComposites:
 
         core = ClockworkCore(api_key="test", model="test")
 
-        with pytest.raises(ValueError, match="[Cc]ycle|[Cc]ircular"):
+        with pytest.raises(ValueError, match=r"[Cc]ycle|[Cc]ircular"):
             core._resolve_dependency_order([backend])
 
     def test_nested_composite_cycle(self):
         """Test detection of cycle in nested composites."""
         # Inner composite
-        db = DockerResource(description="Database", name="db", image="postgres:15")
+        db = DockerResource(
+            description="Database", name="db", image="postgres:15"
+        )
         inner = BlankResource(name="inner", description="Inner")
         inner.add(db)
 
         # Middle composite with connection to db
-        api = DockerResource(description="API", name="api", image="node:20", connections=[db])
+        api = DockerResource(
+            description="API", name="api", image="node:20", connections=[db]
+        )
         middle = BlankResource(name="middle", description="Middle")
         middle.add(api)
 
@@ -334,15 +382,27 @@ class TestCycleDetectionComposites:
 
         core = ClockworkCore(api_key="test", model="test")
 
-        with pytest.raises(ValueError, match="[Cc]ycle|[Cc]ircular"):
+        with pytest.raises(ValueError, match=r"[Cc]ycle|[Cc]ircular"):
             core._resolve_dependency_order([outer])
 
     def test_no_cycle_composite_linear_chain(self):
         """Test valid linear dependency chain in composite has no cycle."""
         # Create linear dependency: c → b → a
-        c = DockerResource(description="Service C", name="c", image="alpine:latest")
-        b = DockerResource(description="Service B", name="b", image="alpine:latest", connections=[c])
-        a = DockerResource(description="Service A", name="a", image="alpine:latest", connections=[b])
+        c = DockerResource(
+            description="Service C", name="c", image="alpine:latest"
+        )
+        b = DockerResource(
+            description="Service B",
+            name="b",
+            image="alpine:latest",
+            connections=[c],
+        )
+        a = DockerResource(
+            description="Service A",
+            name="a",
+            image="alpine:latest",
+            connections=[b],
+        )
 
         backend = BlankResource(name="backend", description="Backend")
         backend.add(a, b, c)
@@ -360,10 +420,11 @@ class TestTopologicalOrderingComposites:
     def test_ordering_simple_composite(self):
         """Test correct ordering of composite with children."""
         # Create composite with dependencies
-        db = DockerResource(description="Database", name="db", image="postgres:15")
+        db = DockerResource(
+            description="Database", name="db", image="postgres:15"
+        )
         api = DockerResource(
-            description="API", name="api", image="node:20",
-            connections=[db]
+            description="API", name="api", image="node:20", connections=[db]
         )
 
         backend = BlankResource(name="backend", description="Backend")
@@ -373,7 +434,9 @@ class TestTopologicalOrderingComposites:
         ordered = core._resolve_dependency_order([backend])
 
         # Find indices
-        idx_backend = next(i for i, r in enumerate(ordered) if r.name == "backend")
+        idx_backend = next(
+            i for i, r in enumerate(ordered) if r.name == "backend"
+        )
         idx_db = next(i for i, r in enumerate(ordered) if r.name == "db")
         idx_api = next(i for i, r in enumerate(ordered) if r.name == "api")
 
@@ -385,15 +448,21 @@ class TestTopologicalOrderingComposites:
     def test_ordering_multiple_composites(self):
         """Test ordering with multiple composites and cross-composite connections."""
         # Backend composite
-        db = DockerResource(description="Database", name="db", image="postgres:15")
-        cache = DockerResource(description="Cache", name="cache", image="redis:7")
+        db = DockerResource(
+            description="Database", name="db", image="postgres:15"
+        )
+        cache = DockerResource(
+            description="Cache", name="cache", image="redis:7"
+        )
         backend = BlankResource(name="backend", description="Backend")
         backend.add(db, cache)
 
         # Services composite (depends on backend children)
         api = DockerResource(
-            description="API", name="api", image="node:20",
-            connections=[db, cache]
+            description="API",
+            name="api",
+            image="node:20",
+            connections=[db, cache],
         )
         services = BlankResource(name="services", description="Services")
         services.add(api)
@@ -402,10 +471,14 @@ class TestTopologicalOrderingComposites:
         ordered = core._resolve_dependency_order([backend, services])
 
         # Find indices
-        idx_backend = next(i for i, r in enumerate(ordered) if r.name == "backend")
+        idx_backend = next(
+            i for i, r in enumerate(ordered) if r.name == "backend"
+        )
         idx_db = next(i for i, r in enumerate(ordered) if r.name == "db")
         idx_cache = next(i for i, r in enumerate(ordered) if r.name == "cache")
-        idx_services = next(i for i, r in enumerate(ordered) if r.name == "services")
+        idx_services = next(
+            i for i, r in enumerate(ordered) if r.name == "services"
+        )
         idx_api = next(i for i, r in enumerate(ordered) if r.name == "api")
 
         # Backend should come first (parent)
@@ -422,8 +495,12 @@ class TestTopologicalOrderingComposites:
     def test_ordering_nested_composites(self):
         """Test ordering with deeply nested composites."""
         # Innermost resources
-        db = DockerResource(description="Database", name="db", image="postgres:15")
-        cache = DockerResource(description="Cache", name="cache", image="redis:7")
+        db = DockerResource(
+            description="Database", name="db", image="postgres:15"
+        )
+        cache = DockerResource(
+            description="Cache", name="cache", image="redis:7"
+        )
 
         # Middle layer
         backend = BlankResource(name="backend", description="Backend")
@@ -431,8 +508,7 @@ class TestTopologicalOrderingComposites:
 
         # API depends on db
         api = DockerResource(
-            description="API", name="api", image="node:20",
-            connections=[db]
+            description="API", name="api", image="node:20", connections=[db]
         )
 
         # Top level
@@ -444,7 +520,9 @@ class TestTopologicalOrderingComposites:
 
         # Find indices
         idx_app = next(i for i, r in enumerate(ordered) if r.name == "app")
-        idx_backend = next(i for i, r in enumerate(ordered) if r.name == "backend")
+        idx_backend = next(
+            i for i, r in enumerate(ordered) if r.name == "backend"
+        )
         idx_db = next(i for i, r in enumerate(ordered) if r.name == "db")
         idx_api = next(i for i, r in enumerate(ordered) if r.name == "api")
 
@@ -461,28 +539,35 @@ class TestTopologicalOrderingComposites:
     def test_ordering_mixed_primitives_and_composites(self):
         """Test ordering with mix of primitives and composites."""
         # Standalone primitive
-        config = FileResource(description="Config", name="config.yaml", content="...")
+        config = FileResource(
+            description="Config", name="config.yaml", content="..."
+        )
 
         # Composite depending on primitive
         db = DockerResource(
-            description="Database", name="db", image="postgres:15",
-            connections=[config]
+            description="Database",
+            name="db",
+            image="postgres:15",
+            connections=[config],
         )
         backend = BlankResource(name="backend", description="Backend")
         backend.add(db)
 
         # Another primitive depending on composite child
         api = DockerResource(
-            description="API", name="api", image="node:20",
-            connections=[db]
+            description="API", name="api", image="node:20", connections=[db]
         )
 
         core = ClockworkCore(api_key="test", model="test")
         ordered = core._resolve_dependency_order([config, backend, api])
 
         # Find indices
-        idx_config = next(i for i, r in enumerate(ordered) if r.name == "config.yaml")
-        idx_backend = next(i for i, r in enumerate(ordered) if r.name == "backend")
+        idx_config = next(
+            i for i, r in enumerate(ordered) if r.name == "config.yaml"
+        )
+        idx_backend = next(
+            i for i, r in enumerate(ordered) if r.name == "backend"
+        )
         idx_db = next(i for i, r in enumerate(ordered) if r.name == "db")
         idx_api = next(i for i, r in enumerate(ordered) if r.name == "api")
 
@@ -502,7 +587,9 @@ class TestCompositeEdgeCases:
     def test_empty_composite_ordering(self):
         """Test ordering with empty composite (no children)."""
         backend = BlankResource(name="backend", description="Empty backend")
-        config = FileResource(description="Config", name="config.yaml", content="...")
+        config = FileResource(
+            description="Config", name="config.yaml", content="..."
+        )
 
         core = ClockworkCore(api_key="test", model="test")
         ordered = core._resolve_dependency_order([backend, config])
@@ -514,7 +601,9 @@ class TestCompositeEdgeCases:
 
     def test_composite_with_duplicate_children(self):
         """Test handling of duplicate children (should be deduplicated)."""
-        db = DockerResource(description="Database", name="db", image="postgres:15")
+        db = DockerResource(
+            description="Database", name="db", image="postgres:15"
+        )
         backend = BlankResource(name="backend", description="Backend")
 
         # Try to add same child twice
@@ -527,7 +616,9 @@ class TestCompositeEdgeCases:
     def test_deeply_nested_composites(self):
         """Test deeply nested composite hierarchy."""
         # Create 4-level hierarchy
-        db = DockerResource(description="Database", name="db", image="postgres:15")
+        db = DockerResource(
+            description="Database", name="db", image="postgres:15"
+        )
 
         level3 = BlankResource(name="level3", description="Level 3")
         level3.add(db)

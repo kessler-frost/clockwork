@@ -7,11 +7,12 @@ This module tests the resource connection system including:
 - Integration with ClockworkCore
 """
 
-import pytest
 from unittest.mock import patch
 
-from clockwork.resources import DockerResource, FileResource
+import pytest
+
 from clockwork.core import ClockworkCore
+from clockwork.resources import DockerResource, FileResource
 
 
 class TestCycleDetection:
@@ -22,8 +23,19 @@ class TestCycleDetection:
         # To create a true cycle, we need both resources to reference each other
         # We create them temporarily, then manually add to _connection_resources
 
-        a = DockerResource(description="Service A", name="a", image="alpine:latest", ports=["8001:80"])
-        b = DockerResource(description="Service B", name="b", image="alpine:latest", ports=["8002:80"], connections=[a])
+        a = DockerResource(
+            description="Service A",
+            name="a",
+            image="alpine:latest",
+            ports=["8001:80"],
+        )
+        b = DockerResource(
+            description="Service B",
+            name="b",
+            image="alpine:latest",
+            ports=["8002:80"],
+            connections=[a],
+        )
 
         # Now manually create the cycle by adding b to a's _connection_resources
         # This simulates a scenario where both point to each other
@@ -32,16 +44,33 @@ class TestCycleDetection:
 
         core = ClockworkCore(api_key="test", model="test")
 
-        with pytest.raises(ValueError, match="[Cc]ycle|[Cc]ircular"):
+        with pytest.raises(ValueError, match=r"[Cc]ycle|[Cc]ircular"):
             core._resolve_dependency_order([a, b])
 
     def test_complex_cycle(self):
         """Test detection of complex A → B → C → A cycle."""
         # Create cycle: A → B → C → A
         # Build the chain first: A → B → C
-        a = DockerResource(description="Service A", name="a", image="alpine:latest", ports=["8001:80"])
-        b = DockerResource(description="Service B", name="b", image="alpine:latest", ports=["8002:80"], connections=[a])
-        c = DockerResource(description="Service C", name="c", image="alpine:latest", ports=["8003:80"], connections=[b])
+        a = DockerResource(
+            description="Service A",
+            name="a",
+            image="alpine:latest",
+            ports=["8001:80"],
+        )
+        b = DockerResource(
+            description="Service B",
+            name="b",
+            image="alpine:latest",
+            ports=["8002:80"],
+            connections=[a],
+        )
+        c = DockerResource(
+            description="Service C",
+            name="c",
+            image="alpine:latest",
+            ports=["8003:80"],
+            connections=[b],
+        )
 
         # Now close the cycle by making A point to C (completing A→B→C→A)
         a._connection_resources.append(c)
@@ -49,13 +78,18 @@ class TestCycleDetection:
 
         core = ClockworkCore(api_key="test", model="test")
 
-        with pytest.raises(ValueError, match="[Cc]ycle|[Cc]ircular"):
+        with pytest.raises(ValueError, match=r"[Cc]ycle|[Cc]ircular"):
             core._resolve_dependency_order([a, b, c])
 
     def test_self_reference(self):
         """Test detection of self-reference cycle A → A."""
         # Create resource that references itself
-        a = DockerResource(description="Service A", name="a", image="alpine:latest", ports=["8001:80"])
+        a = DockerResource(
+            description="Service A",
+            name="a",
+            image="alpine:latest",
+            ports=["8001:80"],
+        )
 
         # Make it reference itself
         a._connection_resources.append(a)
@@ -63,14 +97,31 @@ class TestCycleDetection:
 
         core = ClockworkCore(api_key="test", model="test")
 
-        with pytest.raises(ValueError, match="[Cc]ycle|[Cc]ircular"):
+        with pytest.raises(ValueError, match=r"[Cc]ycle|[Cc]ircular"):
             core._resolve_dependency_order([a])
 
     def test_no_cycle_linear_chain(self):
         """Test valid linear dependency chain has no cycle."""
-        c = DockerResource(description="Service C", name="c", image="alpine:latest", ports=["8003:80"])
-        b = DockerResource(description="Service B", name="b", image="alpine:latest", ports=["8002:80"], connections=[c])
-        a = DockerResource(description="Service A", name="a", image="alpine:latest", ports=["8001:80"], connections=[b])
+        c = DockerResource(
+            description="Service C",
+            name="c",
+            image="alpine:latest",
+            ports=["8003:80"],
+        )
+        b = DockerResource(
+            description="Service B",
+            name="b",
+            image="alpine:latest",
+            ports=["8002:80"],
+            connections=[c],
+        )
+        a = DockerResource(
+            description="Service A",
+            name="a",
+            image="alpine:latest",
+            ports=["8001:80"],
+            connections=[b],
+        )
 
         core = ClockworkCore(api_key="test", model="test")
 
@@ -88,10 +139,33 @@ class TestCycleDetection:
            \\ /
             D
         """
-        d = DockerResource(description="Service D", name="d", image="alpine:latest", ports=["8004:80"])
-        b = DockerResource(description="Service B", name="b", image="alpine:latest", ports=["8002:80"], connections=[d])
-        c = DockerResource(description="Service C", name="c", image="alpine:latest", ports=["8003:80"], connections=[d])
-        a = DockerResource(description="Service A", name="a", image="alpine:latest", ports=["8001:80"], connections=[b, c])
+        d = DockerResource(
+            description="Service D",
+            name="d",
+            image="alpine:latest",
+            ports=["8004:80"],
+        )
+        b = DockerResource(
+            description="Service B",
+            name="b",
+            image="alpine:latest",
+            ports=["8002:80"],
+            connections=[d],
+        )
+        c = DockerResource(
+            description="Service C",
+            name="c",
+            image="alpine:latest",
+            ports=["8003:80"],
+            connections=[d],
+        )
+        a = DockerResource(
+            description="Service A",
+            name="a",
+            image="alpine:latest",
+            ports=["8001:80"],
+            connections=[b, c],
+        )
 
         core = ClockworkCore(api_key="test", model="test")
 
@@ -108,9 +182,26 @@ class TestDependencyOrdering:
 
         Expected order: C, B, A (dependencies first)
         """
-        c = DockerResource(description="Service C", name="c", image="alpine:latest", ports=["8003:80"])
-        b = DockerResource(description="Service B", name="b", image="alpine:latest", ports=["8002:80"], connections=[c])
-        a = DockerResource(description="Service A", name="a", image="alpine:latest", ports=["8001:80"], connections=[b])
+        c = DockerResource(
+            description="Service C",
+            name="c",
+            image="alpine:latest",
+            ports=["8003:80"],
+        )
+        b = DockerResource(
+            description="Service B",
+            name="b",
+            image="alpine:latest",
+            ports=["8002:80"],
+            connections=[c],
+        )
+        a = DockerResource(
+            description="Service A",
+            name="a",
+            image="alpine:latest",
+            ports=["8001:80"],
+            connections=[b],
+        )
 
         core = ClockworkCore(api_key="test", model="test")
         ordered = core._resolve_dependency_order([a, b, c])
@@ -134,10 +225,33 @@ class TestDependencyOrdering:
 
         Expected order: D first, then B and C (in any order), then A last
         """
-        d = DockerResource(description="Service D", name="d", image="alpine:latest", ports=["8004:80"])
-        b = DockerResource(description="Service B", name="b", image="alpine:latest", ports=["8002:80"], connections=[d])
-        c = DockerResource(description="Service C", name="c", image="alpine:latest", ports=["8003:80"], connections=[d])
-        a = DockerResource(description="Service A", name="a", image="alpine:latest", ports=["8001:80"], connections=[b, c])
+        d = DockerResource(
+            description="Service D",
+            name="d",
+            image="alpine:latest",
+            ports=["8004:80"],
+        )
+        b = DockerResource(
+            description="Service B",
+            name="b",
+            image="alpine:latest",
+            ports=["8002:80"],
+            connections=[d],
+        )
+        c = DockerResource(
+            description="Service C",
+            name="c",
+            image="alpine:latest",
+            ports=["8003:80"],
+            connections=[d],
+        )
+        a = DockerResource(
+            description="Service A",
+            name="a",
+            image="alpine:latest",
+            ports=["8001:80"],
+            connections=[b, c],
+        )
 
         core = ClockworkCore(api_key="test", model="test")
         ordered = core._resolve_dependency_order([a, b, c, d])
@@ -161,11 +275,33 @@ class TestDependencyOrdering:
 
         Expected: Dependencies before dependents in each tree
         """
-        b = DockerResource(description="Service B", name="b", image="alpine:latest", ports=["8002:80"])
-        a = DockerResource(description="Service A", name="a", image="alpine:latest", ports=["8001:80"], connections=[b])
+        b = DockerResource(
+            description="Service B",
+            name="b",
+            image="alpine:latest",
+            ports=["8002:80"],
+        )
+        a = DockerResource(
+            description="Service A",
+            name="a",
+            image="alpine:latest",
+            ports=["8001:80"],
+            connections=[b],
+        )
 
-        y = DockerResource(description="Service Y", name="y", image="alpine:latest", ports=["8004:80"])
-        x = DockerResource(description="Service X", name="x", image="alpine:latest", ports=["8003:80"], connections=[y])
+        y = DockerResource(
+            description="Service Y",
+            name="y",
+            image="alpine:latest",
+            ports=["8004:80"],
+        )
+        x = DockerResource(
+            description="Service X",
+            name="x",
+            image="alpine:latest",
+            ports=["8003:80"],
+            connections=[y],
+        )
 
         core = ClockworkCore(api_key="test", model="test")
         ordered = core._resolve_dependency_order([a, b, x, y])
@@ -184,7 +320,12 @@ class TestDependencyOrdering:
 
     def test_single_resource(self):
         """Test ordering with single resource (no connections)."""
-        a = DockerResource(description="Service A", name="a", image="alpine:latest", ports=["8001:80"])
+        a = DockerResource(
+            description="Service A",
+            name="a",
+            image="alpine:latest",
+            ports=["8001:80"],
+        )
 
         core = ClockworkCore(api_key="test", model="test")
         ordered = core._resolve_dependency_order([a])
@@ -205,9 +346,26 @@ class TestDependencyOrdering:
 
         Given A → B → C, try different input orders.
         """
-        c = DockerResource(description="Service C", name="c", image="alpine:latest", ports=["8003:80"])
-        b = DockerResource(description="Service B", name="b", image="alpine:latest", ports=["8002:80"], connections=[c])
-        a = DockerResource(description="Service A", name="a", image="alpine:latest", ports=["8001:80"], connections=[b])
+        c = DockerResource(
+            description="Service C",
+            name="c",
+            image="alpine:latest",
+            ports=["8003:80"],
+        )
+        b = DockerResource(
+            description="Service B",
+            name="b",
+            image="alpine:latest",
+            ports=["8002:80"],
+            connections=[c],
+        )
+        a = DockerResource(
+            description="Service A",
+            name="a",
+            image="alpine:latest",
+            ports=["8001:80"],
+            connections=[b],
+        )
 
         core = ClockworkCore(api_key="test", model="test")
 
@@ -239,7 +397,7 @@ class TestConnectionContext:
             image="postgres:15-alpine",
             ports=["5432:5432"],
             env_vars={"POSTGRES_PASSWORD": "secret"},
-            networks=["backend"]
+            networks=["backend"],
         )
 
         context = docker.get_connection_context()
@@ -260,7 +418,7 @@ class TestConnectionContext:
             description="Configuration file",
             name="config.yaml",
             directory="/etc/app",
-            content="key: value"
+            content="key: value",
         )
 
         context = file.get_connection_context()
@@ -281,7 +439,7 @@ class TestConnectionContext:
             description="Standalone service",
             name="standalone",
             image="alpine:latest",
-            ports=["8080:80"]
+            ports=["8080:80"],
         )
 
         # Empty connections list (default)
@@ -297,7 +455,7 @@ class TestConnectionContext:
             description="Minimal service",
             name="minimal",
             image="alpine:latest",
-            ports=["8080:80"]
+            ports=["8080:80"],
             # volumes, env_vars, networks are empty/default
         )
 
@@ -319,14 +477,13 @@ class TestConnectionContext:
 
     def test_base_resource_connection_context(self):
         """Test base Resource class connection context."""
-        from clockwork.resources.base import Resource
 
         # Create a basic resource (using DockerResource since Resource is abstract)
         resource = DockerResource(
             description="Test resource",
             name="test",
             image="alpine:latest",
-            ports=["80:80"]
+            ports=["80:80"],
         )
 
         context = resource.get_connection_context()
@@ -348,7 +505,7 @@ class TestIntegration:
             description="Database",
             name="db",
             image="postgres:15-alpine",
-            ports=["5432:5432"]
+            ports=["5432:5432"],
         )
 
         app = DockerResource(
@@ -356,7 +513,7 @@ class TestIntegration:
             name="app",
             image="node:18-alpine",
             ports=["3000:3000"],
-            connections=[db]
+            connections=[db],
         )
 
         # Test that core processes connections
@@ -364,7 +521,11 @@ class TestIntegration:
 
         # The _resolve_dependency_order should be called internally
         # and should order resources correctly (db before app)
-        with patch.object(core, '_resolve_dependency_order', wraps=core._resolve_dependency_order) as mock_order:
+        with patch.object(
+            core,
+            "_resolve_dependency_order",
+            wraps=core._resolve_dependency_order,
+        ) as mock_order:
             # This would normally be called in apply()
             ordered = core._resolve_dependency_order([app, db])
 
@@ -384,14 +545,14 @@ class TestIntegration:
             name="postgres",
             image="postgres:15-alpine",
             ports=["5432:5432"],
-            env_vars={"POSTGRES_PASSWORD": "secret"}
+            env_vars={"POSTGRES_PASSWORD": "secret"},
         )
 
         app = DockerResource(
             description="Web application",
             name="webapp",
             image="node:18-alpine",
-            connections=[db]
+            connections=[db],
         )
 
         completer = ResourceCompleter(api_key="test", model="test")
@@ -412,23 +573,22 @@ class TestIntegration:
             name="postgres",
             image="postgres:15-alpine",
             ports=["5432:5432"],
-            env_vars={"POSTGRES_PASSWORD": "secret"}
+            env_vars={"POSTGRES_PASSWORD": "secret"},
         )
 
         file = FileResource(
             description="Config file",
             name="config.yaml",
             directory="/etc/app",
-            content="key: value"
+            content="key: value",
         )
 
         completer = ResourceCompleter(api_key="test", model="test")
 
         # Format connection context (pass context dicts, not Resource objects)
-        formatted = completer._format_connection_context([
-            db.get_connection_context(),
-            file.get_connection_context()
-        ])
+        formatted = completer._format_connection_context(
+            [db.get_connection_context(), file.get_connection_context()]
+        )
 
         # Should contain resource names
         assert "postgres" in formatted
@@ -444,14 +604,14 @@ class TestIntegration:
             description="Database",
             name="db",
             image="postgres:15-alpine",
-            ports=["5432:5432"]
+            ports=["5432:5432"],
         )
 
         cache = DockerResource(
             description="Cache",
             name="redis",
             image="redis:7-alpine",
-            ports=["6379:6379"]
+            ports=["6379:6379"],
         )
 
         app = DockerResource(
@@ -459,13 +619,13 @@ class TestIntegration:
             name="app",
             image="node:18-alpine",
             ports=["3000:3000"],
-            connections=[db, cache]
+            connections=[db, cache],
         )
 
         # Verify connections - they're now context dicts, not Resource objects
         assert len(app.connections) == 2
         # Check that connection dicts contain the expected resource names
-        connection_names = {conn['name'] for conn in app.connections}
+        connection_names = {conn["name"] for conn in app.connections}
         assert "db" in connection_names
         assert "redis" in connection_names
 
@@ -493,7 +653,12 @@ class TestEdgeCases:
 
     def test_duplicate_resources_in_list(self):
         """Test handling of duplicate resources in input list."""
-        a = DockerResource(description="Service A", name="a", image="alpine:latest", ports=["8001:80"])
+        a = DockerResource(
+            description="Service A",
+            name="a",
+            image="alpine:latest",
+            ports=["8001:80"],
+        )
 
         core = ClockworkCore(api_key="test", model="test")
 
@@ -506,8 +671,19 @@ class TestEdgeCases:
 
     def test_connection_to_nonexistent_resource(self):
         """Test connection referencing resource not in the list."""
-        b = DockerResource(description="Service B", name="b", image="alpine:latest", ports=["8002:80"])
-        a = DockerResource(description="Service A", name="a", image="alpine:latest", ports=["8001:80"], connections=[b])
+        b = DockerResource(
+            description="Service B",
+            name="b",
+            image="alpine:latest",
+            ports=["8002:80"],
+        )
+        a = DockerResource(
+            description="Service A",
+            name="a",
+            image="alpine:latest",
+            ports=["8001:80"],
+            connections=[b],
+        )
 
         core = ClockworkCore(api_key="test", model="test")
 
@@ -528,14 +704,16 @@ class TestEdgeCases:
         resources = []
         prev = None
 
-        for i, name in enumerate(['j', 'i', 'h', 'g', 'f', 'e', 'd', 'c', 'b', 'a']):
+        for i, name in enumerate(
+            ["j", "i", "h", "g", "f", "e", "d", "c", "b", "a"]
+        ):
             connections = [prev] if prev else []
             resource = DockerResource(
                 description=f"Service {name}",
                 name=name,
                 image="alpine:latest",
                 ports=[f"{8001+i}:80"],
-                connections=connections
+                connections=connections,
             )
             resources.append(resource)
             prev = resource
@@ -544,7 +722,7 @@ class TestEdgeCases:
         ordered = core._resolve_dependency_order(resources)
 
         # Verify order: j, i, h, g, f, e, d, c, b, a
-        expected_order = ['j', 'i', 'h', 'g', 'f', 'e', 'd', 'c', 'b', 'a']
+        expected_order = ["j", "i", "h", "g", "f", "e", "d", "c", "b", "a"]
         actual_order = [r.name for r in ordered]
 
         assert actual_order == expected_order
@@ -555,7 +733,7 @@ class TestEdgeCases:
             description="Config file",
             name="app.conf",
             directory="/etc",
-            content="setting=value"
+            content="setting=value",
         )
 
         app = DockerResource(
@@ -563,7 +741,7 @@ class TestEdgeCases:
             name="app",
             image="node:18-alpine",
             ports=["3000:3000"],
-            connections=[config_file]
+            connections=[config_file],
         )
 
         core = ClockworkCore(api_key="test", model="test")

@@ -13,20 +13,19 @@ Cleanup: clockwork destroy
 """
 
 from datetime import datetime
+
+from clockwork.assertions import (
+    ContainerRunningAssert,
+    FileContentMatchesAssert,
+    FileExistsAssert,
+    HealthcheckAssert,
+    PortAccessibleAssert,
+)
 from clockwork.resources import (
+    DockerResource,
     FileResource,
     GitRepoResource,
-    DockerResource,
 )
-from clockwork.assertions import (
-    FileExistsAssert,
-    FileContentMatchesAssert,
-    ContainerRunningAssert,
-    PortAccessibleAssert,
-    HealthcheckAssert,
-)
-from pydantic_ai.common_tools.duckduckgo import duckduckgo_search_tool
-
 
 # ==============================================================================
 # SECTION 1: File Resources
@@ -53,7 +52,7 @@ See main.py for the complete example.
     assertions=[
         FileExistsAssert(path="scratch/README.md"),
         FileContentMatchesAssert(path="scratch/README.md", pattern="Clockwork"),
-    ]
+    ],
 )
 
 # AI-generated file - AI creates content from description
@@ -65,7 +64,7 @@ config_ai = FileResource(
     assertions=[
         FileExistsAssert(path="scratch/config.yaml"),
         FileContentMatchesAssert(path="scratch/config.yaml", pattern="5432"),
-    ]
+    ],
 )
 
 
@@ -78,7 +77,7 @@ config_ai = FileResource(
 fastapi_repo = GitRepoResource(
     description="FastAPI Python web framework repository",
     dest="scratch/repos/fastapi",
-    branch="master"  # Specify branch to avoid AI guessing wrong
+    branch="master",  # Specify branch to avoid AI guessing wrong
     # AI fills in: name, repo_url
 )
 
@@ -96,14 +95,17 @@ nginx_container = DockerResource(
     assertions=[
         ContainerRunningAssert(timeout_seconds=10),
         PortAccessibleAssert(port=8080, host="localhost", protocol="tcp"),
-        HealthcheckAssert(url="http://localhost:8080", expected_status=200, timeout_seconds=5),
-    ]
+        HealthcheckAssert(
+            url="http://localhost:8080", expected_status=200, timeout_seconds=5
+        ),
+    ],
 )
 
 
 # ==============================================================================
 # SECTION 4: Tool Integration (Optional)
 # ==============================================================================
+
 
 # Custom tool - Python function the AI can call
 def get_current_time(format_type: str) -> str:
@@ -116,12 +118,12 @@ def get_current_time(format_type: str) -> str:
         Formatted timestamp string
     """
     now = datetime.now()
-    if format_type == 'time':
-        return now.strftime('%H:%M:%S')
-    elif format_type == 'date':
-        return now.strftime('%Y-%m-%d')
+    if format_type == "time":
+        return now.strftime("%H:%M:%S")
+    elif format_type == "date":
+        return now.strftime("%Y-%m-%d")
     else:
-        return now.strftime('%Y-%m-%d %H:%M:%S')
+        return now.strftime("%Y-%m-%d %H:%M:%S")
 
 
 # Uncomment to enable tool examples (requires API key with web search)

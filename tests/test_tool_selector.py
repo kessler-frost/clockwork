@@ -1,15 +1,14 @@
 """Tests for ToolSelector functionality."""
 
-import pytest
 from unittest.mock import Mock, patch
 
-from clockwork.tool_selector import ToolSelector
 from clockwork.resources import (
-    FileResource,
-    DockerResource,
     AppleContainerResource,
+    DockerResource,
+    FileResource,
     GitRepoResource,
 )
+from clockwork.tool_selector import ToolSelector
 
 
 class TestToolSelectorBasics:
@@ -93,7 +92,7 @@ class TestResourceTypeTools:
         resource = GitRepoResource(
             name="test-repo",
             description="Test git repository",
-            dest="/tmp/test"
+            dest="/tmp/test",
         )
 
         tools = selector.select_tools_for_resource(resource)
@@ -199,7 +198,7 @@ class TestMCPTools:
         resource = FileResource(description="Test")
         context = "Analyze existing files"
 
-        tools = selector.select_tools_for_resource(resource, context)
+        selector.select_tools_for_resource(resource, context)
 
         # Should request filesystem_mcp
         assert any(
@@ -229,11 +228,13 @@ class TestToolRegistry:
         assert selector._tool_registry["duckduckgo_search"] is None
 
         # After getting it, should be loaded (if available)
-        tool = selector._get_tool("duckduckgo_search")
+        selector._get_tool("duckduckgo_search")
 
         # Tool should now be cached
         cached_tool = selector._tool_registry["duckduckgo_search"]
-        assert cached_tool is not None or cached_tool is None  # Depends on if installed
+        assert (
+            cached_tool is not None or cached_tool is None
+        )  # Depends on if installed
 
 
 class TestDuplicateRemoval:

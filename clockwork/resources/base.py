@@ -1,11 +1,17 @@
 """Base resource classes for Clockwork."""
 
-from typing import Dict, Any, Optional, List, TYPE_CHECKING, Union, Iterator
-from typing_extensions import Self
-from pydantic import BaseModel, Field, field_validator, model_validator, PrivateAttr
-from collections.abc import Mapping
 import logging
+from collections.abc import Iterator, Mapping
+from typing import TYPE_CHECKING, Any, Optional, Self
+
 import pulumi
+from pydantic import (
+    BaseModel,
+    Field,
+    PrivateAttr,
+    field_validator,
+    model_validator,
+)
 
 if TYPE_CHECKING:
     from clockwork.assertions.base import BaseAssertion
@@ -60,7 +66,7 @@ class ChildrenCollection(Mapping):
         ...     print(f"{name}: {resource.image}")
     """
 
-    def __init__(self, children: List['Resource']):
+    def __init__(self, children: list["Resource"]):
         """Initialize the collection with a list of child resources.
 
         Args:
@@ -68,7 +74,7 @@ class ChildrenCollection(Mapping):
         """
         self._children = children
 
-    def __getitem__(self, name: str) -> 'Resource':
+    def __getitem__(self, name: str) -> "Resource":
         """Access child by name: webapp.children["postgres"]
 
         Args:
@@ -91,7 +97,9 @@ class ChildrenCollection(Mapping):
         Yields:
             Names of child resources
         """
-        return (child.name for child in self._children if child.name is not None)
+        return (
+            child.name for child in self._children if child.name is not None
+        )
 
     def __len__(self) -> int:
         """Return number of children.
@@ -160,17 +168,19 @@ class Resource(BaseModel):
 
     name: str | None = None
     description: str | None = None
-    assertions: List["BaseAssertion"] | None = None
-    connections: List[Dict[str, Any]] = Field(
+    assertions: list["BaseAssertion"] | None = None
+    connections: list[dict[str, Any]] = Field(
         default_factory=list,
-        description="Connection context dicts (Resource objects auto-converted via validator)"
+        description="Connection context dicts (Resource objects auto-converted via validator)",
     )
-    _connection_resources: List["Resource"] = PrivateAttr(default_factory=list)
-    _children: List["Resource"] = PrivateAttr(default_factory=list)
+    _connection_resources: list["Resource"] = PrivateAttr(default_factory=list)
+    _children: list["Resource"] = PrivateAttr(default_factory=list)
     _parent: Optional["Resource"] = PrivateAttr(default=None)
 
     # AI and integration capabilities
-    tools: List[Any] | None = None  # PydanticAI tools (duckduckgo_search_tool(), MCPServerStdio, etc.)
+    tools: list[Any] | None = (
+        None  # PydanticAI tools (duckduckgo_search_tool(), MCPServerStdio, etc.)
+    )
 
     def __init__(self, **data):
         """Initialize Resource and capture connection Resource objects.
@@ -181,9 +191,9 @@ class Resource(BaseModel):
         """
         # Extract Resource objects before Pydantic processes the connections field
         connection_resources = []
-        if 'connections' in data and data['connections']:
-            for item in data['connections']:
-                if hasattr(item, 'get_connection_context'):
+        if data.get("connections"):
+            for item in data["connections"]:
+                if hasattr(item, "get_connection_context"):
                     connection_resources.append(item)
 
         # Initialize Pydantic model (triggers validators)
@@ -192,7 +202,7 @@ class Resource(BaseModel):
         # Store captured Resource objects in private attribute
         self._connection_resources = connection_resources
 
-    @field_validator('connections', mode='before')
+    @field_validator("connections", mode="before")
     @classmethod
     def convert_resources_before_validation(cls, value):
         """Convert Resource objects to dicts before field validation.
@@ -211,7 +221,7 @@ class Resource(BaseModel):
 
         result = []
         for item in value:
-            if hasattr(item, 'get_connection_context'):
+            if hasattr(item, "get_connection_context"):
                 # Convert Resource to dict
                 result.append(item.get_connection_context())
             else:
@@ -219,8 +229,8 @@ class Resource(BaseModel):
                 result.append(item)
         return result
 
-    @model_validator(mode='after')
-    def convert_connections_to_dicts(self) -> 'Resource':
+    @model_validator(mode="after")
+    def convert_connections_to_dicts(self) -> "Resource":
         """Convert Resource objects in connections field to serializable dicts.
 
         This validator runs after __init__ and converts any remaining Resource objects
@@ -236,7 +246,7 @@ class Resource(BaseModel):
         connection_contexts = []
 
         for item in self.connections:
-            if hasattr(item, 'get_connection_context'):
+            if hasattr(item, "get_connection_context"):
                 # Convert Resource to context dict
                 connection_contexts.append(item.get_connection_context())
             elif isinstance(item, dict):
@@ -244,7 +254,10 @@ class Resource(BaseModel):
                 connection_contexts.append(item)
             else:
                 import logging
-                logging.warning(f"Unknown connection type: {type(item)}, skipping")
+
+                logging.warning(
+                    f"Unknown connection type: {type(item)}, skipping"
+                )
 
         # Replace connections with context dicts only
         self.connections = connection_contexts
@@ -269,7 +282,7 @@ class Resource(BaseModel):
         """
         return self.name is None
 
-    def get_connection_context(self) -> Dict[str, Any]:
+    def get_connection_context(self) -> dict[str, Any]:
         """Get shareable context from this resource for connected resources.
 
         This method returns a dictionary of fields that can be shared with other
@@ -493,7 +506,7 @@ class Resource(BaseModel):
 
         return self
 
-    def get_all_descendants(self) -> List["Resource"]:
+    def get_all_descendants(self) -> list["Resource"]:
         """Get all descendant resources recursively (children, grandchildren, etc.).
 
         Uses depth-first traversal to collect all descendants in the hierarchy.
@@ -523,7 +536,7 @@ class Resource(BaseModel):
             descendants.extend(child.get_all_descendants())
         return descendants
 
-    def _build_dependency_options(self) -> Optional[pulumi.ResourceOptions]:
+    def _build_dependency_options(self) -> pulumi.ResourceOptions | None:
         """Build Pulumi ResourceOptions from connection dependencies.
 
         Iterates through connected resources and creates a ResourceOptions object
@@ -547,7 +560,10 @@ class Resource(BaseModel):
 
         depends_on = []
         for conn in self._connection_resources:
-            if hasattr(conn, '_pulumi_resource') and conn._pulumi_resource is not None:
+            if (
+                hasattr(conn, "_pulumi_resource")
+                and conn._pulumi_resource is not None
+            ):
                 depends_on.append(conn._pulumi_resource)
 
         if depends_on:
@@ -555,7 +571,9 @@ class Resource(BaseModel):
 
         return None
 
-    def _compile_with_opts(self, opts: Optional[pulumi.ResourceOptions]) -> pulumi.Resource:
+    def _compile_with_opts(
+        self, opts: pulumi.ResourceOptions | None
+    ) -> pulumi.Resource:
         """Internal method to compile resource with custom ResourceOptions.
 
         This method is used during recursive compilation of composite resources
@@ -590,14 +608,14 @@ class Resource(BaseModel):
             return self.to_pulumi()
         finally:
             # Clean up temporary options
-            if hasattr(self, '_temp_compile_opts'):
-                delattr(self, '_temp_compile_opts')
+            if hasattr(self, "_temp_compile_opts"):
+                delattr(self, "_temp_compile_opts")
 
     def _merge_resource_options(
         self,
-        parent_opts: Optional[pulumi.ResourceOptions],
-        dep_opts: Optional[pulumi.ResourceOptions]
-    ) -> Optional[pulumi.ResourceOptions]:
+        parent_opts: pulumi.ResourceOptions | None,
+        dep_opts: pulumi.ResourceOptions | None,
+    ) -> pulumi.ResourceOptions | None:
         """Merge parent options and dependency options.
 
         Combines ResourceOptions from parent (for hierarchy) and dependencies
@@ -644,8 +662,10 @@ class Resource(BaseModel):
 
         # Create merged options with parent from parent_opts and combined depends_on
         return pulumi.ResourceOptions(
-            parent=parent_opts.parent if hasattr(parent_opts, 'parent') else None,
-            depends_on=merged_depends_on if merged_depends_on else None
+            parent=parent_opts.parent
+            if hasattr(parent_opts, "parent")
+            else None,
+            depends_on=merged_depends_on if merged_depends_on else None,
         )
 
     def to_pulumi(self):
@@ -668,4 +688,6 @@ class Resource(BaseModel):
                     ports=[docker.ContainerPortArgs(internal=80, external=8080)]
                 )
         """
-        raise NotImplementedError(f"{self.__class__.__name__} must implement to_pulumi()")
+        raise NotImplementedError(
+            f"{self.__class__.__name__} must implement to_pulumi()"
+        )

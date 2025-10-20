@@ -1,9 +1,13 @@
 """Container-specific assertions for both Docker and Apple Containers."""
 
 import subprocess
-from typing import Any, Optional
+from typing import TYPE_CHECKING
+
 from .base import BaseAssertion
-from .utils import resolve_container_name, escape_shell_pattern
+from .utils import resolve_container_name
+
+if TYPE_CHECKING:
+    from clockwork.resources.base import Resource
 
 
 class ContainerRunningAssert(BaseAssertion):
@@ -39,16 +43,31 @@ class ContainerRunningAssert(BaseAssertion):
             resource_type = resource.__class__.__name__
 
             if resource_type == "AppleContainerResource":
-                cmd = ["container", "ps", "--filter", f"name={container_name}", "--format", "{{.Status}}"]
+                cmd = [
+                    "container",
+                    "ps",
+                    "--filter",
+                    f"name={container_name}",
+                    "--format",
+                    "{{.Status}}",
+                ]
             else:
                 # Default to Docker for DockerResource and others
-                cmd = ["docker", "ps", "-a", "--filter", f"name={container_name}", "--format", "{{.Status}}"]
+                cmd = [
+                    "docker",
+                    "ps",
+                    "-a",
+                    "--filter",
+                    f"name={container_name}",
+                    "--format",
+                    "{{.Status}}",
+                ]
 
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=self.timeout_seconds
+                timeout=self.timeout_seconds,
             )
             return "up" in result.stdout.lower()
         except Exception:

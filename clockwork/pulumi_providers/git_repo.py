@@ -7,10 +7,15 @@ using subprocess to execute git commands directly.
 import asyncio
 import shutil
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import pulumi
-from pulumi.dynamic import CreateResult, DiffResult, ResourceProvider, UpdateResult
+from pulumi.dynamic import (
+    CreateResult,
+    DiffResult,
+    ResourceProvider,
+    UpdateResult,
+)
 
 
 class GitRepoInputs:
@@ -55,7 +60,9 @@ class GitRepoProvider(ResourceProvider):
     git commands. It supports create, update, delete, and diff operations.
     """
 
-    async def _run_command(self, cmd: List[str], cwd: str | None = None) -> Dict[str, Any]:
+    async def _run_command(
+        self, cmd: list[str], cwd: str | None = None
+    ) -> dict[str, Any]:
         """Run a git command and return the result.
 
         Args:
@@ -83,9 +90,11 @@ class GitRepoProvider(ResourceProvider):
                 "stderr": stderr_bytes.decode().strip(),
             }
         except Exception as e:
-            raise Exception(f"Failed to run command {' '.join(cmd)}: {str(e)}")
+            raise Exception(
+                f"Failed to run command {' '.join(cmd)}: {e!s}"
+            ) from e
 
-    async def _create_async(self, props: Dict[str, Any]) -> CreateResult:
+    async def _create_async(self, props: dict[str, Any]) -> CreateResult:
         """Async implementation of create.
 
         Args:
@@ -110,18 +119,20 @@ class GitRepoProvider(ResourceProvider):
             if pull:
                 # Pull latest changes
                 result = await self._run_command(
-                    ["git", "checkout", branch],
-                    cwd=dest
+                    ["git", "checkout", branch], cwd=dest
                 )
                 if result["returncode"] != 0:
-                    raise Exception(f"Failed to checkout branch {branch}: {result['stderr']}")
+                    raise Exception(
+                        f"Failed to checkout branch {branch}: {result['stderr']}"
+                    )
 
                 result = await self._run_command(
-                    ["git", "pull", "origin", branch],
-                    cwd=dest
+                    ["git", "pull", "origin", branch], cwd=dest
                 )
                 if result["returncode"] != 0:
-                    raise Exception(f"Failed to pull latest changes: {result['stderr']}")
+                    raise Exception(
+                        f"Failed to pull latest changes: {result['stderr']}"
+                    )
             # Repository exists, return existing path
             return CreateResult(id_=dest, outs=props)
 
@@ -135,7 +146,7 @@ class GitRepoProvider(ResourceProvider):
 
         return CreateResult(id_=dest, outs=props)
 
-    def create(self, props: Dict[str, Any]) -> CreateResult:
+    def create(self, props: dict[str, Any]) -> CreateResult:
         """Create a new repository clone.
 
         Args:
@@ -150,10 +161,7 @@ class GitRepoProvider(ResourceProvider):
         return asyncio.run(self._create_async(props))
 
     async def _update_async(
-        self,
-        id: str,
-        old_props: Dict[str, Any],
-        new_props: Dict[str, Any]
+        self, id: str, old_props: dict[str, Any], new_props: dict[str, Any]
     ) -> UpdateResult:
         """Async implementation of update.
 
@@ -181,27 +189,24 @@ class GitRepoProvider(ResourceProvider):
             return UpdateResult(outs=new_props)
 
         # Pull latest changes
-        result = await self._run_command(
-            ["git", "checkout", branch],
-            cwd=dest
-        )
+        result = await self._run_command(["git", "checkout", branch], cwd=dest)
         if result["returncode"] != 0:
-            raise Exception(f"Failed to checkout branch {branch}: {result['stderr']}")
+            raise Exception(
+                f"Failed to checkout branch {branch}: {result['stderr']}"
+            )
 
         result = await self._run_command(
-            ["git", "pull", "origin", branch],
-            cwd=dest
+            ["git", "pull", "origin", branch], cwd=dest
         )
         if result["returncode"] != 0:
-            raise Exception(f"Failed to pull latest changes: {result['stderr']}")
+            raise Exception(
+                f"Failed to pull latest changes: {result['stderr']}"
+            )
 
         return UpdateResult(outs=new_props)
 
     def update(
-        self,
-        id: str,
-        old_props: Dict[str, Any],
-        new_props: Dict[str, Any]
+        self, id: str, old_props: dict[str, Any], new_props: dict[str, Any]
     ) -> UpdateResult:
         """Update a repository by pulling latest changes.
 
@@ -215,7 +220,7 @@ class GitRepoProvider(ResourceProvider):
         """
         return asyncio.run(self._update_async(id, old_props, new_props))
 
-    async def _delete_async(self, id: str, props: Dict[str, Any]) -> None:
+    async def _delete_async(self, id: str, props: dict[str, Any]) -> None:
         """Async implementation of delete.
 
         Args:
@@ -228,7 +233,7 @@ class GitRepoProvider(ResourceProvider):
         if dest_path.exists():
             shutil.rmtree(dest_path)
 
-    def delete(self, id: str, props: Dict[str, Any]) -> None:
+    def delete(self, id: str, props: dict[str, Any]) -> None:
         """Delete a repository.
 
         Args:
@@ -238,10 +243,7 @@ class GitRepoProvider(ResourceProvider):
         asyncio.run(self._delete_async(id, props))
 
     def diff(
-        self,
-        id: str,
-        old_props: Dict[str, Any],
-        new_props: Dict[str, Any]
+        self, id: str, old_props: dict[str, Any], new_props: dict[str, Any]
     ) -> DiffResult:
         """Check what changed between old and new properties.
 

@@ -33,7 +33,9 @@ class PulumiCompiler:
 
         # Set Pulumi passphrase from settings if not already set in environment
         if "PULUMI_CONFIG_PASSPHRASE" not in os.environ:
-            os.environ["PULUMI_CONFIG_PASSPHRASE"] = settings.pulumi_config_passphrase
+            os.environ["PULUMI_CONFIG_PASSPHRASE"] = (
+                settings.pulumi_config_passphrase
+            )
             logger.debug("Set PULUMI_CONFIG_PASSPHRASE from settings")
 
     def create_program(self, resources: list[Any]) -> Callable:
@@ -61,16 +63,27 @@ class PulumiCompiler:
                 try:
                     if hasattr(resource, "to_pulumi"):
                         # Check if composite or primitive
-                        if hasattr(resource, '_children') and len(resource._children) > 0:
-                            logger.debug(f"Compiling composite resource: {resource.name}")
+                        if (
+                            hasattr(resource, "_children")
+                            and len(resource._children) > 0
+                        ):
+                            logger.debug(
+                                f"Compiling composite resource: {resource.name}"
+                            )
 
                             # For composites, call to_pulumi which should handle ComponentResource
-                            pulumi_resource = resource.to_pulumi()
-                            logger.debug(f"Created ComponentResource: {resource.name}")
-                        else:
-                            logger.debug(f"Compiling primitive resource: {resource.name}")
                             resource.to_pulumi()
-                            logger.debug(f"Created Pulumi resource: {resource.name}")
+                            logger.debug(
+                                f"Created ComponentResource: {resource.name}"
+                            )
+                        else:
+                            logger.debug(
+                                f"Compiling primitive resource: {resource.name}"
+                            )
+                            resource.to_pulumi()
+                            logger.debug(
+                                f"Created Pulumi resource: {resource.name}"
+                            )
                     else:
                         logger.warning(
                             f"Resource {resource.name} does not implement to_pulumi()"
@@ -190,9 +203,7 @@ class PulumiCompiler:
             # Extract summary
             summary = destroy_result.summary
 
-            logger.info(
-                f"Pulumi destroy completed: {summary.result}"
-            )
+            logger.info(f"Pulumi destroy completed: {summary.result}")
 
             return {
                 "success": True,

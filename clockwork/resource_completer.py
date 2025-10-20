@@ -6,15 +6,20 @@ the AI's task. No prompts needed - the schema IS the prompt!
 """
 
 import logging
-from typing import Any, List
+from typing import Any
 
-from pydantic_ai import Agent, InlineDefsJsonSchemaTransformer, ModelRetry, RunContext
+from pydantic_ai import (
+    Agent,
+    InlineDefsJsonSchemaTransformer,
+    ModelRetry,
+    RunContext,
+)
 from pydantic_ai.models.openai import OpenAIChatModel
-from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.profiles.openai import OpenAIModelProfile
+from pydantic_ai.providers.openai import OpenAIProvider
 
-from .tool_selector import ToolSelector
 from .settings import get_settings
+from .tool_selector import ToolSelector
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +33,7 @@ class ResourceCompleter:
         model: str | None = None,
         base_url: str | None = None,
         tool_selector: ToolSelector | None = None,
-        enable_tool_selection: bool = True
+        enable_tool_selection: bool = True,
     ):
         """
         Initialize the resource completer.
@@ -53,14 +58,16 @@ class ResourceCompleter:
 
         # Tool selection setup
         self.enable_tool_selection = enable_tool_selection
-        self.tool_selector = tool_selector or (ToolSelector() if enable_tool_selection else None)
+        self.tool_selector = tool_selector or (
+            ToolSelector() if enable_tool_selection else None
+        )
 
         logger.info(
             f"Initialized ResourceCompleter with model: {self.model} at {self.base_url} "
             f"(tool selection: {enable_tool_selection})"
         )
 
-    async def complete(self, resources: List[Any]) -> List[Any]:
+    async def complete(self, resources: list[Any]) -> list[Any]:
         """
         Complete partial resources using AI (async version).
 
@@ -109,20 +116,21 @@ class ResourceCompleter:
             logger.debug(f"Using {len(tools)} user-provided tools")
         elif self.enable_tool_selection and self.tool_selector:
             context = resource.description or ""
-            tools = self.tool_selector.select_tools_for_resource(resource, context)
+            tools = self.tool_selector.select_tools_for_resource(
+                resource, context
+            )
             logger.debug(f"ToolSelector chose {len(tools)} tools")
 
         # Create OpenAI-compatible model
         model = OpenAIChatModel(
             self.model,
             provider=OpenAIProvider(
-                base_url=self.base_url,
-                api_key=self.api_key
+                base_url=self.base_url, api_key=self.api_key
             ),
             profile=OpenAIModelProfile(
                 json_schema_transformer=InlineDefsJsonSchemaTransformer,
-                openai_supports_strict_tool_definition=False
-            )
+                openai_supports_strict_tool_definition=False,
+            ),
         )
 
         # Create PydanticAI Agent with minimal system prompt
@@ -141,23 +149,31 @@ class ResourceCompleter:
         async def validate_required_fields(ctx: RunContext, output: Any) -> Any:
             """Validate that all required fields defined by needs_completion() are filled."""
             if output.needs_completion():
-                logger.warning(f"AI failed to complete required fields for {output.__class__.__name__}")
+                logger.warning(
+                    f"AI failed to complete required fields for {output.__class__.__name__}"
+                )
                 raise ModelRetry(
-                    f"The resource still has incomplete required fields. "
-                    f"You MUST provide actual non-None values for ALL required fields. "
-                    f"Review the resource definition and fill in any missing required fields. "
-                    f"Do NOT leave required fields as None."
+                    "The resource still has incomplete required fields. "
+                    "You MUST provide actual non-None values for ALL required fields. "
+                    "Review the resource definition and fill in any missing required fields. "
+                    "Do NOT leave required fields as None."
                 )
             return output
 
         # Build user message including description and current state
-        user_data = resource.model_dump(exclude={'tools', 'assertions', 'connections'})
+        user_data = resource.model_dump(
+            exclude={"tools", "assertions", "connections"}
+        )
         provided_fields = {k: v for k, v in user_data.items() if v is not None}
 
         # Create message showing what's provided and what needs completion
         if provided_fields:
-            provided_str = "\n".join([f"- {k}: {v}" for k, v in provided_fields.items()])
-            user_message = f"{resource.description}\n\nAlready provided:\n{provided_str}"
+            provided_str = "\n".join(
+                [f"- {k}: {v}" for k, v in provided_fields.items()]
+            )
+            user_message = (
+                f"{resource.description}\n\nAlready provided:\n{provided_str}"
+            )
         else:
             user_message = resource.description
 
@@ -189,7 +205,7 @@ class ResourceCompleter:
         # Merge: user values override AI values
         # For each field, use user value if not None, otherwise use AI value
         merged_data = {}
-        for field_name in user_data.keys():
+        for field_name in user_data:
             user_value = user_data[field_name]
             ai_value = ai_data.get(field_name)
 
@@ -204,13 +220,13 @@ class ResourceCompleter:
 
         # Preserve connections from user resource (not part of AI completion)
         # Connections are already converted to dicts by the field validator
-        if hasattr(user_resource, 'connections') and user_resource.connections:
-            merged_data['connections'] = user_resource.connections
+        if hasattr(user_resource, "connections") and user_resource.connections:
+            merged_data["connections"] = user_resource.connections
 
         # Preserve assertions from user resource (not part of AI completion)
         # Assertions should always come from the user, never generated by AI
-        if hasattr(user_resource, 'assertions') and user_resource.assertions:
-            merged_data['assertions'] = user_resource.assertions
+        if hasattr(user_resource, "assertions") and user_resource.assertions:
+            merged_data["assertions"] = user_resource.assertions
 
         # Create new resource instance with merged data
         return user_resource.__class__(**merged_data)
@@ -228,18 +244,18 @@ class ResourceCompleter:
             True if resource has children, False otherwise
         """
         # Check for _children attribute (new property-based API)
-        if hasattr(resource, '_children'):
-            children = getattr(resource, '_children', None)
+        if hasattr(resource, "_children"):
+            children = getattr(resource, "_children", None)
             return children is not None and len(children) > 0
 
         # Fallback: check for public children attribute
-        if hasattr(resource, 'children'):
-            children = getattr(resource, 'children', None)
+        if hasattr(resource, "children"):
+            children = getattr(resource, "children", None)
             return children is not None and len(children) > 0
 
         return False
 
-    def _get_children(self, resource: Any) -> List[Any]:
+    def _get_children(self, resource: Any) -> list[Any]:
         """
         Get child resources from a composite resource.
 
@@ -250,20 +266,22 @@ class ResourceCompleter:
             List of child Resource objects (may be empty)
         """
         # Use _children list (internal list of child resources)
-        if hasattr(resource, '_children'):
-            children_list = getattr(resource, '_children', None)
+        if hasattr(resource, "_children"):
+            children_list = getattr(resource, "_children", None)
             if children_list is not None:
                 return children_list  # _children is already a list
 
         # Fallback to public children attribute (which returns ChildrenCollection)
-        if hasattr(resource, 'children'):
-            children = getattr(resource, 'children', None)
+        if hasattr(resource, "children"):
+            children = getattr(resource, "children", None)
             if children is not None:
-                return list(children.values())  # Convert ChildrenCollection to list
+                return list(
+                    children.values()
+                )  # Convert ChildrenCollection to list
 
         return []
 
-    def _set_children(self, resource: Any, children: List[Any]) -> None:
+    def _set_children(self, resource: Any, children: list[Any]) -> None:
         """
         Set child resources on a composite resource.
 
@@ -273,7 +291,7 @@ class ResourceCompleter:
         """
         # Use _children property (new property-based API)
         # Rebuild the dict by preserving the keys (names) and updating values
-        if hasattr(resource, '_children'):
+        if hasattr(resource, "_children"):
             # Clear existing children and rebuild
             resource._children.clear()
             for child in children:
@@ -282,12 +300,16 @@ class ResourceCompleter:
             return
 
         # Fall back to direct attribute assignment for public children
-        if hasattr(resource, 'children'):
+        if hasattr(resource, "children"):
             resource.children = children
         else:
-            logger.warning(f"Cannot set children on {resource.name}: no _children or children attribute")
+            logger.warning(
+                f"Cannot set children on {resource.name}: no _children or children attribute"
+            )
 
-    async def _complete_composite(self, resource: Any, parent_context: str | None = None) -> Any:
+    async def _complete_composite(
+        self, resource: Any, parent_context: str | None = None
+    ) -> Any:
         """
         Complete a composite resource using two-phase completion.
 
@@ -307,17 +329,23 @@ class ResourceCompleter:
         Returns:
             Completed composite resource with completed children
         """
-        logger.info(f"Starting two-phase completion for composite resource: {resource.name}")
+        logger.info(
+            f"Starting two-phase completion for composite resource: {resource.name}"
+        )
 
         # Get children before completion
         children = self._get_children(resource)
-        logger.info(f"Composite resource {resource.name} has {len(children)} children")
+        logger.info(
+            f"Composite resource {resource.name} has {len(children)} children"
+        )
 
         # PHASE 1: Complete the parent resource with children visible as context
         logger.info(f"Phase 1: Completing parent resource {resource.name}")
 
         # Build enhanced user message including parent context and children info
-        user_data = resource.model_dump(exclude={'tools', 'assertions', 'connections', 'children'})
+        user_data = resource.model_dump(
+            exclude={"tools", "assertions", "connections", "children"}
+        )
         provided_fields = {k: v for k, v in user_data.items() if v is not None}
 
         # Add children context to the message
@@ -328,49 +356,66 @@ class ResourceCompleter:
         if parent_context:
             parent_message_parts.append(f"Parent context: {parent_context}")
 
-        parent_message_parts.append(resource.description or "Complete this composite resource")
+        parent_message_parts.append(
+            resource.description or "Complete this composite resource"
+        )
 
         if provided_fields:
-            provided_str = "\n".join([f"- {k}: {v}" for k, v in provided_fields.items()])
+            provided_str = "\n".join(
+                [f"- {k}: {v}" for k, v in provided_fields.items()]
+            )
             parent_message_parts.append(f"\nAlready provided:\n{provided_str}")
 
         if children_context:
-            parent_message_parts.append(f"\nChildren in this composite:\n{children_context}")
+            parent_message_parts.append(
+                f"\nChildren in this composite:\n{children_context}"
+            )
 
         parent_message = "\n\n".join(parent_message_parts)
 
         # Complete parent with standard single-resource completion
         # (temporarily remove children to avoid schema issues)
         resource_copy = resource.model_copy()
-        if hasattr(resource_copy, 'children'):
+        if hasattr(resource_copy, "children"):
             resource_copy.children = []
 
-        completed_parent = await self._complete_resource_with_message(resource_copy, parent_message)
+        completed_parent = await self._complete_resource_with_message(
+            resource_copy, parent_message
+        )
 
         # PHASE 2: Complete each child resource with parent context
         logger.info(f"Phase 2: Completing {len(children)} children")
 
         completed_children = []
-        parent_context_for_children = self._build_parent_context(completed_parent)
+        parent_context_for_children = self._build_parent_context(
+            completed_parent
+        )
 
         for i, child in enumerate(children):
-            logger.info(f"Completing child {i + 1}/{len(children)}: {child.name or 'unnamed'}")
+            logger.info(
+                f"Completing child {i + 1}/{len(children)}: {child.name or 'unnamed'}"
+            )
 
             # Check if child needs completion
             if not child.needs_completion():
-                logger.info(f"Child {child.name or 'unnamed'} already complete, skipping")
+                logger.info(
+                    f"Child {child.name or 'unnamed'} already complete, skipping"
+                )
                 completed_children.append(child)
                 continue
 
             # Recursive: if child is also composite, use two-phase completion
             if self._is_composite(child):
-                logger.info(f"Child {child.name or 'unnamed'} is composite, using recursive completion")
-                completed_child = await self._complete_composite(child, parent_context_for_children)
+                logger.info(
+                    f"Child {child.name or 'unnamed'} is composite, using recursive completion"
+                )
+                completed_child = await self._complete_composite(
+                    child, parent_context_for_children
+                )
             else:
                 # Complete child with parent context
                 completed_child = await self._complete_child_resource(
-                    child,
-                    parent_context_for_children
+                    child, parent_context_for_children
                 )
 
             completed_children.append(completed_child)
@@ -378,10 +423,12 @@ class ResourceCompleter:
         # Set completed children on the parent
         self._set_children(completed_parent, completed_children)
 
-        logger.info(f"Two-phase completion finished for composite resource: {completed_parent.name}")
+        logger.info(
+            f"Two-phase completion finished for composite resource: {completed_parent.name}"
+        )
         return completed_parent
 
-    def _build_children_context(self, children: List[Any]) -> str:
+    def _build_children_context(self, children: list[Any]) -> str:
         """
         Build context string describing child resources.
 
@@ -396,7 +443,9 @@ class ResourceCompleter:
 
         context_parts = []
         for i, child in enumerate(children):
-            child_data = child.model_dump(exclude={'tools', 'assertions', 'connections', 'children'})
+            child_data = child.model_dump(
+                exclude={"tools", "assertions", "connections", "children"}
+            )
             child_info = f"  {i + 1}. {child.__class__.__name__}"
 
             if child.name:
@@ -406,10 +455,15 @@ class ResourceCompleter:
                 child_info += f" - {child.description}"
 
             # Add key non-None fields
-            key_fields = {k: v for k, v in child_data.items()
-                         if v is not None and k not in ['name', 'description']}
+            key_fields = {
+                k: v
+                for k, v in child_data.items()
+                if v is not None and k not in ["name", "description"]
+            }
             if key_fields:
-                fields_str = ", ".join([f"{k}={v}" for k, v in key_fields.items()])
+                fields_str = ", ".join(
+                    [f"{k}={v}" for k, v in key_fields.items()]
+                )
                 child_info += f" [{fields_str}]"
 
             context_parts.append(child_info)
@@ -426,15 +480,22 @@ class ResourceCompleter:
         Returns:
             Formatted string with parent context
         """
-        context_parts = [f"This resource is part of {parent.name or 'a composite resource'}"]
+        context_parts = [
+            f"This resource is part of {parent.name or 'a composite resource'}"
+        ]
 
         if parent.description:
             context_parts.append(f"Parent purpose: {parent.description}")
 
         # Add key parent fields that might be useful for children
-        parent_data = parent.model_dump(exclude={'tools', 'assertions', 'connections', 'children'})
-        key_fields = {k: v for k, v in parent_data.items()
-                     if v is not None and k not in ['name', 'description']}
+        parent_data = parent.model_dump(
+            exclude={"tools", "assertions", "connections", "children"}
+        )
+        key_fields = {
+            k: v
+            for k, v in parent_data.items()
+            if v is not None and k not in ["name", "description"]
+        }
 
         if key_fields:
             fields_str = ", ".join([f"{k}={v}" for k, v in key_fields.items()])
@@ -442,7 +503,9 @@ class ResourceCompleter:
 
         return ". ".join(context_parts)
 
-    async def _complete_child_resource(self, resource: Any, parent_context: str) -> Any:
+    async def _complete_child_resource(
+        self, resource: Any, parent_context: str
+    ) -> Any:
         """
         Complete a child resource with parent context.
 
@@ -454,21 +517,29 @@ class ResourceCompleter:
             Completed child resource
         """
         # Build message including parent context
-        user_data = resource.model_dump(exclude={'tools', 'assertions', 'connections'})
+        user_data = resource.model_dump(
+            exclude={"tools", "assertions", "connections"}
+        )
         provided_fields = {k: v for k, v in user_data.items() if v is not None}
 
         message_parts = [parent_context]
         message_parts.append(resource.description or "Complete this resource")
 
         if provided_fields:
-            provided_str = "\n".join([f"- {k}: {v}" for k, v in provided_fields.items()])
+            provided_str = "\n".join(
+                [f"- {k}: {v}" for k, v in provided_fields.items()]
+            )
             message_parts.append(f"\nAlready provided:\n{provided_str}")
 
         user_message = "\n\n".join(message_parts)
 
-        return await self._complete_resource_with_message(resource, user_message)
+        return await self._complete_resource_with_message(
+            resource, user_message
+        )
 
-    async def _complete_resource_with_message(self, resource: Any, user_message: str) -> Any:
+    async def _complete_resource_with_message(
+        self, resource: Any, user_message: str
+    ) -> Any:
         """
         Complete a resource with a custom user message.
 
@@ -490,20 +561,21 @@ class ResourceCompleter:
             logger.debug(f"Using {len(tools)} user-provided tools")
         elif self.enable_tool_selection and self.tool_selector:
             context = resource.description or ""
-            tools = self.tool_selector.select_tools_for_resource(resource, context)
+            tools = self.tool_selector.select_tools_for_resource(
+                resource, context
+            )
             logger.debug(f"ToolSelector chose {len(tools)} tools")
 
         # Create OpenAI-compatible model
         model = OpenAIChatModel(
             self.model,
             provider=OpenAIProvider(
-                base_url=self.base_url,
-                api_key=self.api_key
+                base_url=self.base_url, api_key=self.api_key
             ),
             profile=OpenAIModelProfile(
                 json_schema_transformer=InlineDefsJsonSchemaTransformer,
-                openai_supports_strict_tool_definition=False
-            )
+                openai_supports_strict_tool_definition=False,
+            ),
         )
 
         # Create PydanticAI Agent with minimal system prompt
@@ -521,12 +593,14 @@ class ResourceCompleter:
         async def validate_required_fields(ctx: RunContext, output: Any) -> Any:
             """Validate that all required fields defined by needs_completion() are filled."""
             if output.needs_completion():
-                logger.warning(f"AI failed to complete required fields for {output.__class__.__name__}")
+                logger.warning(
+                    f"AI failed to complete required fields for {output.__class__.__name__}"
+                )
                 raise ModelRetry(
-                    f"The resource still has incomplete required fields. "
-                    f"You MUST provide actual non-None values for ALL required fields. "
-                    f"Review the resource definition and fill in any missing required fields. "
-                    f"Do NOT leave required fields as None."
+                    "The resource still has incomplete required fields. "
+                    "You MUST provide actual non-None values for ALL required fields. "
+                    "Review the resource definition and fill in any missing required fields. "
+                    "Do NOT leave required fields as None."
                 )
             return output
 

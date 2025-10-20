@@ -1,10 +1,13 @@
 """Git repository resource for cloning and managing repositories with optional AI-suggested URLs."""
 
-from typing import Optional, Dict, Any
+from typing import Any
+
 import pulumi
 from pydantic import Field
-from .base import Resource
+
 from clockwork.pulumi_providers.git_repo import GitRepo, GitRepoInputs
+
+from .base import Resource
 
 
 class GitRepoResource(Resource):
@@ -34,10 +37,29 @@ class GitRepoResource(Resource):
     """
 
     description: str
-    name: str | None = Field(None, description="Repository identifier/short name", examples=["fastapi", "django", "flask"])
-    repo_url: str | None = Field(None, description="Git repository URL - prefer official GitHub repos", examples=["https://github.com/tiangolo/fastapi.git", "https://github.com/django/django.git"])
-    dest: str | None = Field(None, description="Destination directory for cloned repository", examples=["./repos/fastapi", "/opt/django", "scratch/repos/flask"])
-    branch: str | None = Field(None, description="Git branch to checkout - usually main or master", examples=["main", "master", "develop"])
+    name: str | None = Field(
+        None,
+        description="Repository identifier/short name",
+        examples=["fastapi", "django", "flask"],
+    )
+    repo_url: str | None = Field(
+        None,
+        description="Git repository URL - prefer official GitHub repos",
+        examples=[
+            "https://github.com/tiangolo/fastapi.git",
+            "https://github.com/django/django.git",
+        ],
+    )
+    dest: str | None = Field(
+        None,
+        description="Destination directory for cloned repository",
+        examples=["./repos/fastapi", "/opt/django", "scratch/repos/flask"],
+    )
+    branch: str | None = Field(
+        None,
+        description="Git branch to checkout - usually main or master",
+        examples=["main", "master", "develop"],
+    )
     pull: bool = True
     present: bool = True
 
@@ -54,10 +76,10 @@ class GitRepoResource(Resource):
             bool: True if any field needs completion, False otherwise
         """
         return (
-            self.name is None or
-            self.repo_url is None or
-            self.dest is None or
-            self.branch is None
+            self.name is None
+            or self.repo_url is None
+            or self.dest is None
+            or self.branch is None
         )
 
     def to_pulumi(self) -> pulumi.Resource:
@@ -82,17 +104,26 @@ class GitRepoResource(Resource):
             >>> pulumi_resource = repo.to_pulumi()
         """
         # Validate required fields
-        if self.name is None or self.repo_url is None or self.dest is None or self.branch is None:
-            raise ValueError(f"Resource not completed: name={self.name}, repo_url={self.repo_url}, dest={self.dest}, branch={self.branch}")
+        if (
+            self.name is None
+            or self.repo_url is None
+            or self.dest is None
+            or self.branch is None
+        ):
+            raise ValueError(
+                f"Resource not completed: name={self.name}, repo_url={self.repo_url}, dest={self.dest}, branch={self.branch}"
+            )
 
         # Build resource options for dependencies
         dep_opts = self._build_dependency_options()
 
         # Check if we have temporary compile options (from _compile_with_opts)
         # This allows this resource to be a child in a composite
-        if hasattr(self, '_temp_compile_opts'):
+        if hasattr(self, "_temp_compile_opts"):
             # Merge with dependency options
-            opts = self._merge_resource_options(self._temp_compile_opts, dep_opts)
+            opts = self._merge_resource_options(
+                self._temp_compile_opts, dep_opts
+            )
         else:
             opts = dep_opts
 
@@ -117,7 +148,7 @@ class GitRepoResource(Resource):
 
         return git_resource
 
-    def get_connection_context(self) -> Dict[str, Any]:
+    def get_connection_context(self) -> dict[str, Any]:
         """Get connection context for this Git repository resource.
 
         Returns shareable fields that other resources can use when connected.

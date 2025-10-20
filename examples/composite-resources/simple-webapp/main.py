@@ -95,7 +95,7 @@ def main():
     # 2. redis starts second
     # 3. api starts last (after both dependencies are ready)
     api.connect(postgres)  # API depends on database
-    api.connect(redis)     # API depends on cache
+    api.connect(redis)  # API depends on cache
 
     # The composite pattern provides several benefits:
     # 1. Logical grouping: All related resources are together
@@ -107,12 +107,12 @@ def main():
     # The .children property provides dict-like access to child resources by name
 
     # Dict-style access (recommended - clean and intuitive):
-    postgres_ref = webapp.children["postgres-db"]
-    redis_ref = webapp.children["redis-cache"]
-    api_ref = webapp.children["api-server"]
+    webapp.children["postgres-db"]
+    webapp.children["redis-cache"]
+    webapp.children["api-server"]
 
     # Safe access with .get() - returns None if child doesn't exist:
-    optional_child = webapp.children.get("non-existent", None)
+    webapp.children.get("non-existent", None)
 
     # Check if a child exists:
     if "postgres-db" in webapp.children:

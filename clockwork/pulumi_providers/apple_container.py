@@ -6,10 +6,15 @@ the Apple Containers CLI (container command) available on macOS.
 
 import asyncio
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import pulumi
-from pulumi.dynamic import CreateResult, UpdateResult, DiffResult, ResourceProvider
+from pulumi.dynamic import (
+    CreateResult,
+    DiffResult,
+    ResourceProvider,
+    UpdateResult,
+)
 
 
 class AppleContainerInputs:
@@ -34,15 +39,15 @@ class AppleContainerInputs:
         self,
         image: str,
         container_name: str,
-        ports: List[str] | None = None,
-        volumes: List[str] | None = None,
-        env_vars: Dict[str, str] | None = None,
-        networks: List[str] | None = None,
+        ports: list[str] | None = None,
+        volumes: list[str] | None = None,
+        env_vars: dict[str, str] | None = None,
+        networks: list[str] | None = None,
         memory: str | None = None,
         cpus: str | None = None,
         user: str | None = None,
         workdir: str | None = None,
-        labels: Dict[str, str] | None = None,
+        labels: dict[str, str] | None = None,
         must_run: bool = True,
     ):
         """Initialize AppleContainerInputs.
@@ -86,7 +91,7 @@ class AppleContainerProvider(ResourceProvider):
     operations.
     """
 
-    async def _run_command(self, cmd: List[str]) -> Dict[str, Any]:
+    async def _run_command(self, cmd: list[str]) -> dict[str, Any]:
         """Run a container CLI command and return the result.
 
         Args:
@@ -112,7 +117,9 @@ class AppleContainerProvider(ResourceProvider):
                 "stderr": stderr_bytes.decode().strip(),
             }
         except Exception as e:
-            raise Exception(f"Failed to run command {' '.join(cmd)}: {str(e)}")
+            raise Exception(
+                f"Failed to run command {' '.join(cmd)}: {e!s}"
+            ) from e
 
     async def _find_container_by_label(self, container_name: str) -> str | None:
         """Find container ID by clockwork.name label.
@@ -123,12 +130,16 @@ class AppleContainerProvider(ResourceProvider):
         Returns:
             Container ID if found, None otherwise
         """
-        result = await self._run_command(["container", "ls", "--all", "--format", "json"])
+        result = await self._run_command(
+            ["container", "ls", "--all", "--format", "json"]
+        )
         if result["returncode"] != 0:
             return None
 
         try:
-            containers = json.loads(result["stdout"]) if result["stdout"] else []
+            containers = (
+                json.loads(result["stdout"]) if result["stdout"] else []
+            )
             for container in containers:
                 labels = container.get("configuration", {}).get("labels", {})
                 if labels.get("clockwork.name") == container_name:
@@ -138,7 +149,7 @@ class AppleContainerProvider(ResourceProvider):
 
         return None
 
-    def _build_common_options(self, props: Dict[str, Any]) -> List[str]:
+    def _build_common_options(self, props: dict[str, Any]) -> list[str]:
         """Build common container options from properties.
 
         Args:
@@ -183,7 +194,7 @@ class AppleContainerProvider(ResourceProvider):
 
         return options
 
-    def _build_run_command(self, props: Dict[str, Any]) -> List[str]:
+    def _build_run_command(self, props: dict[str, Any]) -> list[str]:
         """Build container run command from properties.
 
         Args:
@@ -197,7 +208,7 @@ class AppleContainerProvider(ResourceProvider):
         cmd.append(props["image"])
         return cmd
 
-    async def _create_async(self, props: Dict[str, Any]) -> CreateResult:
+    async def _create_async(self, props: dict[str, Any]) -> CreateResult:
         """Async implementation of create.
 
         Args:
@@ -215,7 +226,9 @@ class AppleContainerProvider(ResourceProvider):
         existing_id = await self._find_container_by_label(container_name)
         if existing_id:
             # Check if it's running
-            inspect_result = await self._run_command(["container", "inspect", existing_id])
+            inspect_result = await self._run_command(
+                ["container", "inspect", existing_id]
+            )
             if inspect_result["returncode"] == 0:
                 try:
                     data = json.loads(inspect_result["stdout"])
@@ -239,7 +252,9 @@ class AppleContainerProvider(ResourceProvider):
             result = await self._run_command(cmd)
 
             if result["returncode"] != 0:
-                raise Exception(f"Failed to create container: {result['stderr']}")
+                raise Exception(
+                    f"Failed to create container: {result['stderr']}"
+                )
 
             # Container ID is in stdout
             container_id = result["stdout"].strip()
@@ -253,12 +268,14 @@ class AppleContainerProvider(ResourceProvider):
             result = await self._run_command(cmd)
 
             if result["returncode"] != 0:
-                raise Exception(f"Failed to create container: {result['stderr']}")
+                raise Exception(
+                    f"Failed to create container: {result['stderr']}"
+                )
 
             container_id = result["stdout"].strip()
             return CreateResult(id_=container_id, outs=props)
 
-    def create(self, props: Dict[str, Any]) -> CreateResult:
+    def create(self, props: dict[str, Any]) -> CreateResult:
         """Create a new container.
 
         Args:
@@ -273,10 +290,7 @@ class AppleContainerProvider(ResourceProvider):
         return asyncio.run(self._create_async(props))
 
     async def _update_async(
-        self,
-        id: str,
-        old_props: Dict[str, Any],
-        new_props: Dict[str, Any]
+        self, id: str, old_props: dict[str, Any], new_props: dict[str, Any]
     ) -> UpdateResult:
         """Async implementation of update.
 
@@ -297,10 +311,7 @@ class AppleContainerProvider(ResourceProvider):
         return UpdateResult(outs=create_result.outs)
 
     def update(
-        self,
-        id: str,
-        old_props: Dict[str, Any],
-        new_props: Dict[str, Any]
+        self, id: str, old_props: dict[str, Any], new_props: dict[str, Any]
     ) -> UpdateResult:
         """Update a container by recreating it.
 
@@ -314,7 +325,7 @@ class AppleContainerProvider(ResourceProvider):
         """
         return asyncio.run(self._update_async(id, old_props, new_props))
 
-    async def _delete_async(self, id: str, props: Dict[str, Any]) -> None:
+    async def _delete_async(self, id: str, props: dict[str, Any]) -> None:
         """Async implementation of delete.
 
         Args:
@@ -331,7 +342,9 @@ class AppleContainerProvider(ResourceProvider):
                 actual_id = found_id
 
         # Check if container exists
-        inspect_result = await self._run_command(["container", "inspect", actual_id])
+        inspect_result = await self._run_command(
+            ["container", "inspect", actual_id]
+        )
         if inspect_result["returncode"] != 0:
             # Container doesn't exist, nothing to do
             return
@@ -342,7 +355,7 @@ class AppleContainerProvider(ResourceProvider):
         if result["returncode"] != 0:
             raise Exception(f"Failed to delete container: {result['stderr']}")
 
-    def delete(self, id: str, props: Dict[str, Any]) -> None:
+    def delete(self, id: str, props: dict[str, Any]) -> None:
         """Delete a container.
 
         Args:
@@ -352,10 +365,7 @@ class AppleContainerProvider(ResourceProvider):
         asyncio.run(self._delete_async(id, props))
 
     def diff(
-        self,
-        id: str,
-        old_props: Dict[str, Any],
-        new_props: Dict[str, Any]
+        self, id: str, old_props: dict[str, Any], new_props: dict[str, Any]
     ) -> DiffResult:
         """Check what changed between old and new properties.
 
@@ -373,8 +383,17 @@ class AppleContainerProvider(ResourceProvider):
 
         # Fields that require replacement
         replacement_fields = [
-            "image", "ports", "volumes", "env_vars", "networks",
-            "memory", "cpus", "user", "workdir", "labels", "must_run"
+            "image",
+            "ports",
+            "volumes",
+            "env_vars",
+            "networks",
+            "memory",
+            "cpus",
+            "user",
+            "workdir",
+            "labels",
+            "must_run",
         ]
 
         for field in replacement_fields:
@@ -412,10 +431,10 @@ class AppleContainer(pulumi.dynamic.Resource):
     container_id: pulumi.Output[str]
     image: pulumi.Output[str]
     container_name: pulumi.Output[str]
-    ports: pulumi.Output[List[str]]
-    volumes: pulumi.Output[List[str]]
-    env_vars: pulumi.Output[Dict[str, str]]
-    networks: pulumi.Output[List[str]]
+    ports: pulumi.Output[list[str]]
+    volumes: pulumi.Output[list[str]]
+    env_vars: pulumi.Output[dict[str, str]]
+    networks: pulumi.Output[list[str]]
 
     def __init__(
         self,

@@ -399,3 +399,4 @@ uv run pytest tests/test_resources.py -v  # Specific file
 ```bash
 clockwork destroy  # Removes all deployed resources
 ```
+- always run pre-commit hooks after you've made final changes and fix things accordingly

@@ -19,12 +19,12 @@ The connection system ensures:
 - All services deployed on the same Docker network
 """
 
-from clockwork.resources import DockerResource
 from clockwork.assertions import (
     ContainerRunningAssert,
-    PortAccessibleAssert,
     HealthcheckAssert,
+    PortAccessibleAssert,
 )
+from clockwork.resources import DockerResource
 
 # Layer 1: Data services (no dependencies)
 # These deploy first since they have no connections
@@ -37,12 +37,12 @@ postgres = DockerResource(
     env_vars={
         "POSTGRES_DB": "appdb",
         "POSTGRES_USER": "admin",
-        "POSTGRES_PASSWORD": "secret123"
+        "POSTGRES_PASSWORD": "secret123",
     },
     assertions=[
         ContainerRunningAssert(timeout_seconds=10),
         PortAccessibleAssert(port=5432, host="localhost", protocol="tcp"),
-    ]
+    ],
 )
 
 redis = DockerResource(
@@ -53,7 +53,7 @@ redis = DockerResource(
     assertions=[
         ContainerRunningAssert(timeout_seconds=10),
         PortAccessibleAssert(port=6379, host="localhost", protocol="tcp"),
-    ]
+    ],
 )
 
 # Layer 2: Application services (depend on data services)
@@ -64,12 +64,15 @@ api = DockerResource(
     name="api-server",
     image="nginx:alpine",  # Nginx has default running process
     ports=["8000:80"],  # Map host 8000 to container 80
-    connections=[postgres, redis],  # AI will use this context to generate DATABASE_URL and REDIS_URL
+    connections=[
+        postgres,
+        redis,
+    ],  # AI will use this context to generate DATABASE_URL and REDIS_URL
     assertions=[
         ContainerRunningAssert(timeout_seconds=10),
         PortAccessibleAssert(port=8000, host="localhost", protocol="tcp"),
         HealthcheckAssert(url="http://localhost:8000"),
-    ]
+    ],
 )
 
 worker = DockerResource(
@@ -79,7 +82,7 @@ worker = DockerResource(
     connections=[redis],  # AI will use this context to generate REDIS_URL
     assertions=[
         ContainerRunningAssert(timeout_seconds=10),
-    ]
+    ],
 )
 
 # Note: Deployment order will be automatically determined:

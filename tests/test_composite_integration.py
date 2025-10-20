@@ -9,14 +9,14 @@ This module tests complete workflows including:
 """
 
 import asyncio
-import pytest
 from pathlib import Path
-from unittest.mock import Mock, MagicMock, patch, AsyncMock
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
-from clockwork.resources import DockerResource, FileResource, BlankResource
+import pytest
+from pydantic import ValidationError
+
 from clockwork.core import ClockworkCore
-from clockwork.resource_completer import ResourceCompleter
-from clockwork.pulumi_compiler import PulumiCompiler
+from clockwork.resources import BlankResource, DockerResource, FileResource
 
 
 @pytest.fixture(autouse=True)
@@ -41,13 +41,13 @@ class TestEndToEndWorkflow:
             description="Database",
             name="db",
             image="postgres:15",
-            ports=["5432:5432"]
+            ports=["5432:5432"],
         )
         cache = DockerResource(
             description="Cache",
             name="cache",
             image="redis:7",
-            ports=["6379:6379"]
+            ports=["6379:6379"],
         )
         backend.add(db, cache)
 
@@ -62,12 +62,14 @@ class TestEndToEndWorkflow:
         assert cache in ordered
 
         # 4. Compile to Pulumi (mock)
-        with patch('pulumi.ComponentResource') as mock_component:
+        with (
+            patch("pulumi.ComponentResource") as mock_component,
+            patch.object(db, "to_pulumi", return_value=MagicMock()),
+            patch.object(cache, "to_pulumi", return_value=MagicMock()),
+        ):
             mock_component.return_value = MagicMock()
-            with patch.object(db, 'to_pulumi', return_value=MagicMock()):
-                with patch.object(cache, 'to_pulumi', return_value=MagicMock()):
-                    result = backend.to_pulumi()
-                    assert result is not None
+            result = backend.to_pulumi()
+            assert result is not None
 
     def test_nested_composite_workflow(self):
         """Test complete workflow with nested composites."""
@@ -76,7 +78,7 @@ class TestEndToEndWorkflow:
             description="Database",
             name="db",
             image="postgres:15",
-            ports=["5432:5432"]
+            ports=["5432:5432"],
         )
 
         backend = BlankResource(name="backend", description="Backend")
@@ -87,7 +89,7 @@ class TestEndToEndWorkflow:
             name="api",
             image="node:20",
             ports=["3000:3000"],
-            connections=[db]
+            connections=[db],
         )
 
         app = BlankResource(name="app", description="Application")
@@ -102,14 +104,16 @@ class TestEndToEndWorkflow:
 
         # Find indices
         idx_app = next(i for i, r in enumerate(ordered) if r.name == "app")
-        idx_backend = next(i for i, r in enumerate(ordered) if r.name == "backend")
+        idx_backend = next(
+            i for i, r in enumerate(ordered) if r.name == "backend"
+        )
         idx_db = next(i for i, r in enumerate(ordered) if r.name == "db")
         idx_api = next(i for i, r in enumerate(ordered) if r.name == "api")
 
         # Verify ordering
         assert idx_app < idx_backend  # parent before child
-        assert idx_backend < idx_db   # parent before child
-        assert idx_db < idx_api        # dependency before dependent
+        assert idx_backend < idx_db  # parent before child
+        assert idx_db < idx_api  # dependency before dependent
 
     def test_cross_composite_connection_workflow(self):
         """Test workflow with connections across composite boundaries."""
@@ -118,7 +122,7 @@ class TestEndToEndWorkflow:
             description="Database",
             name="db",
             image="postgres:15",
-            ports=["5432:5432"]
+            ports=["5432:5432"],
         )
         backend = BlankResource(name="backend", description="Backend")
         backend.add(db)
@@ -129,7 +133,7 @@ class TestEndToEndWorkflow:
             name="api",
             image="node:20",
             ports=["3000:3000"],
-            connections=[db]
+            connections=[db],
         )
         services = BlankResource(name="services", description="Services")
         services.add(api)
@@ -152,7 +156,9 @@ class TestAICompletion:
         # Create composite with incomplete child
         backend = BlankResource(name="backend", description="Backend")
         backend.add(
-            DockerResource(description="PostgreSQL database")  # No name or image
+            DockerResource(
+                description="PostgreSQL database"
+            )  # No name or image
         )
 
         # Composite should need completion
@@ -164,11 +170,11 @@ class TestAICompletion:
         backend = BlankResource(name="backend", description="Backend services")
         backend.add(
             DockerResource(description="PostgreSQL database"),
-            DockerResource(description="Redis cache")
+            DockerResource(description="Redis cache"),
         )
 
         # Mock ResourceCompleter
-        with patch('clockwork.core.ResourceCompleter') as mock_completer_class:
+        with patch("clockwork.core.ResourceCompleter") as mock_completer_class:
             mock_completer = Mock()
 
             # Mock complete method to fill in missing fields
@@ -177,11 +183,21 @@ class TestAICompletion:
                 for r in resources:
                     if isinstance(r, DockerResource):
                         if r.name is None:
-                            r.name = "completed-" + r.description.split()[0].lower()
+                            r.name = (
+                                "completed-" + r.description.split()[0].lower()
+                            )
                         if r.image is None:
-                            r.image = "postgres:15" if "database" in r.description.lower() else "redis:7"
+                            r.image = (
+                                "postgres:15"
+                                if "database" in r.description.lower()
+                                else "redis:7"
+                            )
                         if r.ports is None or len(r.ports) == 0:
-                            r.ports = ["5432:5432"] if "database" in r.description.lower() else ["6379:6379"]
+                            r.ports = (
+                                ["5432:5432"]
+                                if "database" in r.description.lower()
+                                else ["6379:6379"]
+                            )
                     completed.append(r)
                 return completed
 
@@ -190,7 +206,7 @@ class TestAICompletion:
 
             # Run completion
             core = ClockworkCore(api_key="test", model="test")
-            completed = await core._complete_resources_safe([backend])
+            await core._complete_resources_safe([backend])
 
             # Verify children were completed
             # Note: This tests the concept, actual implementation may vary
@@ -203,7 +219,7 @@ class TestAICompletion:
         backend.add(db)
 
         # Mock completion
-        with patch('clockwork.core.ResourceCompleter') as mock_completer_class:
+        with patch("clockwork.core.ResourceCompleter") as mock_completer_class:
             mock_completer = Mock()
 
             async def mock_complete(resources):
@@ -218,7 +234,7 @@ class TestAICompletion:
             mock_completer_class.return_value = mock_completer
 
             core = ClockworkCore(api_key="test", model="test")
-            completed = await core._complete_resources_safe([backend])
+            await core._complete_resources_safe([backend])
 
             # Verify hierarchy is preserved
             assert db.parent == backend
@@ -238,14 +254,14 @@ class TestAssertions:
             name="db",
             image="postgres:15",
             ports=["5432:5432"],
-            assertions=[ContainerRunningAssert(container_name="db")]
+            assertions=[ContainerRunningAssert(container_name="db")],
         )
 
         backend = BlankResource(name="backend", description="Backend")
         backend.add(db)
 
         # Load and run assertions
-        with patch('clockwork.core.ResourceCompleter') as mock_completer_class:
+        with patch("clockwork.core.ResourceCompleter") as mock_completer_class:
             mock_completer = Mock()
             mock_completer.complete = AsyncMock(return_value=[backend])
             mock_completer_class.return_value = mock_completer
@@ -271,7 +287,7 @@ class TestAssertions:
             name="db",
             image="postgres:15",
             ports=["5432:5432"],
-            assertions=[ContainerRunningAssert(container_name="db")]
+            assertions=[ContainerRunningAssert(container_name="db")],
         )
 
         backend = BlankResource(name="backend", description="Backend")
@@ -297,9 +313,7 @@ class TestMixedResources:
         """Test deployment with mix of primitives and composites."""
         # Standalone primitive
         config = FileResource(
-            description="Config",
-            name="config.yaml",
-            content="key: value"
+            description="Config", name="config.yaml", content="key: value"
         )
 
         # Composite with children
@@ -308,7 +322,7 @@ class TestMixedResources:
             name="db",
             image="postgres:15",
             ports=["5432:5432"],
-            connections=[config]
+            connections=[config],
         )
         backend = BlankResource(name="backend", description="Backend")
         backend.add(db)
@@ -319,7 +333,7 @@ class TestMixedResources:
             name="api",
             image="node:20",
             ports=["3000:3000"],
-            connections=[db]
+            connections=[db],
         )
 
         # Resolve dependencies
@@ -330,15 +344,19 @@ class TestMixedResources:
         assert len(ordered) == 4  # config + backend + db + api
 
         # Find indices
-        idx_config = next(i for i, r in enumerate(ordered) if r.name == "config.yaml")
-        idx_backend = next(i for i, r in enumerate(ordered) if r.name == "backend")
+        idx_config = next(
+            i for i, r in enumerate(ordered) if r.name == "config.yaml"
+        )
+        idx_backend = next(
+            i for i, r in enumerate(ordered) if r.name == "backend"
+        )
         idx_db = next(i for i, r in enumerate(ordered) if r.name == "db")
         idx_api = next(i for i, r in enumerate(ordered) if r.name == "api")
 
         # Verify ordering
-        assert idx_config < idx_db     # config before db (explicit connection)
-        assert idx_backend < idx_db    # backend before db (parent-child)
-        assert idx_db < idx_api         # db before api (explicit connection)
+        assert idx_config < idx_db  # config before db (explicit connection)
+        assert idx_backend < idx_db  # backend before db (parent-child)
+        assert idx_db < idx_api  # db before api (explicit connection)
 
     async def test_mixed_resources_full_pipeline(self):
         """Test full pipeline with mixed resources."""
@@ -346,38 +364,45 @@ class TestMixedResources:
         config = FileResource(
             description="Config",
             name="config.yaml",
-            content="database: postgres"
+            content="database: postgres",
         )
 
         db = DockerResource(
             description="Database",
             name="db",
             image="postgres:15",
-            ports=["5432:5432"]
+            ports=["5432:5432"],
         )
 
         backend = BlankResource(name="backend", description="Backend")
         backend.add(db)
 
         # Mock pipeline components
-        with patch('clockwork.core.ResourceCompleter') as mock_completer_class:
-            with patch('clockwork.core.PulumiCompiler') as mock_compiler_class:
-                # Setup mocks
-                mock_completer = Mock()
-                mock_completer.complete = AsyncMock(return_value=[config, backend])
-                mock_completer_class.return_value = mock_completer
+        with (
+            patch("clockwork.core.ResourceCompleter") as mock_completer_class,
+            patch("clockwork.core.PulumiCompiler") as mock_compiler_class,
+        ):
+            # Setup mocks
+            mock_completer = Mock()
+            mock_completer.complete = AsyncMock(return_value=[config, backend])
+            mock_completer_class.return_value = mock_completer
 
-                mock_compiler = Mock()
-                mock_compiler.preview = AsyncMock(return_value={
+            mock_compiler = Mock()
+            mock_compiler.preview = AsyncMock(
+                return_value={
                     "success": True,
-                    "summary": {"change_summary": {"create": 3}}
-                })
-                mock_compiler_class.return_value = mock_compiler
+                    "summary": {"change_summary": {"create": 3}},
+                }
+            )
+            mock_compiler_class.return_value = mock_compiler
 
-                # Create temporary main.py
-                import tempfile
-                with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
-                    f.write("""
+            # Create temporary main.py
+            import tempfile
+
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".py", delete=False
+            ) as f:
+                f.write("""
 from clockwork.resources import FileResource, DockerResource, BlankResource
 
 config = FileResource(
@@ -396,18 +421,18 @@ db = DockerResource(
 backend = BlankResource(name="backend", description="Backend")
 backend.add(db)
 """)
-                    temp_path = Path(f.name)
+                temp_path = Path(f.name)
 
-                try:
-                    # Run plan
-                    core = ClockworkCore(api_key="test", model="test")
-                    result = await core.plan(temp_path)
+            try:
+                # Run plan
+                core = ClockworkCore(api_key="test", model="test")
+                result = await core.plan(temp_path)
 
-                    # Verify pipeline executed
-                    assert result["dry_run"] is True
-                finally:
-                    # Cleanup
-                    temp_path.unlink()
+                # Verify pipeline executed
+                assert result["dry_run"] is True
+            finally:
+                # Cleanup
+                temp_path.unlink()
 
 
 class TestPostCreationOverrides:
@@ -420,7 +445,7 @@ class TestPostCreationOverrides:
             description="Database",
             name="db",
             image="postgres:15",
-            ports=["5432:5432"]
+            ports=["5432:5432"],
         )
 
         # Add to composite
@@ -443,14 +468,14 @@ class TestPostCreationOverrides:
             description="Cache",
             name="cache",
             image="redis:7",
-            ports=["6379:6379"]
+            ports=["6379:6379"],
         )
 
         db = DockerResource(
             description="Database",
             name="db",
             image="postgres:15",
-            ports=["5432:5432"]
+            ports=["5432:5432"],
         )
 
         backend = BlankResource(name="backend", description="Backend")
@@ -461,7 +486,7 @@ class TestPostCreationOverrides:
 
         # Verify connection was added
         assert cache in db._connection_resources
-        connection_names = {conn['name'] for conn in db.connections}
+        connection_names = {conn["name"] for conn in db.connections}
         assert "cache" in connection_names
 
     def test_add_more_children_after_creation(self):
@@ -471,7 +496,7 @@ class TestPostCreationOverrides:
             description="Database",
             name="db",
             image="postgres:15",
-            ports=["5432:5432"]
+            ports=["5432:5432"],
         )
 
         backend = BlankResource(name="backend", description="Backend")
@@ -484,7 +509,7 @@ class TestPostCreationOverrides:
             description="Cache",
             name="cache",
             image="redis:7",
-            ports=["6379:6379"]
+            ports=["6379:6379"],
         )
 
         backend.add(cache)
@@ -505,14 +530,14 @@ class TestComplexScenarios:
             description="PostgreSQL",
             name="postgres",
             image="postgres:15",
-            ports=["5432:5432"]
+            ports=["5432:5432"],
         )
 
         redis = DockerResource(
             description="Redis",
             name="redis",
             image="redis:7",
-            ports=["6379:6379"]
+            ports=["6379:6379"],
         )
 
         data_layer = BlankResource(name="data-layer", description="Data layer")
@@ -524,7 +549,7 @@ class TestComplexScenarios:
             name="auth",
             image="auth:latest",
             ports=["8001:8000"],
-            connections=[postgres, redis]
+            connections=[postgres, redis],
         )
 
         api_service = DockerResource(
@@ -532,10 +557,12 @@ class TestComplexScenarios:
             name="api",
             image="api:latest",
             ports=["8002:8000"],
-            connections=[postgres, redis, auth_service]
+            connections=[postgres, redis, auth_service],
         )
 
-        service_layer = BlankResource(name="service-layer", description="Service layer")
+        service_layer = BlankResource(
+            name="service-layer", description="Service layer"
+        )
         service_layer.add(auth_service, api_service)
 
         # Gateway layer
@@ -544,14 +571,18 @@ class TestComplexScenarios:
             name="gateway",
             image="nginx:latest",
             ports=["80:80"],
-            connections=[api_service]
+            connections=[api_service],
         )
 
-        gateway_layer = BlankResource(name="gateway-layer", description="Gateway layer")
+        gateway_layer = BlankResource(
+            name="gateway-layer", description="Gateway layer"
+        )
         gateway_layer.add(gateway)
 
         # Top-level application
-        app = BlankResource(name="microservices-app", description="Microservices application")
+        app = BlankResource(
+            name="microservices-app", description="Microservices application"
+        )
         app.add(data_layer, service_layer, gateway_layer)
 
         # Resolve dependencies
@@ -562,11 +593,15 @@ class TestComplexScenarios:
         assert len(ordered) == 10  # 4 composites + 6 containers
 
         # Verify ordering constraints
-        idx_postgres = next(i for i, r in enumerate(ordered) if r.name == "postgres")
+        idx_postgres = next(
+            i for i, r in enumerate(ordered) if r.name == "postgres"
+        )
         idx_redis = next(i for i, r in enumerate(ordered) if r.name == "redis")
         idx_auth = next(i for i, r in enumerate(ordered) if r.name == "auth")
         idx_api = next(i for i, r in enumerate(ordered) if r.name == "api")
-        idx_gateway = next(i for i, r in enumerate(ordered) if r.name == "gateway")
+        idx_gateway = next(
+            i for i, r in enumerate(ordered) if r.name == "gateway"
+        )
 
         # Data layer before services
         assert idx_postgres < idx_auth
@@ -587,10 +622,12 @@ class TestComplexScenarios:
             description="PostgreSQL database",
             name="db",
             image="postgres:15",
-            ports=["5432:5432"]
+            ports=["5432:5432"],
         )
 
-        backend_tier = BlankResource(name="backend-tier", description="Backend tier")
+        backend_tier = BlankResource(
+            name="backend-tier", description="Backend tier"
+        )
         backend_tier.add(db)
 
         # Application tier
@@ -599,10 +636,12 @@ class TestComplexScenarios:
             name="api",
             image="api:latest",
             ports=["3000:3000"],
-            connections=[db]
+            connections=[db],
         )
 
-        app_tier = BlankResource(name="app-tier", description="Application tier")
+        app_tier = BlankResource(
+            name="app-tier", description="Application tier"
+        )
         app_tier.add(api)
 
         # Frontend tier
@@ -611,14 +650,18 @@ class TestComplexScenarios:
             name="web",
             image="nginx:latest",
             ports=["80:80"],
-            connections=[api]
+            connections=[api],
         )
 
-        frontend_tier = BlankResource(name="frontend-tier", description="Frontend tier")
+        frontend_tier = BlankResource(
+            name="frontend-tier", description="Frontend tier"
+        )
         frontend_tier.add(web)
 
         # Full application
-        three_tier_app = BlankResource(name="three-tier-app", description="Three-tier app")
+        three_tier_app = BlankResource(
+            name="three-tier-app", description="Three-tier app"
+        )
         three_tier_app.add(backend_tier, app_tier, frontend_tier)
 
         # Resolve dependencies
@@ -647,8 +690,8 @@ class TestErrorHandling:
     def test_composite_without_name_fails_compilation(self):
         """Test that composite without name fails during compilation."""
         # Note: BlankResource requires name, so this test checks validation
-        with pytest.raises(Exception):
-            backend = BlankResource()  # Should fail: name is required
+        with pytest.raises(ValidationError):
+            BlankResource()  # Should fail: name is required
 
     async def test_cycle_detection_prevents_deployment(self):
         """Test that cycle detection prevents deployment."""
@@ -657,7 +700,7 @@ class TestErrorHandling:
             description="Database",
             name="db",
             image="postgres:15",
-            ports=["5432:5432"]
+            ports=["5432:5432"],
         )
 
         api = DockerResource(
@@ -665,7 +708,7 @@ class TestErrorHandling:
             name="api",
             image="node:20",
             ports=["3000:3000"],
-            connections=[db]
+            connections=[db],
         )
 
         # Create cycle
@@ -676,7 +719,7 @@ class TestErrorHandling:
         backend.add(db, api)
 
         # Mock pipeline
-        with patch('clockwork.core.ResourceCompleter') as mock_completer_class:
+        with patch("clockwork.core.ResourceCompleter") as mock_completer_class:
             mock_completer = Mock()
             mock_completer.complete = AsyncMock(return_value=[backend])
             mock_completer_class.return_value = mock_completer
@@ -684,6 +727,6 @@ class TestErrorHandling:
             core = ClockworkCore(api_key="test", model="test")
 
             # Should raise cycle error during resolution
-            with pytest.raises(ValueError, match="[Cc]ycle|[Cc]ircular"):
+            with pytest.raises(ValueError, match=r"[Cc]ycle|[Cc]ircular"):
                 await core._complete_resources_safe([backend])
                 core._resolve_dependency_order([backend])

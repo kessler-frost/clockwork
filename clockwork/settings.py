@@ -33,39 +33,37 @@ class ClockworkSettings(BaseSettings):
 
     # AI Configuration (OpenAI-compatible API)
     api_key: str | None = Field(
-        default=None,
-        description="API key for AI service (env: CW_API_KEY)"
+        default=None, description="API key for AI service (env: CW_API_KEY)"
     )
 
     model: str = Field(
         default="meta-llama/llama-4-scout:free",
-        description="Model name for AI resource completion (env: CW_MODEL)"
+        description="Model name for AI resource completion (env: CW_MODEL)",
     )
 
     base_url: str = Field(
         default="https://openrouter.ai/api/v1",
-        description="Base URL for OpenAI-compatible API endpoint (env: CW_BASE_URL)"
+        description="Base URL for OpenAI-compatible API endpoint (env: CW_BASE_URL)",
     )
 
     # Pulumi Configuration
     pulumi_config_passphrase: str = Field(
         default="clockwork",
         description="Pulumi passphrase for state encryption (env: CW_PULUMI_CONFIG_PASSPHRASE or PULUMI_CONFIG_PASSPHRASE)",
-        validation_alias="PULUMI_CONFIG_PASSPHRASE"  # Also accept standard Pulumi env var
+        validation_alias="PULUMI_CONFIG_PASSPHRASE",  # Also accept standard Pulumi env var
     )
 
     # Logging Configuration
     log_level: str = Field(
         default="INFO",
-        description="Logging level (DEBUG, INFO, WARNING, ERROR) (env: CW_LOG_LEVEL)"
+        description="Logging level (DEBUG, INFO, WARNING, ERROR) (env: CW_LOG_LEVEL)",
     )
 
     # Resource Completion Configuration
     completion_max_retries: int = Field(
         default=3,
-        description="Maximum retry attempts for AI resource completion (env: CW_COMPLETION_MAX_RETRIES)"
+        description="Maximum retry attempts for AI resource completion (env: CW_COMPLETION_MAX_RETRIES)",
     )
-
 
 
 # Global settings instance

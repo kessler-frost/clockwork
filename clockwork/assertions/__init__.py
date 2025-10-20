@@ -31,12 +31,6 @@ Example:
 # Base assertion class
 from .base import BaseAssertion
 
-# HTTP assertions
-from .http import (
-    HealthcheckAssert,
-    PortAccessibleAssert,
-)
-
 # Container assertions
 from .container import (
     ContainerRunningAssert,
@@ -44,19 +38,25 @@ from .container import (
 
 # File assertions
 from .file import (
-    FileExistsAssert,
     FileContentMatchesAssert,
+    FileExistsAssert,
+)
+
+# HTTP assertions
+from .http import (
+    HealthcheckAssert,
+    PortAccessibleAssert,
 )
 
 __all__ = [
     # Base
     "BaseAssertion",
+    # Container
+    "ContainerRunningAssert",
+    "FileContentMatchesAssert",
+    # File
+    "FileExistsAssert",
     # HTTP
     "HealthcheckAssert",
     "PortAccessibleAssert",
-    # Container
-    "ContainerRunningAssert",
-    # File
-    "FileExistsAssert",
-    "FileContentMatchesAssert",
 ]

@@ -5,8 +5,14 @@ helper methods, chaining operations, and BlankResource behavior.
 """
 
 import asyncio
+
 import pytest
-from clockwork.resources import Resource, DockerResource, FileResource, BlankResource
+
+from clockwork.resources import (
+    BlankResource,
+    DockerResource,
+    FileResource,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -25,8 +31,15 @@ def event_loop():
 
 def test_add_single_child():
     """Test adding a single child resource to a parent."""
-    parent = DockerResource(description="Parent container", name="parent", image="nginx:alpine", ports=["80:80"])
-    child = FileResource(description="Child file", name="config.txt", content="test content")
+    parent = DockerResource(
+        description="Parent container",
+        name="parent",
+        image="nginx:alpine",
+        ports=["80:80"],
+    )
+    child = FileResource(
+        description="Child file", name="config.txt", content="test content"
+    )
 
     result = parent.add(child)
 
@@ -35,7 +48,7 @@ def test_add_single_child():
 
     # Parent should have child
     assert len(parent.children) == 1
-    assert list(parent.children.values())[0] is child
+    assert next(iter(parent.children.values())) is child
     assert len(parent.children) > 0
 
     # Child should know its parent
@@ -45,10 +58,21 @@ def test_add_single_child():
 
 def test_add_multiple_children_at_once():
     """Test adding multiple children in a single .add() call."""
-    parent = DockerResource(description="Parent", name="parent", image="nginx:alpine", ports=["80:80"])
-    child1 = FileResource(description="Child 1", name="file1.txt", content="content1")
-    child2 = FileResource(description="Child 2", name="file2.txt", content="content2")
-    child3 = FileResource(description="Child 3", name="file3.txt", content="content3")
+    parent = DockerResource(
+        description="Parent",
+        name="parent",
+        image="nginx:alpine",
+        ports=["80:80"],
+    )
+    child1 = FileResource(
+        description="Child 1", name="file1.txt", content="content1"
+    )
+    child2 = FileResource(
+        description="Child 2", name="file2.txt", content="content2"
+    )
+    child3 = FileResource(
+        description="Child 3", name="file3.txt", content="content3"
+    )
 
     parent.add(child1, child2, child3)
 
@@ -66,10 +90,21 @@ def test_add_multiple_children_at_once():
 
 def test_add_chaining():
     """Test chaining multiple .add() calls."""
-    parent = DockerResource(description="Parent", name="parent", image="nginx:alpine", ports=["80:80"])
-    child1 = FileResource(description="Child 1", name="file1.txt", content="content1")
-    child2 = FileResource(description="Child 2", name="file2.txt", content="content2")
-    child3 = FileResource(description="Child 3", name="file3.txt", content="content3")
+    parent = DockerResource(
+        description="Parent",
+        name="parent",
+        image="nginx:alpine",
+        ports=["80:80"],
+    )
+    child1 = FileResource(
+        description="Child 1", name="file1.txt", content="content1"
+    )
+    child2 = FileResource(
+        description="Child 2", name="file2.txt", content="content2"
+    )
+    child3 = FileResource(
+        description="Child 3", name="file3.txt", content="content3"
+    )
 
     result = parent.add(child1).add(child2).add(child3)
 
@@ -85,7 +120,12 @@ def test_add_chaining():
 
 def test_add_type_checking():
     """Test that .add() raises TypeError when adding non-Resource objects."""
-    parent = DockerResource(description="Parent", name="parent", image="nginx:alpine", ports=["80:80"])
+    parent = DockerResource(
+        description="Parent",
+        name="parent",
+        image="nginx:alpine",
+        ports=["80:80"],
+    )
 
     # Should raise TypeError for non-Resource
     with pytest.raises(TypeError, match="Can only add Resource objects"):
@@ -100,8 +140,15 @@ def test_add_type_checking():
 
 def test_add_duplicate_prevention():
     """Test that adding the same child twice is prevented."""
-    parent = DockerResource(description="Parent", name="parent", image="nginx:alpine", ports=["80:80"])
-    child = FileResource(description="Child", name="file.txt", content="content")
+    parent = DockerResource(
+        description="Parent",
+        name="parent",
+        image="nginx:alpine",
+        ports=["80:80"],
+    )
+    child = FileResource(
+        description="Child", name="file.txt", content="content"
+    )
 
     # Add child first time
     parent.add(child)
@@ -114,9 +161,21 @@ def test_add_duplicate_prevention():
 
 def test_add_reparenting_warning(caplog):
     """Test that re-parenting a child resource logs a warning."""
-    parent1 = DockerResource(description="Parent 1", name="parent1", image="nginx:alpine", ports=["80:80"])
-    parent2 = DockerResource(description="Parent 2", name="parent2", image="redis:alpine", ports=["6379:6379"])
-    child = FileResource(description="Child", name="file.txt", content="content")
+    parent1 = DockerResource(
+        description="Parent 1",
+        name="parent1",
+        image="nginx:alpine",
+        ports=["80:80"],
+    )
+    parent2 = DockerResource(
+        description="Parent 2",
+        name="parent2",
+        image="redis:alpine",
+        ports=["6379:6379"],
+    )
+    child = FileResource(
+        description="Child", name="file.txt", content="content"
+    )
 
     # Add child to parent1
     parent1.add(child)
@@ -139,8 +198,18 @@ def test_add_reparenting_warning(caplog):
 
 def test_connect_single_resource():
     """Test connecting to a single resource."""
-    db = DockerResource(description="Database", name="postgres", image="postgres:15-alpine", ports=["5432:5432"])
-    api = DockerResource(description="API", name="api", image="node:20-alpine", ports=["8000:8000"])
+    db = DockerResource(
+        description="Database",
+        name="postgres",
+        image="postgres:15-alpine",
+        ports=["5432:5432"],
+    )
+    api = DockerResource(
+        description="API",
+        name="api",
+        image="node:20-alpine",
+        ports=["8000:8000"],
+    )
 
     result = api.connect(db)
 
@@ -157,9 +226,24 @@ def test_connect_single_resource():
 
 def test_connect_multiple_resources():
     """Test connecting to multiple resources at once."""
-    db = DockerResource(description="Database", name="postgres", image="postgres:15-alpine", ports=["5432:5432"])
-    cache = DockerResource(description="Cache", name="redis", image="redis:7-alpine", ports=["6379:6379"])
-    api = DockerResource(description="API", name="api", image="node:20-alpine", ports=["8000:8000"])
+    db = DockerResource(
+        description="Database",
+        name="postgres",
+        image="postgres:15-alpine",
+        ports=["5432:5432"],
+    )
+    cache = DockerResource(
+        description="Cache",
+        name="redis",
+        image="redis:7-alpine",
+        ports=["6379:6379"],
+    )
+    api = DockerResource(
+        description="API",
+        name="api",
+        image="node:20-alpine",
+        ports=["8000:8000"],
+    )
 
     api.connect(db, cache)
 
@@ -172,10 +256,30 @@ def test_connect_multiple_resources():
 
 def test_connect_chaining():
     """Test chaining multiple .connect() calls."""
-    db = DockerResource(description="Database", name="postgres", image="postgres:15-alpine", ports=["5432:5432"])
-    cache = DockerResource(description="Cache", name="redis", image="redis:7-alpine", ports=["6379:6379"])
-    queue = DockerResource(description="Queue", name="rabbitmq", image="rabbitmq:3-alpine", ports=["5672:5672"])
-    api = DockerResource(description="API", name="api", image="node:20-alpine", ports=["8000:8000"])
+    db = DockerResource(
+        description="Database",
+        name="postgres",
+        image="postgres:15-alpine",
+        ports=["5432:5432"],
+    )
+    cache = DockerResource(
+        description="Cache",
+        name="redis",
+        image="redis:7-alpine",
+        ports=["6379:6379"],
+    )
+    queue = DockerResource(
+        description="Queue",
+        name="rabbitmq",
+        image="rabbitmq:3-alpine",
+        ports=["5672:5672"],
+    )
+    api = DockerResource(
+        description="API",
+        name="api",
+        image="node:20-alpine",
+        ports=["8000:8000"],
+    )
 
     result = api.connect(db).connect(cache).connect(queue)
 
@@ -191,7 +295,12 @@ def test_connect_chaining():
 
 def test_connect_type_checking():
     """Test that .connect() raises TypeError when connecting non-Resource objects."""
-    api = DockerResource(description="API", name="api", image="node:20-alpine", ports=["8000:8000"])
+    api = DockerResource(
+        description="API",
+        name="api",
+        image="node:20-alpine",
+        ports=["8000:8000"],
+    )
 
     # Should raise TypeError for non-Resource
     with pytest.raises(TypeError, match="Can only connect Resource objects"):
@@ -206,8 +315,18 @@ def test_connect_type_checking():
 
 def test_connect_duplicate_prevention():
     """Test that connecting to the same resource twice is prevented."""
-    db = DockerResource(description="Database", name="postgres", image="postgres:15-alpine", ports=["5432:5432"])
-    api = DockerResource(description="API", name="api", image="node:20-alpine", ports=["8000:8000"])
+    db = DockerResource(
+        description="Database",
+        name="postgres",
+        image="postgres:15-alpine",
+        ports=["5432:5432"],
+    )
+    api = DockerResource(
+        description="API",
+        name="api",
+        image="node:20-alpine",
+        ports=["8000:8000"],
+    )
 
     # Connect first time
     api.connect(db)
@@ -220,8 +339,18 @@ def test_connect_duplicate_prevention():
 
 def test_connect_updates_both_fields():
     """Test that .connect() updates both _connection_resources and connections fields."""
-    db = DockerResource(description="Database", name="postgres", image="postgres:15-alpine", ports=["5432:5432"])
-    api = DockerResource(description="API", name="api", image="node:20-alpine", ports=["8000:8000"])
+    db = DockerResource(
+        description="Database",
+        name="postgres",
+        image="postgres:15-alpine",
+        ports=["5432:5432"],
+    )
+    api = DockerResource(
+        description="API",
+        name="api",
+        image="node:20-alpine",
+        ports=["8000:8000"],
+    )
 
     api.connect(db)
 
@@ -242,9 +371,18 @@ def test_connect_updates_both_fields():
 
 def test_children_dict_access():
     """Test that .children dict-style access works correctly."""
-    parent = DockerResource(description="Parent", name="parent", image="nginx:alpine", ports=["80:80"])
-    child1 = FileResource(description="Child 1", name="file1.txt", content="content1")
-    child2 = FileResource(description="Child 2", name="file2.txt", content="content2")
+    parent = DockerResource(
+        description="Parent",
+        name="parent",
+        image="nginx:alpine",
+        ports=["80:80"],
+    )
+    child1 = FileResource(
+        description="Child 1", name="file1.txt", content="content1"
+    )
+    child2 = FileResource(
+        description="Child 2", name="file2.txt", content="content2"
+    )
 
     parent.add(child1, child2)
 
@@ -267,8 +405,15 @@ def test_children_dict_access():
 
 def test_children_dict_is_immutable():
     """Test that modifying .children dict doesn't affect internal state."""
-    parent = DockerResource(description="Parent", name="parent", image="nginx:alpine", ports=["80:80"])
-    child = FileResource(description="Child", name="file.txt", content="content")
+    parent = DockerResource(
+        description="Parent",
+        name="parent",
+        image="nginx:alpine",
+        ports=["80:80"],
+    )
+    child = FileResource(
+        description="Child", name="file.txt", content="content"
+    )
 
     parent.add(child)
 
@@ -277,13 +422,20 @@ def test_children_dict_is_immutable():
     # Dict is a property, so direct modification attempts would need to go through add()
     # Just verify the child is accessible
     assert len(children) == 1
-    assert list(children.values())[0] is child
+    assert next(iter(children.values())) is child
 
 
 def test_parent_returns_correct_parent():
     """Test that .parent property returns the correct parent."""
-    parent = DockerResource(description="Parent", name="parent", image="nginx:alpine", ports=["80:80"])
-    child = FileResource(description="Child", name="file.txt", content="content")
+    parent = DockerResource(
+        description="Parent",
+        name="parent",
+        image="nginx:alpine",
+        ports=["80:80"],
+    )
+    child = FileResource(
+        description="Child", name="file.txt", content="content"
+    )
 
     parent.add(child)
 
@@ -293,8 +445,15 @@ def test_parent_returns_correct_parent():
 
 def test_children_len_check():
     """Test that len(children) can be used to check for children."""
-    parent = DockerResource(description="Parent", name="parent", image="nginx:alpine", ports=["80:80"])
-    child = FileResource(description="Child", name="file.txt", content="content")
+    parent = DockerResource(
+        description="Parent",
+        name="parent",
+        image="nginx:alpine",
+        ports=["80:80"],
+    )
+    child = FileResource(
+        description="Child", name="file.txt", content="content"
+    )
 
     # No children initially
     assert len(parent.children) == 0
@@ -306,8 +465,15 @@ def test_children_len_check():
 
 def test_parent_none_check():
     """Test that checking parent is not None works correctly."""
-    parent = DockerResource(description="Parent", name="parent", image="nginx:alpine", ports=["80:80"])
-    child = FileResource(description="Child", name="file.txt", content="content")
+    parent = DockerResource(
+        description="Parent",
+        name="parent",
+        image="nginx:alpine",
+        ports=["80:80"],
+    )
+    child = FileResource(
+        description="Child", name="file.txt", content="content"
+    )
 
     # No parent initially
     assert child.parent is None
@@ -331,9 +497,15 @@ def test_get_all_descendants_nested_hierarchy():
     root = BlankResource(name="root", description="Root resource")
     child1 = BlankResource(name="child1", description="Child 1")
     child2 = BlankResource(name="child2", description="Child 2")
-    grandchild1 = FileResource(description="Grandchild 1", name="gc1.txt", content="content1")
-    grandchild2 = FileResource(description="Grandchild 2", name="gc2.txt", content="content2")
-    grandchild3 = FileResource(description="Grandchild 3", name="gc3.txt", content="content3")
+    grandchild1 = FileResource(
+        description="Grandchild 1", name="gc1.txt", content="content1"
+    )
+    grandchild2 = FileResource(
+        description="Grandchild 2", name="gc2.txt", content="content2"
+    )
+    grandchild3 = FileResource(
+        description="Grandchild 3", name="gc3.txt", content="content3"
+    )
 
     # Build hierarchy
     root.add(child1, child2)
@@ -372,8 +544,15 @@ def test_get_all_descendants_nested_hierarchy():
 def test_add_then_connect_chaining():
     """Test .add().connect() chaining."""
     parent = BlankResource(name="parent", description="Parent resource")
-    child = FileResource(description="Child", name="file.txt", content="content")
-    db = DockerResource(description="Database", name="postgres", image="postgres:15-alpine", ports=["5432:5432"])
+    child = FileResource(
+        description="Child", name="file.txt", content="content"
+    )
+    db = DockerResource(
+        description="Database",
+        name="postgres",
+        image="postgres:15-alpine",
+        ports=["5432:5432"],
+    )
 
     result = parent.add(child).connect(db)
 
@@ -390,8 +569,15 @@ def test_add_then_connect_chaining():
 def test_connect_then_add_chaining():
     """Test .connect().add() chaining."""
     parent = BlankResource(name="parent", description="Parent resource")
-    child = FileResource(description="Child", name="file.txt", content="content")
-    db = DockerResource(description="Database", name="postgres", image="postgres:15-alpine", ports=["5432:5432"])
+    child = FileResource(
+        description="Child", name="file.txt", content="content"
+    )
+    db = DockerResource(
+        description="Database",
+        name="postgres",
+        image="postgres:15-alpine",
+        ports=["5432:5432"],
+    )
 
     result = parent.connect(db).add(child)
 
@@ -408,16 +594,26 @@ def test_connect_then_add_chaining():
 def test_multiple_chained_operations():
     """Test complex chaining with multiple operations."""
     parent = BlankResource(name="parent", description="Parent resource")
-    child1 = FileResource(description="Child 1", name="file1.txt", content="content1")
-    child2 = FileResource(description="Child 2", name="file2.txt", content="content2")
-    db = DockerResource(description="Database", name="postgres", image="postgres:15-alpine", ports=["5432:5432"])
-    cache = DockerResource(description="Cache", name="redis", image="redis:7-alpine", ports=["6379:6379"])
+    child1 = FileResource(
+        description="Child 1", name="file1.txt", content="content1"
+    )
+    child2 = FileResource(
+        description="Child 2", name="file2.txt", content="content2"
+    )
+    db = DockerResource(
+        description="Database",
+        name="postgres",
+        image="postgres:15-alpine",
+        ports=["5432:5432"],
+    )
+    cache = DockerResource(
+        description="Cache",
+        name="redis",
+        image="redis:7-alpine",
+        ports=["6379:6379"],
+    )
 
-    result = (parent
-              .add(child1)
-              .connect(db)
-              .add(child2)
-              .connect(cache))
+    result = parent.add(child1).connect(db).add(child2).connect(cache)
 
     # Should return parent
     assert result is parent
@@ -451,8 +647,12 @@ def test_blank_resource_creation():
 def test_blank_resource_add_children():
     """Test adding children to BlankResource."""
     blank = BlankResource(name="blank", description="Blank resource")
-    child1 = FileResource(description="Child 1", name="file1.txt", content="content1")
-    child2 = FileResource(description="Child 2", name="file2.txt", content="content2")
+    child1 = FileResource(
+        description="Child 1", name="file1.txt", content="content1"
+    )
+    child2 = FileResource(
+        description="Child 2", name="file2.txt", content="content2"
+    )
 
     blank.add(child1, child2)
 
@@ -475,7 +675,9 @@ def test_blank_resource_needs_completion_delegates():
     assert blank.needs_completion() is False
 
     # Add completed child - no completion needed
-    completed_child = FileResource(description="Completed", name="file.txt", content="content")
+    completed_child = FileResource(
+        description="Completed", name="file.txt", content="content"
+    )
     blank.add(completed_child)
     assert blank.needs_completion() is False
 
@@ -488,8 +690,18 @@ def test_blank_resource_needs_completion_delegates():
 def test_blank_resource_get_connection_context_includes_children():
     """Test that BlankResource.get_connection_context() includes children info."""
     blank = BlankResource(name="blank", description="Blank resource")
-    child1 = DockerResource(description="Child 1", name="nginx", image="nginx:alpine", ports=["80:80"])
-    child2 = DockerResource(description="Child 2", name="redis", image="redis:alpine", ports=["6379:6379"])
+    child1 = DockerResource(
+        description="Child 1",
+        name="nginx",
+        image="nginx:alpine",
+        ports=["80:80"],
+    )
+    child2 = DockerResource(
+        description="Child 2",
+        name="redis",
+        image="redis:alpine",
+        ports=["6379:6379"],
+    )
 
     blank.add(child1, child2)
 
@@ -512,8 +724,15 @@ def test_blank_resource_get_connection_context_includes_children():
 
 def test_bidirectional_relationships():
     """Test that parent-child relationships are bidirectional."""
-    parent = DockerResource(description="Parent", name="parent", image="nginx:alpine", ports=["80:80"])
-    child = FileResource(description="Child", name="file.txt", content="content")
+    parent = DockerResource(
+        description="Parent",
+        name="parent",
+        image="nginx:alpine",
+        ports=["80:80"],
+    )
+    child = FileResource(
+        description="Child", name="file.txt", content="content"
+    )
 
     parent.add(child)
 
@@ -528,8 +747,15 @@ def test_bidirectional_relationships():
 
 def test_post_creation_field_access():
     """Test accessing child properties after adding to parent."""
-    parent = DockerResource(description="Parent", name="parent", image="nginx:alpine", ports=["80:80"])
-    child = FileResource(description="Child", name="file.txt", content="content")
+    parent = DockerResource(
+        description="Parent",
+        name="parent",
+        image="nginx:alpine",
+        ports=["80:80"],
+    )
+    child = FileResource(
+        description="Child", name="file.txt", content="content"
+    )
 
     parent.add(child)
 
@@ -547,13 +773,20 @@ def test_modifying_child_after_adding():
     that the child object remains the same instance and maintains
     its connection to the parent.
     """
-    parent = DockerResource(description="Parent", name="parent", image="nginx:alpine", ports=["80:80"])
-    child = FileResource(description="Child", name="file.txt", content="original content")
+    parent = DockerResource(
+        description="Parent",
+        name="parent",
+        image="nginx:alpine",
+        ports=["80:80"],
+    )
+    child = FileResource(
+        description="Child", name="file.txt", content="original content"
+    )
 
     parent.add(child)
 
     # Child is the same instance
-    assert list(parent.children.values())[0] is child
+    assert next(iter(parent.children.values())) is child
 
     # Child still knows its parent
     assert child.parent is parent
@@ -566,7 +799,9 @@ def test_multiple_levels_of_hierarchy():
     """Test multi-level parent-child relationships."""
     root = BlankResource(name="root", description="Root")
     level1 = BlankResource(name="level1", description="Level 1")
-    level2 = FileResource(description="Level 2", name="file.txt", content="content")
+    level2 = FileResource(
+        description="Level 2", name="file.txt", content="content"
+    )
 
     root.add(level1)
     level1.add(level2)
@@ -586,7 +821,12 @@ def test_multiple_levels_of_hierarchy():
 
 def test_empty_parent_has_no_children():
     """Test that a parent with no children behaves correctly."""
-    parent = DockerResource(description="Parent", name="parent", image="nginx:alpine", ports=["80:80"])
+    parent = DockerResource(
+        description="Parent",
+        name="parent",
+        image="nginx:alpine",
+        ports=["80:80"],
+    )
 
     assert len(parent.children) == 0
     assert len(parent.children) == 0
@@ -595,7 +835,9 @@ def test_empty_parent_has_no_children():
 
 def test_root_resource_has_no_parent():
     """Test that a root resource (not added to any parent) has no parent."""
-    root = DockerResource(description="Root", name="root", image="nginx:alpine", ports=["80:80"])
+    root = DockerResource(
+        description="Root", name="root", image="nginx:alpine", ports=["80:80"]
+    )
 
     assert root.parent is None
     assert root.parent is None
