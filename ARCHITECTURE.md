@@ -163,10 +163,12 @@ class PulumiCompiler:
 
 **Output Structure**:
 
+Pulumi manages state in the current working directory:
+
 ```text
-.clockwork/state/
-├── .pulumi/        # Pulumi state files
-└── Pulumi.*.yaml   # Stack configuration
+.pulumi/          # Pulumi state backend
+Pulumi.yaml       # Project configuration
+Pulumi.dev.yaml   # Stack configuration (dev stack)
 ```
 
 ### 4. Core Orchestrator
@@ -286,7 +288,7 @@ article = FileResource(
 
 - Execute: `stack.up()` via Automation API
 - Pulumi creates/updates infrastructure
-- State stored in `.clockwork/state/`
+- State managed by Pulumi in `.pulumi/` directory
 - File created at specified path
 
 ### Destroy Pipeline
@@ -296,16 +298,16 @@ The destroy pipeline uses Pulumi's state management:
 **Destroy Execute**:
 
 - Execute: `stack.destroy()` via Automation API
-- Pulumi reads state from `.clockwork/state/`
+- Pulumi reads state from `.pulumi/` directory
 - All tracked resources are destroyed
-- **Automatic Cleanup**: After successful destroy, the `.clockwork` directory is automatically removed (unless `--keep-files` flag is used)
+- **Automatic Cleanup**: After successful destroy, working directories (e.g., `scratch/`) created by resources are automatically removed (unless `--keep-files` flag is used)
 
 **CLI Options**:
 ```bash
-# Default: destroy resources and remove .clockwork directory
+# Default: destroy resources and remove working directories
 clockwork destroy
 
-# Keep .clockwork directory for debugging
+# Keep working directories created by resources
 clockwork destroy --keep-files
 ```
 

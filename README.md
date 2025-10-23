@@ -132,10 +132,10 @@ uv run clockwork plan
 # Validate deployed resources
 uv run clockwork assert
 
-# Destroy deployed resources (removes .clockwork directory by default)
+# Destroy deployed resources (removes working directories by default)
 uv run clockwork destroy
 
-# Destroy but keep .clockwork directory
+# Destroy but keep working directories created by resources
 uv run clockwork destroy --keep-files
 
 # Custom model
@@ -413,8 +413,8 @@ uv run pytest tests/ -v
 uv run ruff check --fix .
 uv run ruff format .
 
-# Clean up
-rm -rf .clockwork/ scratch/
+# Clean up example outputs
+rm -rf scratch/
 ```
 
 ### Pre-commit Hooks

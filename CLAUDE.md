@@ -355,7 +355,7 @@ CW_BASE_URL=https://openrouter.ai/api/v1
 **Models**: LM Studio (local), OpenRouter free/paid (cloud). Must support tool calls.
 **Recommended**: `meta-llama/llama-4-scout:free`, `anthropic/claude-haiku-4.5`
 
-**Output**: `.clockwork/state/` (Pulumi state files)
+**State Management**: Pulumi stores state in `.pulumi/` directory (current working directory)
 
 ## Project Structure
 
