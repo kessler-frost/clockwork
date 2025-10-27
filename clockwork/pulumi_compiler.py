@@ -61,6 +61,16 @@ class PulumiCompiler:
 
             for resource in resources:
                 try:
+                    # Skip resources that have a parent - they'll be compiled by their parent
+                    if (
+                        hasattr(resource, "_parent")
+                        and resource._parent is not None
+                    ):
+                        logger.debug(
+                            f"Skipping child resource '{resource.name}' (parent: '{resource._parent.name}')"
+                        )
+                        continue
+
                     if hasattr(resource, "to_pulumi"):
                         # Check if composite or primitive
                         if (

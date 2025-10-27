@@ -117,7 +117,7 @@ api = DockerResource(
 Use `BlankResource` for pure composition (no implementation, just organization):
 
 ```python
-from clockwork import BlankResource, DockerResource, FileResource
+from clockwork.resources import BlankResource, DockerResource, FileResource
 
 # Simple composite
 monitoring = BlankResource(
@@ -297,17 +297,28 @@ Run: `clockwork assert`
 ## Tool Usage
 
 **PydanticAI Tools**: Web search (`duckduckgo_search_tool()`), custom tools
-**MCP Servers**: Filesystem, databases (Postgres/SQLite), GitHub, Google Drive
+**MCP Servers**: Filesystem (pre-integrated), others require manual setup via `MCPServerStdio`
+
+**Available MCP servers** (require manual setup):
+- Databases: Postgres (`@modelcontextprotocol/server-postgres`), SQLite (`@modelcontextprotocol/server-sqlite`)
+- Version Control: GitHub (`@modelcontextprotocol/server-github`)
+- Storage: Google Drive (`@modelcontextprotocol/server-gdrive`)
+- [Full list](https://github.com/modelcontextprotocol/servers)
 
 ```python
-# Web search
+# Web search (PydanticAI tool)
 FileResource(
     description="Latest AI news", tools=[duckduckgo_search_tool()]
 )
 
-# MCP filesystem
+# Filesystem MCP (pre-integrated, ready to use)
 filesystem_mcp = MCPServerStdio('npx', args=['-y', '@modelcontextprotocol/server-filesystem', '/path'])
-FileResource(description="Code analysis", toolsets=[filesystem_mcp])
+FileResource(description="Code analysis", tools=[filesystem_mcp])
+
+# Additional MCP servers (manual setup required)
+# Example: Postgres MCP server
+postgres_mcp = MCPServerStdio('npx', args=['-y', '@modelcontextprotocol/server-postgres', 'postgresql://...'])
+FileResource(description="Database schema analysis", tools=[postgres_mcp])
 ```
 
 See `examples/showcase/` for tool integration examples
@@ -346,16 +357,27 @@ CW_BASE_URL=http://localhost:1234/v1
 
 # Cloud (OpenRouter)
 CW_API_KEY=your-key
-CW_MODEL=meta-llama/llama-4-scout:free
+CW_MODEL=meta-llama/llama-4-scout:free  # Default free model
 CW_BASE_URL=https://openrouter.ai/api/v1
+
+# AI Completion
+CW_COMPLETION_MAX_RETRIES=3  # Retry attempts for AI completion
+
+# Pulumi Configuration
+CW_PULUMI_CONFIG_PASSPHRASE=clockwork
+# Alternatively: PULUMI_CONFIG_PASSPHRASE=clockwork
+
+# Logging
+CW_LOG_LEVEL=INFO
 ```
 
 **Override**: CLI flags > env vars > .env > defaults
 
 **Models**: LM Studio (local), OpenRouter free/paid (cloud). Must support tool calls.
-**Recommended**: `meta-llama/llama-4-scout:free`, `anthropic/claude-haiku-4.5`
+- **Default**: `meta-llama/llama-4-scout:free` (free tier, decent quality)
+- **Recommended**: `anthropic/claude-haiku-4.5` (better quality, requires paid API key)
 
-**State Management**: Pulumi stores state in `.pulumi/` directory (current working directory)
+**State Management**: Pulumi stores state in `~/.pulumi/` directory (user's home directory) when using the Automation API
 
 ## Project Structure
 

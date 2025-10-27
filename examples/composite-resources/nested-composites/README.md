@@ -79,7 +79,7 @@ Thanks to `.connect()` across composite boundaries, deployment order is:
 ### Deploy the Stack
 
 ```bash
-cd /Users/sankalp/dev/clockwork/examples/composite-resources/nested-composites
+cd examples/composite-resources/nested-composites
 uv run clockwork apply
 ```
 
@@ -223,5 +223,5 @@ After understanding this example, check out:
 
 ## Related Examples
 
-- `/Users/sankalp/dev/clockwork/examples/simple-webapp/`: Basic two-level composite
-- `/Users/sankalp/dev/clockwork/examples/connected-services/`: Real-world service patterns
+- `examples/composite-resources/simple-webapp/`: Basic two-level composite
+- `examples/connected-services/`: Real-world service patterns

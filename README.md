@@ -120,7 +120,21 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for how it works.
 
 ## CLI
 
-All commands must be run from a directory containing `main.py`:
+All commands must be run from a directory containing `main.py`.
+
+**Discovering Commands**: Use `--help` to explore available commands and options:
+
+```bash
+# Show all available commands
+uv run clockwork --help
+
+# Show options for a specific command
+uv run clockwork apply --help
+uv run clockwork destroy --help
+uv run clockwork assert --help
+```
+
+**Available Commands**:
 
 ```bash
 # Full deployment
@@ -192,6 +206,33 @@ AppleContainerResource(
 
 **AI-Powered**: When `image` is not specified, AI suggests appropriate container images (e.g., nginx:alpine).
 **macOS Optimized**: Uses Apple's native container runtime for local development.
+
+### GitRepoResource
+
+Clones and manages Git repositories with optional AI-suggested repository URLs. Automatically clones repositories and keeps them updated.
+
+```python
+GitRepoResource(
+    name="fastapi-repo",
+    description="FastAPI Python web framework repository",
+    dest="./repos/fastapi"  # Where to clone
+)
+```
+
+**AI-Powered**: When `repo_url` is not specified, AI suggests appropriate repository URLs (e.g., official GitHub repositories).
+**Smart Defaults**: AI picks sensible values for branch (main/master) and destination directory if not specified.
+
+**Key Properties**:
+- `repo_url`: Git repository URL (e.g., `https://github.com/tiangolo/fastapi.git`)
+- `dest`: Destination directory for cloning (e.g., `./repos/fastapi`)
+- `branch`: Git branch to checkout (e.g., `main`, `master`, `develop`)
+- `pull`: Update repository if it already exists (default: `True`)
+
+**Use Cases**:
+- Clone dependencies or third-party libraries
+- Set up project scaffolding from template repositories
+- Download configuration or data repositories
+- Maintain local mirrors of remote repositories
 
 ## Assertions
 
@@ -286,10 +327,77 @@ api.connect(redis)     # API depends on cache
 - Each resource can be deployed/destroyed independently
 - Dependencies control deployment order (postgres → redis → api)
 - No parent-child relationship in Pulumi's hierarchy
+- AI sees connected resource details for automatic configuration
 
 **When to use each**:
 - Use `.add()` when resources logically belong together (e.g., all parts of a web app)
 - Use `.connect()` when resources are independent but have ordering requirements
+
+### Resource Connections with .connect()
+
+The `.connect()` method establishes dependencies between resources for proper deployment ordering and AI-powered auto-configuration.
+
+**How it works**:
+
+```python
+from clockwork.resources import DockerResource
+
+# Create independent resources
+postgres = DockerResource(
+    name="postgres-db",
+    description="PostgreSQL database",
+    image="postgres:15-alpine",
+    ports=["5432:5432"]
+)
+
+redis = DockerResource(
+    name="redis-cache",
+    description="Redis cache",
+    image="redis:7-alpine",
+    ports=["6379:6379"]
+)
+
+# Connect API to dependencies
+api = DockerResource(
+    name="api-server",
+    description="FastAPI backend with database and cache",
+    ports=["8000:8000"]
+).connect(postgres, redis)
+
+# Result: postgres → redis → api (deployment order)
+# AI auto-generates DATABASE_URL and REDIS_URL environment variables
+```
+
+**Benefits**:
+
+1. **Automatic Deployment Ordering**: Resources deploy in dependency order (topological sort)
+2. **AI Context Awareness**: Connected resources share context (name, image, ports, env vars)
+3. **Auto-Configuration**: AI can generate connection strings, URLs, and configuration
+4. **Cycle Detection**: Prevents circular dependencies before deployment
+5. **Independent Lifecycles**: Each resource can be updated/destroyed separately
+
+**Connection Context**: When you connect resources, the dependent resource receives context about its dependencies:
+- Resource name and type
+- Container images and ports
+- Environment variables and networks
+- Any other relevant configuration
+
+This allows AI to automatically generate appropriate configuration like database URLs, service endpoints, and connection strings.
+
+**Example - AI Auto-Configuration**:
+
+```python
+# AI sees postgres connection context and auto-generates:
+# - DATABASE_URL=postgresql://postgres:5432
+# - REDIS_URL=redis://redis:6379
+# Based on connected resource details
+
+api = DockerResource(
+    description="API server needing database and cache"
+).connect(postgres, redis)
+```
+
+**Note**: Use `.connect()` for dependencies, use `.add()` for composition (see Composite Resources above).
 
 ### Accessing Children
 
@@ -341,6 +449,13 @@ CW_API_KEY=your-api-key-here
 CW_MODEL=meta-llama/llama-4-scout:free
 CW_BASE_URL=https://openrouter.ai/api/v1
 
+# AI Completion
+CW_COMPLETION_MAX_RETRIES=3
+
+# Pulumi Configuration
+CW_PULUMI_CONFIG_PASSPHRASE=clockwork
+# Alternatively: PULUMI_CONFIG_PASSPHRASE=clockwork
+
 # Logging
 CW_LOG_LEVEL=INFO
 ```
@@ -350,8 +465,10 @@ CW_LOG_LEVEL=INFO
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `CW_API_KEY` | None | API key (required for cloud models) |
-| `CW_MODEL` | `meta-llama/llama-4-scout:free` | Model for AI completion |
+| `CW_MODEL` | `meta-llama/llama-4-scout:free` | Model for AI completion (default, free). Recommended upgrade: `anthropic/claude-haiku-4.5` for better quality |
 | `CW_BASE_URL` | `https://openrouter.ai/api/v1` | API endpoint (OpenRouter, LM Studio, etc.) |
+| `CW_COMPLETION_MAX_RETRIES` | `3` | Maximum retry attempts for AI resource completion |
+| `CW_PULUMI_CONFIG_PASSPHRASE` | `clockwork` | Pulumi passphrase for state encryption (also accepts `PULUMI_CONFIG_PASSPHRASE`) |
 | `CW_LOG_LEVEL` | `INFO` | Logging level |
 
 Override via CLI:
@@ -359,6 +476,13 @@ Override via CLI:
 ```bash
 uv run clockwork apply --model "anthropic/claude-haiku-4.5"
 ```
+
+## Getting Help
+
+- **Questions & Discussions**: [GitHub Discussions](https://github.com/kessler-frost/clockwork/discussions) - Ask questions, share ideas, and discuss best practices
+- **Bug Reports & Feature Requests**: [GitHub Issues](https://github.com/kessler-frost/clockwork/issues) - Report bugs or request new features
+- **Technical Deep Dive**: See [ARCHITECTURE.md](./ARCHITECTURE.md) for implementation details and design decisions
+- **Development Guide**: See [CLAUDE.md](./CLAUDE.md) for contributing and development setup
 
 ## Why Clockwork?
 

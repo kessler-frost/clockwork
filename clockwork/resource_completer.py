@@ -289,14 +289,35 @@ class ResourceCompleter:
             resource: Composite resource object
             children: List of completed child Resource objects
         """
-        # Use _children property (new property-based API)
-        # Rebuild the dict by preserving the keys (names) and updating values
+        # Use _children list (private attribute)
         if hasattr(resource, "_children"):
-            # Clear existing children and rebuild
+            # Clear existing children list and add new ones
             resource._children.clear()
+            resource._children.extend(children)
+
+            # Update parent pointers and fix sibling connections
+            # Build name->child mapping for completed children
+            children_by_name = {
+                child.name: child for child in children if child.name
+            }
+
             for child in children:
-                child_name = child.name or f"child_{id(child)}"
-                resource._children[child_name] = child
+                # Update parent pointer
+                child._parent = resource
+
+                # Fix connections to siblings - replace original references with completed ones
+                if hasattr(child, "_connection_resources"):
+                    updated_connections = []
+                    for conn in child._connection_resources:
+                        # If this connection is to a sibling (same parent), use completed version
+                        if conn.name in children_by_name:
+                            updated_connections.append(
+                                children_by_name[conn.name]
+                            )
+                        else:
+                            # External connection, keep original
+                            updated_connections.append(conn)
+                    child._connection_resources[:] = updated_connections
             return
 
         # Fall back to direct attribute assignment for public children
@@ -376,8 +397,8 @@ class ResourceCompleter:
         # Complete parent with standard single-resource completion
         # (temporarily remove children to avoid schema issues)
         resource_copy = resource.model_copy()
-        if hasattr(resource_copy, "children"):
-            resource_copy.children = []
+        if hasattr(resource_copy, "_children"):
+            resource_copy._children = []
 
         completed_parent = await self._complete_resource_with_message(
             resource_copy, parent_message

@@ -5,14 +5,102 @@ This example demonstrates two approaches to configuring child resources:
 2. Post-creation overrides (modify after adding to composite)
 
 It shows the trade-offs between each approach and when to use which pattern.
+
+NOTE: This example demonstrates Pattern 3 (Hybrid Approach) at module level.
+Other patterns are shown in helper functions for educational purposes.
 """
 
-from clockwork.resources import BlankResource, DockerResource
-from clockwork.resources.assertions import (
+import os
+
+from clockwork.assertions import (
     ContainerRunningAssert,
     HealthcheckAssert,
     PortAccessibleAssert,
 )
+from clockwork.resources import BlankResource, DockerResource
+
+# ==================================================================
+# PATTERN 3: Hybrid Approach (Deployed Example)
+# ==================================================================
+# This combines the best of both approaches - used at module level for deployment
+#
+# Use this when:
+# - Most config is known upfront
+# - Some config needs to be dynamic or conditional
+# - You want clarity + flexibility
+
+webapp = BlankResource(
+    name="webapp-pattern3",
+    description="Web app using hybrid configuration approach",
+)
+
+# Specify core config in constructor
+webapp.add(
+    DockerResource(
+        name="postgres-db",
+        description="PostgreSQL database",
+        image="postgres:15-alpine",
+        ports=["5432:5432"],
+        env_vars={
+            "POSTGRES_USER": "webapp",
+            "POSTGRES_PASSWORD": "webapp_password",
+            "POSTGRES_DB": "webapp_db",
+        },
+    )
+)
+
+webapp.add(
+    DockerResource(
+        name="api-service",
+        description="API service",
+        image="node:18-alpine",
+        ports=["8000:8000"],
+        env_vars={
+            "DATABASE_URL": "postgresql://webapp:webapp_password@postgres-db:5432/webapp_db",
+            "NODE_ENV": "production",
+        },
+    )
+)
+
+# Conditionally override specific fields post-creation
+# Example: Add debug mode based on environment variable
+if os.getenv("DEBUG_MODE") == "true":
+    webapp.children["api-service"].env_vars["DEBUG"] = "true"
+    webapp.children["api-service"].env_vars["LOG_LEVEL"] = "debug"
+
+# Example: Adjust resources based on environment
+environment = os.getenv("ENVIRONMENT", "development")
+if environment == "production":
+    # Production needs persistence and auto-restart
+    webapp.children["postgres-db"].volumes = [
+        "./postgres-data:/var/lib/postgresql/data"
+    ]
+    webapp.children["postgres-db"].restart_policy = "always"
+    webapp.children["api-service"].restart_policy = "always"
+else:
+    # Development doesn't need persistence
+    webapp.children["postgres-db"].restart_policy = "no"
+    webapp.children["api-service"].restart_policy = "no"
+
+# Add assertions after conditional config
+webapp.children["postgres-db"].assertions = [
+    ContainerRunningAssert(),
+    PortAccessibleAssert(port=5432),
+]
+
+webapp.children["api-service"].assertions = [
+    ContainerRunningAssert(),
+    PortAccessibleAssert(port=8000),
+    HealthcheckAssert(url="http://localhost:8000/health"),
+]
+
+webapp.children["api-service"].connect(webapp.children["postgres-db"])
+
+
+# ==================================================================
+# Educational Pattern Examples (Not Deployed)
+# ==================================================================
+# The functions below demonstrate alternative patterns for reference only
 
 
 def pattern_1_constructor_config():
@@ -172,88 +260,6 @@ def pattern_2_post_creation_overrides():
     return webapp
 
 
-def pattern_3_hybrid_approach():
-    """Pattern 3: Hybrid - Specify core config in constructor, override special cases.
-
-    This combines the best of both approaches.
-
-    Use this when:
-    - Most config is known upfront
-    - Some config needs to be dynamic or conditional
-    - You want clarity + flexibility
-    """
-    print("\n=== Pattern 3: Hybrid Approach ===\n")
-
-    webapp = BlankResource(
-        name="webapp-pattern3",
-        description="Web app using hybrid configuration approach",
-    )
-
-    # Specify core config in constructor
-    database = webapp.add(
-        DockerResource(
-            name="postgres-db",
-            description="PostgreSQL database",
-            image="postgres:15-alpine",
-            ports=["5432:5432"],
-            env_vars={
-                "POSTGRES_USER": "webapp",
-                "POSTGRES_PASSWORD": "webapp_password",
-                "POSTGRES_DB": "webapp_db",
-            },
-        )
-    )
-
-    api = webapp.add(
-        DockerResource(
-            name="api-service",
-            description="API service",
-            image="node:18-alpine",
-            ports=["8000:8000"],
-            env_vars={
-                "DATABASE_URL": "postgresql://webapp:webapp_password@postgres-db:5432/webapp_db",
-                "NODE_ENV": "production",
-            },
-        )
-    )
-
-    # Conditionally override specific fields post-creation
-    # Example: Add debug mode based on environment variable
-    import os
-
-    if os.getenv("DEBUG_MODE") == "true":
-        api.env_vars["DEBUG"] = "true"
-        api.env_vars["LOG_LEVEL"] = "debug"
-
-    # Example: Adjust resources based on environment
-    environment = os.getenv("ENVIRONMENT", "development")
-    if environment == "production":
-        # Production needs persistence and auto-restart
-        database.volumes = ["./postgres-data:/var/lib/postgresql/data"]
-        database.restart_policy = "always"
-        api.restart_policy = "always"
-    else:
-        # Development doesn't need persistence
-        database.restart_policy = "no"
-        api.restart_policy = "no"
-
-    # Add assertions after conditional config
-    database.assertions = [
-        ContainerRunningAssert(),
-        PortAccessibleAssert(port=5432),
-    ]
-
-    api.assertions = [
-        ContainerRunningAssert(),
-        PortAccessibleAssert(port=8000),
-        HealthcheckAssert(url="http://localhost:8000/health"),
-    ]
-
-    api.connect(database)
-
-    return webapp
-
-
 def pattern_4_shared_config():
     """Pattern 4: Apply common configuration to multiple resources.
 
@@ -332,84 +338,57 @@ def pattern_4_shared_config():
     return webapp
 
 
-def comparison_summary():
-    """Summary of when to use each pattern.
-
-    PATTERN 1 - Constructor Config:
-    ✓ Use when config is known upfront
-    ✓ Use for simple, static configurations
-    ✓ Use when you value clarity and immutability
-    ✓ RECOMMENDED for most cases
-
-    PATTERN 2 - Post-Creation Overrides:
-    ✓ Use when building resources dynamically
-    ✓ Use when config depends on runtime conditions
-    ✓ Use when generating many similar resources
-    ✓ Use with caution (can be hard to follow)
-
-    PATTERN 3 - Hybrid:
-    ✓ Use when you need both clarity and flexibility
-    ✓ Use for environment-specific overrides
-    ✓ Use for conditional configuration
-    ✓ RECOMMENDED for complex projects
-
-    PATTERN 4 - Shared Config:
-    ✓ Use when multiple resources share config
-    ✓ Use to apply common patterns
-    ✓ Use to reduce duplication (DRY principle)
-    ✓ RECOMMENDED for microservices architectures
-    """
-    pass
-
-
-def main():
-    """Demonstrate all four patterns."""
-
-    # Pattern 1: Constructor-based (most common)
-    pattern_1_constructor_config()
-
-    # Pattern 2: Post-creation overrides (flexible)
-    pattern_2_post_creation_overrides()
-
-    # Pattern 3: Hybrid approach (balanced)
-    webapp3 = pattern_3_hybrid_approach()
-
-    # Pattern 4: Shared config (DRY)
-    pattern_4_shared_config()
-
-    # For this demo, let's use Pattern 3 (hybrid) as it's most practical
-    return webapp3
+# ==================================================================
+# Pattern Summary
+# ==================================================================
+#
+# PATTERN 1 - Constructor Config:
+# ✓ Use when config is known upfront
+# ✓ Use for simple, static configurations
+# ✓ Use when you value clarity and immutability
+# ✓ RECOMMENDED for most cases
+#
+# PATTERN 2 - Post-Creation Overrides:
+# ✓ Use when building resources dynamically
+# ✓ Use when config depends on runtime conditions
+# ✓ Use when generating many similar resources
+# ✓ Use with caution (can be hard to follow)
+#
+# PATTERN 3 - Hybrid (DEPLOYED IN THIS EXAMPLE):
+# ✓ Use when you need both clarity and flexibility
+# ✓ Use for environment-specific overrides
+# ✓ Use for conditional configuration
+# ✓ RECOMMENDED for complex projects
+#
+# PATTERN 4 - Shared Config:
+# ✓ Use when multiple resources share config
+# ✓ Use to apply common patterns
+# ✓ Use to reduce duplication (DRY principle)
+# ✓ RECOMMENDED for microservices architectures
 
 
-if __name__ == "__main__":
-    # Create and deploy using the hybrid pattern
-    app = main()
+# To deploy this example:
+# cd examples/composite-resources/post-creation-overrides
+# uv run clockwork apply
 
-    # To deploy this example:
-    # cd /Users/sankalp/dev/clockwork/examples/composite-resources/post-creation-overrides
-    # uv run clockwork apply
+# To deploy with debug mode:
+# DEBUG_MODE=true uv run clockwork apply
 
-    # To deploy with debug mode:
-    # DEBUG_MODE=true uv run clockwork apply
+# To deploy for production:
+# ENVIRONMENT=production uv run clockwork apply
 
-    # To deploy for production:
-    # ENVIRONMENT=production uv run clockwork apply
+# To verify assertions:
+# uv run clockwork assert
 
-    # To verify assertions:
-    # uv run clockwork assert
+# To destroy:
+# uv run clockwork destroy
 
-    # To destroy:
-    # uv run clockwork destroy
-
-    print("\n" + "=" * 70)
-    print("Configuration Pattern Summary")
-    print("=" * 70)
-    print("""
-    Pattern 1 (Constructor): Best for simple, static configurations
-    Pattern 2 (Post-Creation): Best for dynamic, programmatic generation
-    Pattern 3 (Hybrid): Best for complex projects with conditionals
-    Pattern 4 (Shared Config): Best for multiple similar resources
-
-    Recommendation: Start with Pattern 1, use Pattern 3 when you need
-    environment-specific or conditional configuration.
-    """)
+# Configuration Pattern Summary:
+#
+# Pattern 1 (Constructor): Best for simple, static configurations
+# Pattern 2 (Post-Creation): Best for dynamic, programmatic generation
+# Pattern 3 (Hybrid): Best for complex projects with conditionals (DEPLOYED)
+# Pattern 4 (Shared Config): Best for multiple similar resources
+#
+# Recommendation: Start with Pattern 1, use Pattern 3 when you need
+# environment-specific or conditional configuration.

@@ -71,7 +71,7 @@ webapp (Composite - Application-Specific)
 Create a minimal Prometheus configuration file:
 
 ```bash
-cd /Users/sankalp/dev/clockwork/examples/composite-resources/mixed-pattern
+cd examples/composite-resources/mixed-pattern
 
 cat > prometheus.yml <<EOF
 global:
@@ -309,5 +309,5 @@ After understanding this example, check out:
 
 ## Related Examples
 
-- `/Users/sankalp/dev/clockwork/examples/connected-services/`: Real-world service connections
-- `/Users/sankalp/dev/clockwork/examples/showcase/`: Complete feature showcase
+- `examples/connected-services/`: Real-world service connections
+- `examples/showcase/`: Complete feature showcase

@@ -59,7 +59,7 @@ Thanks to `.connect()`, resources deploy in the correct order:
 ### Deploy the Stack
 
 ```bash
-cd /Users/sankalp/dev/clockwork/examples/composite-resources/simple-webapp
+cd examples/composite-resources/simple-webapp
 uv run clockwork apply
 ```
 
@@ -164,5 +164,5 @@ After understanding this example, check out:
 
 ## Related Examples
 
-- `/Users/sankalp/dev/clockwork/examples/connected-services/`: Real-world service connections
-- `/Users/sankalp/dev/clockwork/examples/showcase/`: Complete feature showcase
+- `examples/connected-services/`: Real-world service connections
+- `examples/showcase/`: Complete feature showcase

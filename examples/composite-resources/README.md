@@ -135,4 +135,4 @@ api.connect(primary)
 
 ## Questions?
 
-Refer to the main Clockwork documentation in `/Users/sankalp/dev/clockwork/CLAUDE.md` for more details on resource connections, assertions, and configuration.
+Refer to the main Clockwork documentation in `CLAUDE.md` (at project root) for more details on resource connections, assertions, and configuration.

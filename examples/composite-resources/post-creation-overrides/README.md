@@ -151,7 +151,7 @@ services[2].env_vars["ROLE"] = "scheduler"
 ### Deploy with Default Pattern (Hybrid)
 
 ```bash
-cd /Users/sankalp/dev/clockwork/examples/composite-resources/post-creation-overrides
+cd examples/composite-resources/post-creation-overrides
 uv run clockwork apply
 ```
 
@@ -379,9 +379,9 @@ After understanding these patterns:
 
 ## Related Examples
 
-- `/Users/sankalp/dev/clockwork/examples/simple-webapp/`: Basic composites (uses Pattern 1)
-- `/Users/sankalp/dev/clockwork/examples/nested-composites/`: Complex hierarchies (uses Pattern 1)
-- `/Users/sankalp/dev/clockwork/examples/mixed-pattern/`: Hybrid architectures (uses Pattern 1)
+- `examples/composite-resources/simple-webapp/`: Basic composites (uses Pattern 1)
+- `examples/composite-resources/nested-composites/`: Complex hierarchies (uses Pattern 1)
+- `examples/composite-resources/mixed-pattern/`: Hybrid architectures (uses Pattern 1)
 
 ## Summary
 
