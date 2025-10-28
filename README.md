@@ -7,6 +7,7 @@ Build infrastructure using composable primitives in Python - AI handles the part
 [![Version](https://img.shields.io/badge/version-0.3.0-blue)](./pyproject.toml)
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue)](./pyproject.toml)
 [![Deploy](https://img.shields.io/badge/deploy-Pulumi-blueviolet)](https://pulumi.com)
+[![License](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 
 ## Build Infrastructure Your Way
 
@@ -81,38 +82,33 @@ Before getting started, ensure you have:
 
 - **Python 3.12 or higher** - Required for modern Python features
 - **uv package manager** - Fast Python package installer and resolver
+- **Git** - For cloning the repository
 - **Docker** (Linux/Windows) or **Apple Containers** (macOS) - For container resources
-- **Basic command-line knowledge** - Familiarity with terminal commands
 
 ## Installation
 
 ### Install uv
 
-If you don't have uv installed:
+First, install the uv package manager if you don't have it:
 
 ```bash
 # Install uv package manager
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-### Create New Project
+### Install Clockwork
+
+Since Clockwork is not yet published to PyPI, clone and install directly from GitHub:
 
 ```bash
-# Create a new project directory
-mkdir my-clockwork-project && cd my-clockwork-project
+# Clone the repository
+git clone https://github.com/kessler-frost/clockwork.git
+cd clockwork
 
-# Initialize a new Python project
-uv init
+# Install dependencies
+uv sync
 
-# Add clockwork as a dependency
-uv add clockwork
-```
-
-### Add to Existing Project
-
-```bash
-# Add clockwork to your existing project
-uv add clockwork
+# Create your main.py and start building (see Quick Start below)
 ```
 
 ## Quick Start
@@ -124,7 +120,7 @@ from clockwork.resources import FileResource
 
 article = FileResource(
     name="article.md",
-    description="Write about Conway's Game of Life",
+    description="Write about the Fibonacci sequence and its mathematical properties",
     directory="output"
 )
 ```
@@ -143,7 +139,6 @@ CW_MODEL=meta-llama/llama-4-scout:free  # Free tier model
 Deploy:
 
 ```bash
-cd your-project
 uv run clockwork apply
 ```
 
@@ -209,35 +204,31 @@ FileResource(
 )
 ```
 
-### DockerResource
+### Container Resources
 
-Runs Docker containers with optional AI-suggested images. Cross-platform support (Mac, Linux, Windows).
+Clockwork provides two container resource types:
+
+| Resource | Platform | Runtime |
+|----------|----------|---------|
+| `DockerResource` | Cross-platform (macOS, Linux, Windows) | Docker Engine via Pulumi provider |
+| `AppleContainerResource` | macOS only | Apple Containers CLI (native runtime) |
+
+Both support AI-powered image suggestion when `image` is not specified (e.g., nginx:alpine, redis:alpine).
+
+**Example Usage** (identical syntax for both):
 
 ```python
-DockerResource(
+# Use DockerResource or AppleContainerResource - syntax is identical
+resource = DockerResource(
     name="web-server",
     description="A lightweight web server for testing and demos",
     ports=["8080:80"]  # Host port 8080 -> Container port 80
 )
 ```
 
-**AI-Powered**: When `image` is not specified, AI suggests appropriate container images (e.g., nginx:alpine).
-**Cross-Platform**: Uses Pulumi Docker provider for universal Docker support.
-
-### AppleContainerResource
-
-Runs Apple Containers with optional AI-suggested images. macOS-specific using Apple Containers CLI.
-
-```python
-AppleContainerResource(
-    name="web-server",
-    description="A lightweight web server for testing and demos",
-    ports=["8080:80"]  # Host port 8080 -> Container port 80
-)
-```
-
-**AI-Powered**: When `image` is not specified, AI suggests appropriate container images (e.g., nginx:alpine).
-**macOS Optimized**: Uses Apple's native container runtime for local development.
+**When to use which:**
+- Use `DockerResource` for cross-platform compatibility or when deploying to Linux/Windows
+- Use `AppleContainerResource` for macOS-optimized local development with Apple's native container runtime
 
 ### GitRepoResource
 
@@ -304,7 +295,7 @@ All assertions are type-safe, Pydantic-based validators with no AI costs.
 
 ## CLI
 
-All commands must be run from a directory containing `main.py`.
+All commands must be run from the clockwork directory where your `main.py` is located.
 
 **Discovering Commands**: Use `--help` to explore available commands and options:
 
@@ -420,7 +411,9 @@ webapp.children["api"].connect(webapp.children["db"], webapp.children["cache"])
 - Use for: resources that belong together (app + config + db)
 
 **`.connect()` - Dependencies** (independent lifecycle):
-- Use `.connect()` for dependencies between independent resources (see Resource Connections section above)
+- Resources deploy in dependency order
+- AI receives context for auto-configuration
+- See **Resource Connections** section above for details
 
 **Accessing Children**:
 
@@ -448,24 +441,7 @@ See `examples/composite-resources/` for detailed examples:
 
 Clockwork uses `.env` files for configuration via Pydantic Settings.
 
-### Create .env File
-
-```bash
-# AI Provider (OpenAI-compatible: OpenRouter, LM Studio, Ollama, etc.)
-CW_API_KEY=your-api-key-here
-CW_MODEL=meta-llama/llama-4-scout:free
-CW_BASE_URL=https://openrouter.ai/api/v1
-
-# AI Completion
-CW_COMPLETION_MAX_RETRIES=3
-
-# Pulumi Configuration
-CW_PULUMI_CONFIG_PASSPHRASE=clockwork
-# Alternatively: PULUMI_CONFIG_PASSPHRASE=clockwork
-
-# Logging
-CW_LOG_LEVEL=INFO
-```
+For a minimal setup, see the Quick Start section above. For all available options, see the table below.
 
 ### Available Settings
 
@@ -499,24 +475,29 @@ uv run clockwork apply --model "anthropic/claude-haiku-4.5"
 - **Questions & Discussions**: [GitHub Discussions](https://github.com/kessler-frost/clockwork/discussions) - Ask questions, share ideas, and discuss best practices
 - **Bug Reports & Feature Requests**: [GitHub Issues](https://github.com/kessler-frost/clockwork/issues) - Report bugs or request new features
 - **Technical Deep Dive**: [ARCHITECTURE.md](./ARCHITECTURE.md) - Implementation details and design decisions
-- **Contributing**: See Development section below for setup and contribution guidelines
+- **Contributing**: See Development section below for setup instructions
 
 ## Examples
 
+Make sure you're in the clockwork directory, then explore these examples:
+
 ```bash
-# Comprehensive showcase (all features)
+# Comprehensive showcase - Demonstrates all Clockwork features
+# Includes: FileResource, DockerResource, AppleContainerResource, GitRepoResource, assertions, connections
 cd examples/showcase
 uv run clockwork apply
 uv run clockwork assert
 uv run clockwork destroy
 
-# Connected services (multi-service with dependencies)
+# Connected services - Multi-service architecture with dependencies
+# Shows: Resource connections, AI auto-configuration, deployment ordering
 cd examples/connected-services
 uv run clockwork apply
 uv run clockwork assert
 uv run clockwork destroy
 
-# Composite resources (grouping and hierarchies)
+# Composite resources - Grouping and hierarchical structures
+# Demonstrates: BlankResource, .add() composition, nested composites
 cd examples/composite-resources/simple-webapp
 uv run clockwork apply
 uv run clockwork assert
@@ -527,12 +508,9 @@ See `examples/` directory for more details.
 
 ## Architecture
 
-For a technical deep dive into Clockwork's implementation, design decisions, and internal architecture, see [ARCHITECTURE.md](./ARCHITECTURE.md).
+For a comprehensive technical deep dive into Clockwork's implementation, design decisions, and internal architecture, see [ARCHITECTURE.md](./ARCHITECTURE.md).
 
-**Key Points**:
-- **Flow**: Declare (Pydantic) → Resolve (dependencies) → Complete (AI) → Compile (Pulumi) → Deploy (Automation API)
-- **AI Completion**: PydanticAI with tool output mode for structured data generation
-- **Deployment**: Pulumi Automation API for programmatic infrastructure management
+This document covers the complete flow: Declare (Pydantic) → Resolve (dependencies) → Complete (AI) → Compile (Pulumi) → Deploy (Automation API).
 
 ## Development
 
