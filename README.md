@@ -130,6 +130,7 @@ Create a `.env` file:
 ```bash
 # Get a free API key from OpenRouter: https://openrouter.ai/keys
 # Or use LM Studio locally (set CW_BASE_URL=http://localhost:1234/v1, no key needed)
+# For local models, qwen/qwen3-coder-30b works exceptionally well
 CW_API_KEY=your-api-key-here
 CW_MODEL=meta-llama/llama-4-scout:free  # Free tier model
 
@@ -465,6 +466,8 @@ uv run clockwork apply --model "anthropic/claude-haiku-4.5"
 **State Management**: Pulumi stores state in `~/.pulumi/` directory (user's home directory) when using the Automation API. This state tracks all deployed resources and their configurations.
 
 **Model Requirements**: AI models must support tool calling (function calling). Most modern models from OpenRouter, OpenAI, Anthropic, and local models served via LM Studio support this feature.
+
+**Local Model Recommendation**: For local inference via LM Studio, `qwen/qwen3-coder-30b` provides excellent results for infrastructure code generation and completion tasks.
 
 **Platform-Specific Resources**:
 - **AppleContainerResource**: macOS only - requires Apple Containers CLI
