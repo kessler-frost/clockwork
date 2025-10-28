@@ -65,6 +65,56 @@ nginx = DockerResource(
 
 No custom DSL. No YAML files. Just Python with adjustable AI assistance.
 
+## Why Clockwork?
+
+- **Pure Python**: No custom DSL or YAML, just Pydantic models
+- **Composable**: Mix and match primitives like building blocks
+- **Flexible**: You choose how much AI handles vs how much you specify
+- **Intelligent**: AI-powered completion adapts to your needs
+- **Functionally Deterministic**: Assertions validate behavior, ensuring reliable outcomes
+- **Type-safe**: Full IDE support with Pydantic validation
+- **Composite Resources**: Build higher-level abstractions by composing basic resources into reusable groups
+
+## Prerequisites
+
+Before getting started, ensure you have:
+
+- **Python 3.12 or higher** - Required for modern Python features
+- **uv package manager** - Fast Python package installer and resolver
+- **Docker** (Linux/Windows) or **Apple Containers** (macOS) - For container resources
+- **Basic command-line knowledge** - Familiarity with terminal commands
+
+## Installation
+
+### Install uv
+
+If you don't have uv installed:
+
+```bash
+# Install uv package manager
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+### Create New Project
+
+```bash
+# Create a new project directory
+mkdir my-clockwork-project && cd my-clockwork-project
+
+# Initialize a new Python project
+uv init
+
+# Add clockwork as a dependency
+uv add clockwork
+```
+
+### Add to Existing Project
+
+```bash
+# Add clockwork to your existing project
+uv add clockwork
+```
+
 ## Quick Start
 
 In your `main.py`:
@@ -82,7 +132,12 @@ article = FileResource(
 Create a `.env` file:
 
 ```bash
-CW_API_KEY=your-key-here
+# Get a free API key from OpenRouter: https://openrouter.ai/keys
+# Or use LM Studio locally (set CW_BASE_URL=http://localhost:1234/v1, no key needed)
+CW_API_KEY=your-api-key-here
+CW_MODEL=meta-llama/llama-4-scout:free  # Free tier model
+
+# See Configuration section below for all options
 ```
 
 Deploy:
@@ -95,69 +150,46 @@ uv run clockwork apply
 ## Example
 
 ```python
-from clockwork.resources import FileResource
+from clockwork.resources import FileResource, DockerResource
+from clockwork.assertions import HealthcheckAssert
 
-# AI generates content
+# AI-generated content
 article = FileResource(
     name="game_of_life.md",
-    description="Write a comprehensive article about Conway's Game of Life",
+    description="Write about Conway's Game of Life",
     directory="scratch"
 )
 
-# User provides content
+# User-provided content
 readme = FileResource(
     name="README.md",
     content="# My Project\n\nGenerated with Clockwork!",
     directory="scratch"
 )
+
+# Container with health check
+nginx = DockerResource(
+    description="web server for static files",
+    ports=["8080:80"],
+    assertions=[HealthcheckAssert(url="http://localhost:8080")]
+)
 ```
 
 ```bash
 uv run clockwork apply
 ```
 
-See [ARCHITECTURE.md](./ARCHITECTURE.md) for how it works.
+### Next Steps
 
-## CLI
+After your first deployment:
 
-All commands must be run from a directory containing `main.py`.
+1. **Explore other resources**: Try `DockerResource`, `AppleContainerResource`, `GitRepoResource`
+2. **Add assertions**: Validate your deployments with `HealthcheckAssert`, `PortAccessibleAssert`
+3. **Connect resources**: Use `.connect()` to link services with automatic configuration
+4. **Build composites**: Group related resources with `BlankResource` for reusable patterns
+5. **Check examples**: Browse `examples/` directory for real-world patterns
 
-**Discovering Commands**: Use `--help` to explore available commands and options:
-
-```bash
-# Show all available commands
-uv run clockwork --help
-
-# Show options for a specific command
-uv run clockwork apply --help
-uv run clockwork destroy --help
-uv run clockwork assert --help
-```
-
-**Available Commands**:
-
-```bash
-# Full deployment
-uv run clockwork apply
-
-# Plan resources without deploying
-uv run clockwork plan
-
-# Validate deployed resources
-uv run clockwork assert
-
-# Destroy deployed resources (removes working directories by default)
-uv run clockwork destroy
-
-# Destroy but keep working directories created by resources
-uv run clockwork destroy --keep-files
-
-# Custom model
-uv run clockwork apply --model "anthropic/claude-haiku-4.5"
-
-# Show version
-uv run clockwork version
-```
+Run `uv run clockwork --help` to see all available commands.
 
 ## Resources
 
@@ -262,82 +294,60 @@ Run assertions:
 uv run clockwork assert
 ```
 
-See [CLAUDE.md](./CLAUDE.md) for available assertion classes.
+**Available Assertion Classes**:
 
-## Composite Resources
+- **HTTP/Network**: `HealthcheckAssert`, `PortAccessibleAssert`
+- **Container**: `ContainerRunningAssert`
+- **File**: `FileExistsAssert`, `FileContentMatchesAssert`
 
-**Build reusable groups** of related resources with `BlankResource` - a lightweight container for organizing infrastructure into logical units.
+All assertions are type-safe, Pydantic-based validators with no AI costs.
 
-### Why Composite Resources?
+## CLI
 
-Composite resources let you:
-- **Group related resources** for organized deployment (e.g., database + cache + API)
-- **Create reusable patterns** that can be instantiated multiple times
-- **Manage complex stacks** with atomic lifecycle (deploy/destroy together)
-- **Build hierarchical structures** by nesting composites
+All commands must be run from a directory containing `main.py`.
 
-### Quick Example
+**Discovering Commands**: Use `--help` to explore available commands and options:
 
-```python
-from clockwork.resources import BlankResource, DockerResource
+```bash
+# Show all available commands
+uv run clockwork --help
 
-# Create a composite web application
-webapp = BlankResource(
-    name="simple-webapp",
-    description="Web application with database, cache, and API"
-)
-
-# Add resources to the composition
-webapp.add(
-    DockerResource(
-        name="postgres-db",
-        image="postgres:15-alpine",
-        ports=["5432:5432"]
-    ),
-    DockerResource(
-        name="redis-cache",
-        image="redis:7-alpine",
-        ports=["6379:6379"]
-    ),
-    DockerResource(
-        name="api-server",
-        description="Node.js API server",
-        ports=["3000:3000"]
-    )
-)
-
-# Access children using dict-style syntax
-postgres = webapp.children["postgres-db"]
-redis = webapp.children["redis-cache"]
-api = webapp.children["api-server"]
-
-# Establish dependencies for proper startup order
-api.connect(postgres)  # API depends on database
-api.connect(redis)     # API depends on cache
+# Show options for a specific command
+uv run clockwork apply --help
+uv run clockwork destroy --help
+uv run clockwork assert --help
 ```
 
-### Key Concepts
+**Available Commands**:
 
-**`.add()` creates compositions** - Resources added to a composite share an atomic lifecycle:
-- Deploy together as a logical unit
-- Destroy together when the composite is destroyed
-- Organized under a single parent in Pulumi's resource hierarchy
+```bash
+# Full deployment
+uv run clockwork apply
 
-**`.connect()` creates dependencies** - Resources have independent lifecycles but explicit ordering:
-- Each resource can be deployed/destroyed independently
-- Dependencies control deployment order (postgres → redis → api)
-- No parent-child relationship in Pulumi's hierarchy
-- AI sees connected resource details for automatic configuration
+# Plan resources without deploying
+uv run clockwork plan
 
-**When to use each**:
-- Use `.add()` when resources logically belong together (e.g., all parts of a web app)
-- Use `.connect()` when resources are independent but have ordering requirements
+# Validate deployed resources
+uv run clockwork assert
 
-### Resource Connections with .connect()
+# Destroy deployed resources (removes working directories by default)
+uv run clockwork destroy
 
-The `.connect()` method establishes dependencies between resources for proper deployment ordering and AI-powered auto-configuration.
+# Destroy but keep working directories created by resources
+uv run clockwork destroy --keep-files
 
-**How it works**:
+# Custom model
+uv run clockwork apply --model "anthropic/claude-haiku-4.5"
+
+# Show version
+uv run clockwork version
+```
+
+## Resource Connections
+
+Declare dependencies between resources for proper deployment ordering and AI-powered auto-configuration.
+
+**How it works:**
 
 ```python
 from clockwork.resources import DockerResource
@@ -368,74 +378,71 @@ api = DockerResource(
 # AI auto-generates DATABASE_URL and REDIS_URL environment variables
 ```
 
-**Benefits**:
+**Benefits:**
 
 1. **Automatic Deployment Ordering**: Resources deploy in dependency order (topological sort)
 2. **AI Context Awareness**: Connected resources share context (name, image, ports, env vars)
-3. **Auto-Configuration**: AI can generate connection strings, URLs, and configuration
+3. **Auto-Configuration**: AI generates connection strings, URLs, and configuration
 4. **Cycle Detection**: Prevents circular dependencies before deployment
 5. **Independent Lifecycles**: Each resource can be updated/destroyed separately
 
-**Connection Context**: When you connect resources, the dependent resource receives context about its dependencies:
-- Resource name and type
-- Container images and ports
-- Environment variables and networks
-- Any other relevant configuration
+See `examples/connected-services/` for complete examples.
 
-This allows AI to automatically generate appropriate configuration like database URLs, service endpoints, and connection strings.
+## Composite Resources
 
-**Example - AI Auto-Configuration**:
+**Build reusable groups** of related resources with `BlankResource` - organize infrastructure into logical units with atomic lifecycle management.
+
+### Basic Usage
 
 ```python
-# AI sees postgres connection context and auto-generates:
-# - DATABASE_URL=postgresql://postgres:5432
-# - REDIS_URL=redis://redis:6379
-# Based on connected resource details
+from clockwork.resources import BlankResource, DockerResource
 
-api = DockerResource(
-    description="API server needing database and cache"
-).connect(postgres, redis)
-```
-
-**Note**: Use `.connect()` for dependencies, use `.add()` for composition (see Composite Resources above).
-
-### Accessing Children
-
-After adding resources to a composite, access them using the `.children` property with dict-style syntax:
-
-```python
-webapp = BlankResource(name="webapp", description="Web app").add(
-    DockerResource(name="db", image="postgres:15"),
-    DockerResource(name="cache", image="redis:7")
+# Create a composite web application
+webapp = BlankResource(
+    name="webapp",
+    description="Web application with database and cache"
+).add(
+    DockerResource(name="db", image="postgres:15-alpine", ports=["5432:5432"]),
+    DockerResource(name="cache", image="redis:7-alpine", ports=["6379:6379"]),
+    DockerResource(name="api", description="API server", ports=["8000:8000"])
 )
 
+# Access and modify children
+webapp.children["db"].ports = ["5433:5432"]
+webapp.children["api"].connect(webapp.children["db"], webapp.children["cache"])
+```
+
+### Key Concepts
+
+**`.add()` - Composition** (atomic lifecycle):
+- Resources deploy/destroy together as one unit
+- Organized under single parent in Pulumi hierarchy
+- Use for: resources that belong together (app + config + db)
+
+**`.connect()` - Dependencies** (independent lifecycle):
+- Use `.connect()` for dependencies between independent resources (see Resource Connections section above)
+
+**Accessing Children**:
+
+```python
 # Dict-style access
 db = webapp.children["db"]
-cache = webapp.children["cache"]
 
-# Safe access (returns None if not found)
-maybe_db = webapp.children.get("db")
+# Safe access
+maybe_cache = webapp.children.get("cache")
 
-# Check existence
-if "db" in webapp.children:
-    webapp.children["db"].ports = ["5432:5432"]
-
-# Iterate over children
+# Iterate
 for name, resource in webapp.children.items():
     print(f"{name}: {resource.image}")
 ```
 
-The `.children` property provides a read-only, dict-like interface for accessing child resources by name.
-
 ### Examples
 
-See `examples/composite-resources/` directory for complete examples:
-- **simple-webapp/** - Basic composition with database, cache, and API
-- **nested-composites/** - Hierarchical compositions (frontend + backend)
-- **mixed-pattern/** - Combining `.add()` and `.connect()` patterns
-- **post-creation-overrides/** - Modifying resources after composition
-
-For detailed documentation on composite resources, see [CLAUDE.md](./CLAUDE.md).
+See `examples/composite-resources/` for detailed examples:
+- **simple-webapp/** - Basic composition patterns
+- **nested-composites/** - Hierarchical structures
+- **mixed-pattern/** - Combining `.add()` and `.connect()`
+- **post-creation-overrides/** - Modifying after composition
 
 ## Configuration
 
@@ -477,22 +484,22 @@ Override via CLI:
 uv run clockwork apply --model "anthropic/claude-haiku-4.5"
 ```
 
+### Important Notes
+
+**State Management**: Pulumi stores state in `~/.pulumi/` directory (user's home directory) when using the Automation API. This state tracks all deployed resources and their configurations.
+
+**Model Requirements**: AI models must support tool calling (function calling). Most modern models from OpenRouter, OpenAI, Anthropic, and local models served via LM Studio support this feature.
+
+**Platform-Specific Resources**:
+- **AppleContainerResource**: macOS only - requires Apple Containers CLI
+- **DockerResource**: Cross-platform - works on macOS, Linux, and Windows
+
 ## Getting Help
 
 - **Questions & Discussions**: [GitHub Discussions](https://github.com/kessler-frost/clockwork/discussions) - Ask questions, share ideas, and discuss best practices
 - **Bug Reports & Feature Requests**: [GitHub Issues](https://github.com/kessler-frost/clockwork/issues) - Report bugs or request new features
-- **Technical Deep Dive**: See [ARCHITECTURE.md](./ARCHITECTURE.md) for implementation details and design decisions
-- **Development Guide**: See [CLAUDE.md](./CLAUDE.md) for contributing and development setup
-
-## Why Clockwork?
-
-- **Pure Python**: No custom DSL or YAML, just Pydantic models
-- **Composable**: Mix and match primitives like building blocks
-- **Flexible**: You choose how much AI handles vs how much you specify
-- **Intelligent**: AI-powered completion adapts to your needs
-- **Functionally Deterministic**: Assertions validate behavior, ensuring reliable outcomes
-- **Type-safe**: Full IDE support with Pydantic validation
-- **Composite Resources**: Build higher-level abstractions by composing basic resources into reusable groups
+- **Technical Deep Dive**: [ARCHITECTURE.md](./ARCHITECTURE.md) - Implementation details and design decisions
+- **Contributing**: See Development section below for setup and contribution guidelines
 
 ## Examples
 
@@ -517,6 +524,15 @@ uv run clockwork destroy
 ```
 
 See `examples/` directory for more details.
+
+## Architecture
+
+For a technical deep dive into Clockwork's implementation, design decisions, and internal architecture, see [ARCHITECTURE.md](./ARCHITECTURE.md).
+
+**Key Points**:
+- **Flow**: Declare (Pydantic) → Resolve (dependencies) → Complete (AI) → Compile (Pulumi) → Deploy (Automation API)
+- **AI Completion**: PydanticAI with tool output mode for structured data generation
+- **Deployment**: Pulumi Automation API for programmatic infrastructure management
 
 ## Development
 
@@ -554,8 +570,6 @@ After installation, hooks run automatically on `git commit`. To run manually:
 ```bash
 uv run pre-commit run --all-files
 ```
-
-See [CLAUDE.md](./CLAUDE.md) for development guide.
 
 ## Roadmap
 
