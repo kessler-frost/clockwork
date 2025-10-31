@@ -18,6 +18,7 @@ from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.profiles.openai import OpenAIModelProfile
 from pydantic_ai.providers.openai import OpenAIProvider
 
+from .model_loader import LMStudioModelLoader
 from .settings import get_settings
 from .tool_selector import ToolSelector
 
@@ -62,10 +63,30 @@ class ResourceCompleter:
             ToolSelector() if enable_tool_selection else None
         )
 
+        # LM Studio auto-loading setup
+        self.lmstudio_loader: LMStudioModelLoader | None = None
+        if LMStudioModelLoader.is_lmstudio_endpoint(self.base_url):
+            self.lmstudio_loader = LMStudioModelLoader()
+            logger.info(
+                f"LM Studio endpoint detected, will auto-load model: {self.model}"
+            )
+
         logger.info(
             f"Initialized ResourceCompleter with model: {self.model} at {self.base_url} "
             f"(tool selection: {enable_tool_selection})"
         )
+
+    async def _ensure_model_loaded(self) -> None:
+        """
+        Ensure the model is loaded in LM Studio if using LM Studio endpoint.
+
+        This is a no-op for non-LM Studio endpoints.
+
+        Raises:
+            Exception: If model loading fails (connection, model not found, etc.)
+        """
+        if self.lmstudio_loader:
+            await self.lmstudio_loader.load_model(self.model)
 
     async def complete(self, resources: list[Any]) -> list[Any]:
         """
@@ -120,6 +141,9 @@ class ResourceCompleter:
                 resource, context
             )
             logger.debug(f"ToolSelector chose {len(tools)} tools")
+
+        # Ensure model is loaded (LM Studio auto-loading)
+        await self._ensure_model_loaded()
 
         # Create OpenAI-compatible model
         model = OpenAIChatModel(
@@ -586,6 +610,9 @@ class ResourceCompleter:
                 resource, context
             )
             logger.debug(f"ToolSelector chose {len(tools)} tools")
+
+        # Ensure model is loaded (LM Studio auto-loading)
+        await self._ensure_model_loaded()
 
         # Create OpenAI-compatible model
         model = OpenAIChatModel(

@@ -467,7 +467,7 @@ uv run clockwork apply --model "anthropic/claude-haiku-4.5"
 
 **Model Requirements**: AI models must support tool calling (function calling). Most modern models from OpenRouter, OpenAI, Anthropic, and local models served via LM Studio support this feature.
 
-**Local Model Recommendation**: For local inference via LM Studio, `qwen/qwen3-coder-30b` provides excellent results for infrastructure code generation and completion tasks.
+**Local Model Recommendation**: For local inference via LM Studio, `qwen/qwen3-coder-30b` provides excellent results. When using LM Studio (`http://localhost:1234`), Clockwork automatically loads your specified model - no manual loading required.
 
 **Platform-Specific Resources**:
 - **AppleContainerResource**: macOS only - requires Apple Containers CLI
