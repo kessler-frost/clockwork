@@ -8,6 +8,7 @@ import asyncio
 
 import pytest
 
+from clockwork.connections import Connection, DependencyConnection
 from clockwork.resources import (
     BlankResource,
     DockerResource,
@@ -216,16 +217,14 @@ def test_connect_single_resource():
     # Should return self for chaining
     assert result is api
 
-    # Should have connection in both fields
-    assert len(api._connection_resources) == 1
-    assert api._connection_resources[0] is db
-    assert len(api.connections) == 1
-    assert api.connections[0]["name"] == "postgres"
-    assert api.connections[0]["type"] == "DockerResource"
+    # Should have connection
+    assert len(api._connections) == 1
+    assert isinstance(api._connections[0], DependencyConnection)
+    assert api._connections[0].to_resource is db
 
 
 def test_connect_multiple_resources():
-    """Test connecting to multiple resources at once."""
+    """Test connecting to multiple resources using chaining."""
     db = DockerResource(
         description="Database",
         name="postgres",
@@ -245,13 +244,13 @@ def test_connect_multiple_resources():
         ports=["8000:8000"],
     )
 
-    api.connect(db, cache)
+    # Connect to multiple resources via chaining
+    api.connect(db).connect(cache)
 
     # Should have both connections
-    assert len(api._connection_resources) == 2
-    assert db in api._connection_resources
-    assert cache in api._connection_resources
-    assert len(api.connections) == 2
+    assert len(api._connections) == 2
+    assert api._connections[0].to_resource is db
+    assert api._connections[1].to_resource is cache
 
 
 def test_connect_chaining():
@@ -287,34 +286,47 @@ def test_connect_chaining():
     assert result is api
 
     # All connections should be added
-    assert len(api._connection_resources) == 3
-    assert db in api._connection_resources
-    assert cache in api._connection_resources
-    assert queue in api._connection_resources
+    assert len(api._connections) == 3
+    assert api._connections[0].to_resource is db
+    assert api._connections[1].to_resource is cache
+    assert api._connections[2].to_resource is queue
 
 
 def test_connect_type_checking():
-    """Test that .connect() raises TypeError when connecting non-Resource objects."""
+    """Test that .connect() accepts Resource or Connection objects."""
     api = DockerResource(
         description="API",
         name="api",
         image="node:20-alpine",
         ports=["8000:8000"],
     )
+    db = DockerResource(
+        description="Database",
+        name="postgres",
+        image="postgres:15-alpine",
+        ports=["5432:5432"],
+    )
 
-    # Should raise TypeError for non-Resource
-    with pytest.raises(TypeError, match="Can only connect Resource objects"):
-        api.connect("not a resource")
+    # Should accept Resource (auto-creates DependencyConnection)
+    api.connect(db)
+    assert len(api._connections) == 1
+    assert isinstance(api._connections[0], DependencyConnection)
 
-    with pytest.raises(TypeError, match="Can only connect Resource objects"):
-        api.connect(42)
-
-    with pytest.raises(TypeError, match="Can only connect Resource objects"):
-        api.connect({"name": "dict"})
+    # Should accept Connection instance directly
+    cache = DockerResource(
+        description="Cache",
+        name="redis",
+        image="redis:7-alpine",
+        ports=["6379:6379"],
+    )
+    explicit_connection = DependencyConnection(to_resource=cache)
+    api.connect(explicit_connection)
+    assert len(api._connections) == 2
+    assert isinstance(api._connections[1], DependencyConnection)
 
 
 def test_connect_duplicate_prevention():
-    """Test that connecting to the same resource twice is prevented."""
+    """Test that connecting to the same resource twice creates separate connections."""
     db = DockerResource(
         description="Database",
         name="postgres",
@@ -330,15 +342,17 @@ def test_connect_duplicate_prevention():
 
     # Connect first time
     api.connect(db)
-    assert len(api._connection_resources) == 1
+    assert len(api._connections) == 1
 
-    # Try to connect again - should be skipped
+    # Connect again - creates a new connection (no duplicate prevention at this level)
     api.connect(db)
-    assert len(api._connection_resources) == 1
+    assert len(api._connections) == 2
+    assert api._connections[0].to_resource is db
+    assert api._connections[1].to_resource is db
 
 
-def test_connect_updates_both_fields():
-    """Test that .connect() updates both _connection_resources and connections fields."""
+def test_connect_creates_connection_objects():
+    """Test that .connect() creates Connection objects with proper structure."""
     db = DockerResource(
         description="Database",
         name="postgres",
@@ -354,14 +368,15 @@ def test_connect_updates_both_fields():
 
     api.connect(db)
 
-    # Should update private list (for graph traversal)
-    assert len(api._connection_resources) == 1
-    assert api._connection_resources[0] is db
+    # Should create Connection object
+    assert len(api._connections) == 1
+    connection = api._connections[0]
+    assert isinstance(connection, Connection)
+    assert isinstance(connection, DependencyConnection)
 
-    # Should update public connections (for AI and serialization)
-    assert len(api.connections) == 1
-    assert isinstance(api.connections[0], dict)
-    assert api.connections[0]["name"] == "postgres"
+    # Connection should have correct from/to resources
+    assert connection.from_resource is api
+    assert connection.to_resource is db
 
 
 # ============================================================================
@@ -562,8 +577,8 @@ def test_add_then_connect_chaining():
     # Should have both child and connection
     assert len(parent.children) == 1
     assert child in parent.children.values()
-    assert len(parent._connection_resources) == 1
-    assert db in parent._connection_resources
+    assert len(parent._connections) == 1
+    assert parent._connections[0].to_resource is db
 
 
 def test_connect_then_add_chaining():
@@ -585,8 +600,8 @@ def test_connect_then_add_chaining():
     assert result is parent
 
     # Should have both connection and child
-    assert len(parent._connection_resources) == 1
-    assert db in parent._connection_resources
+    assert len(parent._connections) == 1
+    assert parent._connections[0].to_resource is db
     assert len(parent.children) == 1
     assert child in parent.children.values()
 
@@ -624,9 +639,9 @@ def test_multiple_chained_operations():
     assert child2 in parent.children.values()
 
     # Should have all connections
-    assert len(parent._connection_resources) == 2
-    assert db in parent._connection_resources
-    assert cache in parent._connection_resources
+    assert len(parent._connections) == 2
+    assert parent._connections[0].to_resource is db
+    assert parent._connections[1].to_resource is cache
 
 
 # ============================================================================

@@ -194,18 +194,14 @@ class BlankResource(Resource):
         if self.name is None:
             raise ValueError("BlankResource requires a name")
 
-        # Build dependency options from connections
-        dep_opts = self._build_dependency_options()
-
         # Check if we have temporary compile options (from _compile_with_opts)
-        # This allows composites to be nested
         if hasattr(self, "_temp_compile_opts"):
-            # Merge with dependency options
-            opts = self._merge_resource_options(
-                self._temp_compile_opts, dep_opts
-            )
+            # Already contains merged parent + dependencies from _compile_with_opts()
+            # Don't build or merge again - just use it directly
+            opts = self._temp_compile_opts
         else:
-            opts = dep_opts
+            # Not in composite - build dependencies normally
+            opts = self._build_dependency_options()
 
         # Create Pulumi ComponentResource
         # ComponentResource acts as a logical grouping without deploying actual infrastructure

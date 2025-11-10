@@ -36,7 +36,7 @@ class GitRepoResource(Resource):
         present: Whether repository should exist (default: True)
     """
 
-    description: str
+    description: str | None = None
     name: str | None = Field(
         None,
         description="Repository identifier/short name",
@@ -114,18 +114,14 @@ class GitRepoResource(Resource):
                 f"Resource not completed: name={self.name}, repo_url={self.repo_url}, dest={self.dest}, branch={self.branch}"
             )
 
-        # Build resource options for dependencies
-        dep_opts = self._build_dependency_options()
-
         # Check if we have temporary compile options (from _compile_with_opts)
-        # This allows this resource to be a child in a composite
         if hasattr(self, "_temp_compile_opts"):
-            # Merge with dependency options
-            opts = self._merge_resource_options(
-                self._temp_compile_opts, dep_opts
-            )
+            # Already contains merged parent + dependencies from _compile_with_opts()
+            # Don't build or merge again - just use it directly
+            opts = self._temp_compile_opts
         else:
-            opts = dep_opts
+            # Not in composite - build dependencies normally
+            opts = self._build_dependency_options()
 
         # Create GitRepoInputs
         inputs = GitRepoInputs(

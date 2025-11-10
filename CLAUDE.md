@@ -10,7 +10,7 @@ uv run pytest tests/
 cd examples/showcase && uv run clockwork apply
 ```
 
-**Platform**: macOS, Linux, Windows | **Tools**: Docker/Apple Containers, standard Unix utilities
+**Platform**: macOS, Linux, Windows | **Runtime**: Docker/Apple Containers
 
 ## Architecture
 
@@ -33,11 +33,39 @@ DockerResource(description="web server", assertions=[HealthcheckAssert(...)])
 
 ## Resources
 
-**Containers**: DockerResource, AppleContainerResource
-**Files**: FileResource
-**Other**: GitRepoResource, BlankResource (composition)
+**Containers**: DockerResource, AppleContainerResource | **Files**: FileResource | **Other**: GitRepoResource, BlankResource (composition)
 
-All support AI completion via `description` field.
+All support AI completion via `description`.
+
+## Connections
+
+First-class components for resource relationships. Handle complex setup beyond simple dependency ordering.
+
+**Types**: DependencyConnection, DatabaseConnection, NetworkConnection, FileConnection, ServiceMeshConnection
+
+All support AI completion via `description`.
+
+```python
+# Simple dependency (auto-creates DependencyConnection)
+api.connect(db)
+
+# Explicit connection type
+api.connect(DatabaseConnection(
+    to_resource=db,
+    schema_file="./schema.sql",
+    connection_string_template="postgresql://{user}:{password}@{host}:{port}/{database}",
+    username="postgres",
+    password="secret",  # pragma: allowlist secret
+    database_name="appdb"
+))
+
+# Chaining
+api.connect(db_conn).connect(cache_conn).connect(network_conn)
+```
+
+**Features**: Auto-configuration (connection strings, env vars), setup resources (networks, volumes), validation, AI completion, type-safe Pydantic
+
+See `examples/connections-showcase/` and `examples/connected-services/`
 
 ## Composites: `.add()` vs `.connect()`
 
@@ -79,25 +107,10 @@ Run: `clockwork assert`
 
 ## Tools
 
-**PydanticAI**: `duckduckgo_search_tool()`, custom functions
-**MCP Servers**: Filesystem (pre-integrated), Postgres, GitHub, etc. (manual setup via `MCPServerStdio`)
+**PydanticAI**: `duckduckgo_search_tool()`, custom functions | **MCP Servers**: Filesystem (pre-integrated), manual setup via `MCPServerStdio`
 
 ```python
 FileResource(description="...", tools=[duckduckgo_search_tool()])
-```
-
-See `examples/showcase/` for examples.
-
-## Connections
-
-Declare dependencies for AI context + deployment ordering:
-
-```python
-db = DockerResource(name="db", description="postgres")
-api = DockerResource(
-    description="API with database",
-    connections=[db]  # AI auto-generates DATABASE_URL
-)
 ```
 
 ## Configuration
@@ -121,11 +134,11 @@ CW_PULUMI_CONFIG_PASSPHRASE=clockwork
 CW_LOG_LEVEL=INFO
 ```
 
-**LM Studio Auto-Loading**: When using `localhost:1234`, Clockwork automatically loads the specified model before resource completion.
+**LM Studio Auto-Loading**: When using `localhost:1234`, Clockwork auto-loads the specified model
 
-**Models**: Must support tool calling. Default: `meta-llama/llama-4-scout:free`. Recommended: `anthropic/claude-haiku-4.5`.
+**Models**: Must support tool calling. Default: `meta-llama/llama-4-scout:free`. Recommended: `anthropic/claude-haiku-4.5`
 
-**State**: Pulumi stores state in `~/.pulumi/`
+**State**: `~/.pulumi/`
 
 ## Project Structure
 
@@ -148,13 +161,12 @@ clockwork/
 
 ## Code Guidelines
 
-- **Style**: Google Python Style Guide
-- **Imports**: stdlib → third-party → local
+- **Style**: Google Python Style Guide | **Imports**: stdlib → third-party → local
 - **Settings**: Use `get_settings()`, never `os.getenv()`
-- **API Docs**: Context7 MCP server first, then WebFetch/WebSearch
-- **Python Packages**: Always use Context7 MCP (`resolve-library-id` + `get-library-docs`) for API reference
+- **API Docs**: Context7 MCP first, then WebFetch/WebSearch
+- **Python Packages**: Context7 MCP (`resolve-library-id` + `get-library-docs`)
 - **Pulumi**: Use native providers (pulumi-docker, pulumi-command)
-- **Pre-commit**: Always run hooks and fix issues before finalizing
+- **Pre-commit**: Always run and fix before finalizing
 
 ## Cleanup
 

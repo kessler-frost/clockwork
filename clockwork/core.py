@@ -14,6 +14,7 @@ import traceback
 from pathlib import Path
 from typing import Any
 
+from .connection_completer import ConnectionCompleter
 from .pulumi_compiler import PulumiCompiler
 from .resource_completer import ResourceCompleter
 from .settings import get_settings
@@ -49,6 +50,9 @@ class ClockworkCore:
         self.resource_completer = ResourceCompleter(
             api_key=api_key, model=model, base_url=base_url
         )
+        self.connection_completer = ConnectionCompleter(
+            api_key=api_key, model=model, base_url=base_url
+        )
         self.pulumi_compiler = PulumiCompiler()
 
         logger.info("ClockworkCore initialized")
@@ -79,10 +83,23 @@ class ClockworkCore:
         # 3. Complete resources (AI stage)
         completed_resources = await self._complete_resources_safe(resources)
 
-        # 4. Get project name from directory
+        # 4. Extract and complete connections
+        connections = self._extract_connections(completed_resources)
+        logger.info(f"Extracted {len(connections)} connections")
+
+        if connections:
+            completed_connections = await self._complete_connections_safe(
+                connections, completed_resources
+            )
+            logger.info(f"Completed {len(completed_connections)} connections")
+
+            # Deploy connection setup resources
+            await self._deploy_connection_setup(completed_connections)
+
+        # 5. Get project name from directory
         project_name = main_file.parent.name
 
-        # 5. Execute Pulumi deploy (or preview if dry run)
+        # 6. Execute Pulumi deploy (or preview if dry run)
         if dry_run:
             logger.info("Dry run - running preview only")
             result = await self.pulumi_compiler.preview(
@@ -149,6 +166,31 @@ class ClockworkCore:
 
         return resources
 
+    def _extract_connections(self, resources: list[Any]) -> list[Any]:
+        """
+        Extract all Connection objects from resources.
+
+        Args:
+            resources: List of Resource objects
+
+        Returns:
+            List of Connection objects extracted from resources
+        """
+        from .connections import Connection
+
+        connections = []
+        for resource in resources:
+            if hasattr(resource, "_connections"):
+                for conn in resource._connections:
+                    if isinstance(conn, Connection):
+                        connections.append(conn)
+                        logger.debug(
+                            f"Found connection: {conn.__class__.__name__} "
+                            f"from {resource.name} to {conn.to_resource.name}"
+                        )
+
+        return connections
+
     async def _complete_resources_safe(self, resources: list[Any]) -> list[Any]:
         """Complete resources with error handling and logging.
 
@@ -171,6 +213,57 @@ class ClockworkCore:
             logger.error(f"Failed to complete resources: {e}")
             logger.error(f"Traceback: {traceback.format_exc()}")
             raise RuntimeError(f"Resource completion failed: {e}") from e
+
+    async def _complete_connections_safe(
+        self, connections: list[Any], resources: list[Any]
+    ) -> list[Any]:
+        """Complete connections with error handling and logging.
+
+        Args:
+            connections: List of partial Connection objects
+            resources: List of all Resource objects (for context)
+
+        Returns:
+            List of completed Connection objects
+
+        Raises:
+            RuntimeError: If connection completion fails
+        """
+        try:
+            completed_connections = await self.connection_completer.complete(
+                connections, resources
+            )
+            logger.info(f"Completed {len(completed_connections)} connections")
+            return completed_connections
+        except Exception as e:
+            logger.error(f"Failed to complete connections: {e}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            raise RuntimeError(f"Connection completion failed: {e}") from e
+
+    async def _deploy_connection_setup(self, connections: list[Any]) -> None:
+        """Deploy setup resources for connections.
+
+        Calls to_pulumi() on each connection to deploy any setup resources
+        (e.g., config files, network bridges).
+
+        Args:
+            connections: List of completed Connection objects
+
+        Side Effects:
+            Stores Pulumi resources in connection._pulumi_resources
+        """
+        for connection in connections:
+            try:
+                pulumi_resources = connection.to_pulumi()
+                if pulumi_resources:
+                    logger.info(
+                        f"Deployed {len(pulumi_resources)} setup resources for "
+                        f"{connection.__class__.__name__}"
+                    )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to deploy setup for {connection.__class__.__name__}: {e}"
+                )
 
     def _flatten_resources(self, resources: list[Any]) -> list[Any]:
         """Flatten resource hierarchy by recursively extracting all children.
@@ -215,23 +308,36 @@ class ClockworkCore:
     ) -> None:
         """Add implicit dependencies from children to parents.
 
-        For each resource with a parent, this adds the parent to the child's
-        _connection_resources list. This ensures parents are deployed before children.
+        For each resource with a parent, this creates a DependencyConnection
+        from child to parent. This ensures parents are deployed before children.
 
         Args:
             resources: Flattened list of Resource objects
 
         Side Effects:
-            Modifies _connection_resources in-place for resources with parents
+            Modifies _connections in-place for resources with parents
         """
+        from .connections import DependencyConnection
+
         for resource in resources:
             parent = resource._parent if hasattr(resource, "_parent") else None
-            # Add parent to connection resources if not already present
-            if (
-                parent is not None
-                and parent not in resource._connection_resources
-            ):
-                resource._connection_resources.append(parent)
+            if parent is None:
+                continue
+
+            # Check if connection to parent already exists
+            has_parent_connection = False
+            if hasattr(resource, "_connections"):
+                for conn in resource._connections:
+                    if conn.to_resource == parent:
+                        has_parent_connection = True
+                        break
+
+            # Add parent connection if not already present
+            if not has_parent_connection:
+                parent_conn = DependencyConnection(
+                    from_resource=resource, to_resource=parent
+                )
+                resource._connections.append(parent_conn)
                 logger.debug(
                     f"Added implicit dependency: {resource.name or resource.__class__.__name__} "
                     f"→ {parent.name or parent.__class__.__name__} (parent)"
@@ -297,34 +403,36 @@ class ClockworkCore:
 
             path.append(resource_name)
 
-            # Use _connection_resources for actual Resource objects
-            for connected in resource._connection_resources:
-                connected_id = id(connected)
-                if connected_id not in visited:
-                    detect_cycle_dfs(connected, path)
-                elif connected_id in rec_stack:
-                    # Cycle detected - format connected name with parent context
-                    connected_name = (
-                        connected.name or connected.__class__.__name__
-                    )
-                    connected_parent = (
-                        connected._parent
-                        if hasattr(connected, "_parent")
-                        else None
-                    )
-                    if connected_parent is not None:
-                        connected_parent_name = (
-                            connected_parent.name
-                            or connected_parent.__class__.__name__
-                        )
+            # Use _connections for dependency tracking
+            if hasattr(resource, "_connections"):
+                for conn in resource._connections:
+                    connected = conn.to_resource
+                    connected_id = id(connected)
+                    if connected_id not in visited:
+                        detect_cycle_dfs(connected, path)
+                    elif connected_id in rec_stack:
+                        # Cycle detected - format connected name with parent context
                         connected_name = (
-                            f"{connected_parent_name}.{connected_name}"
+                            connected.name or connected.__class__.__name__
                         )
+                        connected_parent = (
+                            connected._parent
+                            if hasattr(connected, "_parent")
+                            else None
+                        )
+                        if connected_parent is not None:
+                            connected_parent_name = (
+                                connected_parent.name
+                                or connected_parent.__class__.__name__
+                            )
+                            connected_name = (
+                                f"{connected_parent_name}.{connected_name}"
+                            )
 
-                    cycle_path = [*path, connected_name]
-                    raise ValueError(
-                        f"Dependency cycle detected: {' → '.join(cycle_path)}"
-                    )
+                        cycle_path = [*path, connected_name]
+                        raise ValueError(
+                            f"Dependency cycle detected: {' → '.join(cycle_path)}"
+                        )
 
             rec_stack.remove(id(resource))
             path.pop()
@@ -349,10 +457,12 @@ class ClockworkCore:
             resource_id = id(resource)
             visited_topo.add(resource_id)
 
-            # Visit all dependencies first (use _connection_resources for actual Resource objects)
-            for connected in resource._connection_resources:
-                if id(connected) not in visited_topo:
-                    topological_dfs(connected)
+            # Visit all dependencies first (use _connections)
+            if hasattr(resource, "_connections"):
+                for conn in resource._connections:
+                    connected = conn.to_resource
+                    if id(connected) not in visited_topo:
+                        topological_dfs(connected)
 
             # Add current resource after its dependencies
             result.append(resource)

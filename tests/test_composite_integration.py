@@ -57,15 +57,17 @@ class TestEndToEndWorkflow:
 
         # Verify resolution
         assert len(ordered) == 3  # backend + db + cache
-        assert backend in ordered
-        assert db in ordered
-        assert cache in ordered
+        # Use identity checks to avoid circular reference issues with Connection objects
+        assert any(r is backend for r in ordered)
+        assert any(r is db for r in ordered)
+        assert any(r is cache for r in ordered)
 
         # 4. Verify structure
-        assert db in backend.children.values()
-        assert cache in backend.children.values()
-        assert db.parent == backend
-        assert cache.parent == backend
+        # Use identity checks to avoid circular reference issues with Connection objects
+        assert any(r is db for r in backend.children.values())
+        assert any(r is cache for r in backend.children.values())
+        assert db.parent is backend
+        assert cache.parent is backend
 
     def test_nested_composite_workflow(self):
         """Test complete workflow with nested composites."""
@@ -85,8 +87,8 @@ class TestEndToEndWorkflow:
             name="api",
             image="node:20",
             ports=["3000:3000"],
-            connections=[db],
         )
+        api.connect(db)
 
         app = BlankResource(name="app", description="Application")
         app.add(backend, api)
@@ -129,8 +131,8 @@ class TestEndToEndWorkflow:
             name="api",
             image="node:20",
             ports=["3000:3000"],
-            connections=[db],
         )
+        api.connect(db)
         services = BlankResource(name="services", description="Services")
         services.add(api)
 
@@ -314,8 +316,8 @@ class TestMixedResources:
             name="db",
             image="postgres:15",
             ports=["5432:5432"],
-            connections=[config],
         )
+        db.connect(config)
         backend = BlankResource(name="backend", description="Backend")
         backend.add(db)
 
@@ -325,8 +327,8 @@ class TestMixedResources:
             name="api",
             image="node:20",
             ports=["3000:3000"],
-            connections=[db],
         )
+        api.connect(db)
 
         # Resolve dependencies
         core = ClockworkCore(api_key="test", model="test")
@@ -478,9 +480,8 @@ class TestPostCreationOverrides:
         db.connect(cache)
 
         # Verify connection was added
-        assert cache in db._connection_resources
-        connection_names = {conn["name"] for conn in db.connections}
-        assert "cache" in connection_names
+        assert len(db._connections) == 1
+        assert db._connections[0].to_resource == cache
 
     def test_add_more_children_after_creation(self):
         """Test adding more children to composite after initial creation."""
@@ -542,16 +543,16 @@ class TestComplexScenarios:
             name="auth",
             image="auth:latest",
             ports=["8001:8000"],
-            connections=[postgres, redis],
         )
+        auth_service.connect(postgres).connect(redis)
 
         api_service = DockerResource(
             description="API service",
             name="api",
             image="api:latest",
             ports=["8002:8000"],
-            connections=[postgres, redis, auth_service],
         )
+        api_service.connect(postgres).connect(redis).connect(auth_service)
 
         service_layer = BlankResource(
             name="service-layer", description="Service layer"
@@ -564,8 +565,8 @@ class TestComplexScenarios:
             name="gateway",
             image="nginx:latest",
             ports=["80:80"],
-            connections=[api_service],
         )
+        gateway.connect(api_service)
 
         gateway_layer = BlankResource(
             name="gateway-layer", description="Gateway layer"
@@ -635,8 +636,8 @@ class TestComplexScenarios:
             name="api",
             image="api:latest",
             ports=["3000:3000"],
-            connections=[db],
         )
+        api.connect(db)
 
         app_tier = BlankResource(
             name="app-tier", description="Application tier"
@@ -649,8 +650,8 @@ class TestComplexScenarios:
             name="web",
             image="nginx:latest",
             ports=["80:80"],
-            connections=[api],
         )
+        web.connect(api)
 
         frontend_tier = BlankResource(
             name="frontend-tier", description="Frontend tier"
@@ -694,6 +695,8 @@ class TestErrorHandling:
 
     def test_cycle_detection_prevents_deployment(self):
         """Test that cycle detection prevents deployment."""
+        from clockwork.connections import DependencyConnection
+
         # Create cycle
         db = DockerResource(
             description="Database",
@@ -707,12 +710,13 @@ class TestErrorHandling:
             name="api",
             image="node:20",
             ports=["3000:3000"],
-            connections=[db],
         )
+        api.connect(db)
 
         # Create cycle by making db depend on api (which already depends on db)
-        db._connection_resources.append(api)
-        db.connections.append(api.get_connection_context())
+        db._connections.append(
+            DependencyConnection(from_resource=db, to_resource=api)
+        )
 
         backend = BlankResource(name="backend", description="Backend")
         backend.add(db, api)

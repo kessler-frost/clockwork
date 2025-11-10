@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from pydantic import Field, model_validator
+from pydantic import Field
 
 from .base import Resource
 
@@ -21,7 +21,7 @@ class FileResource(Resource):
         )
     """
 
-    description: str
+    description: str | None = None
     name: str | None = Field(
         None,
         description="Filename with extension",
@@ -45,13 +45,6 @@ class FileResource(Resource):
         None,
         description="Full file path - overrides directory + name if provided",
     )
-
-    @model_validator(mode="after")
-    def validate_description(self):
-        """Description is always required."""
-        if not self.description:
-            raise ValueError("FileResource requires 'description'")
-        return self
 
     def needs_completion(self) -> bool:
         """Returns True if any field needs AI completion."""
@@ -126,18 +119,14 @@ class FileResource(Resource):
         # Ensure mode is set (should be set after AI completion)
         mode = self.mode or "644"
 
-        # Build resource options for dependencies
-        dep_opts = self._build_dependency_options()
-
         # Check if we have temporary compile options (from _compile_with_opts)
-        # This allows this resource to be a child in a composite
         if hasattr(self, "_temp_compile_opts"):
-            # Merge with dependency options
-            opts = self._merge_resource_options(
-                self._temp_compile_opts, dep_opts
-            )
+            # Already contains merged parent + dependencies from _compile_with_opts()
+            # Don't build or merge again - just use it directly
+            opts = self._temp_compile_opts
         else:
-            opts = dep_opts
+            # Not in composite - build dependencies normally
+            opts = self._build_dependency_options()
 
         # Create File resource using dynamic provider
         file_resource = File(

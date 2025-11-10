@@ -178,7 +178,7 @@ class TestImplicitParentChildDependencies:
         core._add_implicit_parent_child_dependencies(flattened)
 
         # Child should now depend on parent
-        assert backend in db._connection_resources
+        assert any(conn.to_resource == backend for conn in db._connections)
 
     def test_implicit_dependencies_nested_composites(self):
         """Test implicit dependencies in nested composites."""
@@ -198,10 +198,10 @@ class TestImplicitParentChildDependencies:
         core._add_implicit_parent_child_dependencies(flattened)
 
         # backend should depend on app (its parent)
-        assert app in backend._connection_resources
+        assert any(conn.to_resource == app for conn in backend._connections)
 
         # db should depend on backend (its parent)
-        assert backend in db._connection_resources
+        assert any(conn.to_resource == backend for conn in db._connections)
 
     def test_implicit_dependencies_multiple_children(self):
         """Test implicit dependencies with multiple children."""
@@ -223,9 +223,9 @@ class TestImplicitParentChildDependencies:
         core._add_implicit_parent_child_dependencies(flattened)
 
         # All children should depend on parent
-        assert backend in db._connection_resources
-        assert backend in cache._connection_resources
-        assert backend in api._connection_resources
+        assert any(conn.to_resource == backend for conn in db._connections)
+        assert any(conn.to_resource == backend for conn in cache._connections)
+        assert any(conn.to_resource == backend for conn in api._connections)
 
 
 class TestCrossCompositConnections:
@@ -313,15 +313,13 @@ class TestCrossCompositConnections:
         backend.add(db)
 
         # Composite B (API connects to db)
-        api = DockerResource(
-            description="API", name="api", image="node:20", connections=[db]
-        )
+        api = DockerResource(description="API", name="api", image="node:20")
+        api.connect(db)
         services = BlankResource(name="services", description="Services")
         services.add(api)
 
         # Create cycle: db → api (this would create a cycle)
-        db._connection_resources.append(api)
-        db.connections.append(api.get_connection_context())
+        db.connect(api)
 
         core = ClockworkCore(api_key="test", model="test")
 
@@ -339,17 +337,15 @@ class TestCycleDetectionComposites:
         db = DockerResource(
             description="Database", name="db", image="postgres:15"
         )
-        api = DockerResource(
-            description="API", name="api", image="node:20", connections=[db]
-        )
+        api = DockerResource(description="API", name="api", image="node:20")
+        api.connect(db)
 
         # Add to composite first
         backend = BlankResource(name="backend", description="Backend")
         backend.add(db, api)
 
         # Create cycle by adding opposite direction connection
-        db._connection_resources.append(api)
-        # Don't add to db.connections to avoid recursion in get_connection_context
+        db.connect(api)
 
         core = ClockworkCore(api_key="test", model="test")
 
@@ -366,9 +362,8 @@ class TestCycleDetectionComposites:
         inner.add(db)
 
         # Middle composite with connection to db
-        api = DockerResource(
-            description="API", name="api", image="node:20", connections=[db]
-        )
+        api = DockerResource(description="API", name="api", image="node:20")
+        api.connect(db)
         middle = BlankResource(name="middle", description="Middle")
         middle.add(api)
 
@@ -377,8 +372,7 @@ class TestCycleDetectionComposites:
         outer.add(inner, middle)
 
         # Create cycle by adding opposite direction (db -> api)
-        # Only add to _connection_resources to avoid recursion
-        db._connection_resources.append(api)
+        db.connect(api)
 
         core = ClockworkCore(api_key="test", model="test")
 

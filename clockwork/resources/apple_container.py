@@ -2,7 +2,6 @@
 
 from typing import Any
 
-import pulumi
 from pydantic import Field
 
 from .base import Resource
@@ -40,7 +39,7 @@ class AppleContainerResource(Resource):
         # AI generates: name="nginx-server", image="nginx:alpine", volumes, env_vars
     """
 
-    description: str
+    description: str | None = None
     name: str | None = Field(
         None,
         description="Container name - must be unique",
@@ -130,18 +129,14 @@ class AppleContainerResource(Resource):
             must_run=self.must_run,
         )
 
-        # Build resource options for dependencies
-        dep_opts = self._build_dependency_options()
-
         # Check if we have temporary compile options (from _compile_with_opts)
-        # This allows this resource to be a child in a composite
         if hasattr(self, "_temp_compile_opts"):
-            # Merge with dependency options
-            opts = self._merge_resource_options(
-                self._temp_compile_opts, dep_opts
-            )
+            # Already contains merged parent + dependencies from _compile_with_opts()
+            # Don't build or merge again - just use it directly
+            opts = self._temp_compile_opts
         else:
-            opts = dep_opts if dep_opts else pulumi.ResourceOptions()
+            # Not in composite - build dependencies normally
+            opts = self._build_dependency_options()
 
         # Create Pulumi resource
         container_resource = AppleContainer(

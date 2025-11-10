@@ -7,14 +7,14 @@ from typing import TYPE_CHECKING, Any, Optional, Self
 import pulumi
 from pydantic import (
     BaseModel,
-    Field,
     PrivateAttr,
-    field_validator,
-    model_validator,
 )
 
 if TYPE_CHECKING:
     from clockwork.assertions.base import BaseAssertion
+    from clockwork.connections.base import Connection
+
+logger = logging.getLogger(__name__)
 
 
 class ChildrenCollection(Mapping):
@@ -134,17 +134,12 @@ class Resource(BaseModel):
     4. to_pulumi() method converts completed resource to Pulumi resources
 
     Resource Connections:
-    Resources can declare dependencies on other resources via the connections field.
+    Resources can declare dependencies on other resources via the .connect() method.
     This enables:
     - AI-powered completion with context from connected resources
     - Automatic dependency ordering for deployment
     - Cross-resource configuration sharing
-
-    Connection Storage Pattern:
-    - Users pass Resource objects in the connections parameter
-    - Pydantic stores connection context dicts in the connections field (serializable)
-    - Original Resource objects are preserved in _connection_resources (for graph traversal)
-    - This dual storage enables both AI completion and dependency resolution
+    - First-class Connection objects with their own setup resources
 
     Composite Resources:
     Resources can have parent-child relationships to create hierarchical structures:
@@ -160,8 +155,7 @@ class Resource(BaseModel):
         assertions: Optional list of type-safe assertion objects for validation
         tools: Optional list of PydanticAI tools (duckduckgo_search_tool(), MCPServerStdio, etc.)
                for AI-powered completion operations
-        connections: List of connection context dicts (auto-converted from Resource objects)
-        _connection_resources: Private list of actual Resource objects for dependency graphs
+        _connections: Private list of Connection objects (for dependency graphs)
         _children: Private list of child resources (for composite resources)
         _parent: Private reference to parent resource (for hierarchy traversal)
     """
@@ -169,11 +163,8 @@ class Resource(BaseModel):
     name: str | None = None
     description: str | None = None
     assertions: list["BaseAssertion"] | None = None
-    connections: list[dict[str, Any]] = Field(
-        default_factory=list,
-        description="Connection context dicts (Resource objects auto-converted via validator)",
-    )
-    _connection_resources: list["Resource"] = PrivateAttr(default_factory=list)
+
+    _connections: list["Connection"] = PrivateAttr(default_factory=list)
     _children: list["Resource"] = PrivateAttr(default_factory=list)
     _parent: Optional["Resource"] = PrivateAttr(default=None)
 
@@ -181,88 +172,6 @@ class Resource(BaseModel):
     tools: list[Any] | None = (
         None  # PydanticAI tools (duckduckgo_search_tool(), MCPServerStdio, etc.)
     )
-
-    def __init__(self, **data):
-        """Initialize Resource and capture connection Resource objects.
-
-        This custom __init__ is necessary to preserve Resource objects before Pydantic
-        processes them. Pydantic validation can cause Resource objects to lose their
-        private attributes, so we extract them early.
-        """
-        # Extract Resource objects before Pydantic processes the connections field
-        connection_resources = []
-        if data.get("connections"):
-            for item in data["connections"]:
-                if hasattr(item, "get_connection_context"):
-                    connection_resources.append(item)
-
-        # Initialize Pydantic model (triggers validators)
-        super().__init__(**data)
-
-        # Store captured Resource objects in private attribute
-        self._connection_resources = connection_resources
-
-    @field_validator("connections", mode="before")
-    @classmethod
-    def convert_resources_before_validation(cls, value):
-        """Convert Resource objects to dicts before field validation.
-
-        This runs before type validation, allowing users to pass Resource objects
-        while the field type remains List[Dict] (avoiding circular schema references).
-
-        Args:
-            value: List that may contain Resource objects or dicts
-
-        Returns:
-            List of dicts only
-        """
-        if not value:
-            return []
-
-        result = []
-        for item in value:
-            if hasattr(item, "get_connection_context"):
-                # Convert Resource to dict
-                result.append(item.get_connection_context())
-            else:
-                # Already a dict
-                result.append(item)
-        return result
-
-    @model_validator(mode="after")
-    def convert_connections_to_dicts(self) -> "Resource":
-        """Convert Resource objects in connections field to serializable dicts.
-
-        This validator runs after __init__ and converts any remaining Resource objects
-        in the connections field to context dictionaries. This ensures the connections
-        field only contains serializable data.
-
-        Note: The original Resource objects are already stored in _connection_resources
-        by __init__, so this validator only handles the public connections field.
-
-        Returns:
-            Self with connections converted to context dicts
-        """
-        connection_contexts = []
-
-        for item in self.connections:
-            if hasattr(item, "get_connection_context"):
-                # Convert Resource to context dict
-                connection_contexts.append(item.get_connection_context())
-            elif isinstance(item, dict):
-                # Already a context dict
-                connection_contexts.append(item)
-            else:
-                import logging
-
-                logging.warning(
-                    f"Unknown connection type: {type(item)}, skipping"
-                )
-
-        # Replace connections with context dicts only
-        self.connections = connection_contexts
-
-        return self
 
     def needs_completion(self) -> bool:
         """Check if this resource needs AI completion for any fields.
@@ -443,67 +352,39 @@ class Resource(BaseModel):
         """
         return self._parent
 
-    def connect(self, *resources: "Resource") -> Self:
-        """Add dependency connections to this resource (alternative to constructor param).
-
-        This method provides a chainable alternative to passing connections in the constructor.
-        Connected resources provide context for AI completion and establish deployment ordering.
+    def connect(self, target: "Resource | Connection") -> Self:
+        """Connect this resource to another resource or establish a connection.
 
         Args:
-            *resources: One or more Resource objects to connect as dependencies
+            target: Either a Resource (auto-creates DependencyConnection) or
+                    a Connection instance (uses it directly)
 
         Returns:
             Self for method chaining
 
-        Raises:
-            TypeError: If any argument is not a Resource instance
+        Examples:
+            # Simple dependency
+            api.connect(db)
 
-        Example:
-            # Constructor style
-            db = DockerResource(name="postgres", image="postgres:15")
-            api = DockerResource(
-                name="api",
-                image="node:20",
-                connections=[db]
-            )
+            # Explicit connection type
+            api.connect(DatabaseConnection(to_resource=db, schema_file="..."))
 
-            # Chainable style (equivalent)
-            db = DockerResource(name="postgres", image="postgres:15")
-            api = DockerResource(name="api", image="node:20").connect(db)
-
-            # Multiple connections
-            db = DockerResource(name="postgres", image="postgres:15")
-            cache = DockerResource(name="redis", image="redis:7")
-            api = DockerResource(name="api", image="node:20").connect(db, cache)
-
-            # Combined with .add()
-            project = Resource(name="microservices")
-            project.add(
-                DockerResource(name="postgres", image="postgres:15"),
-                DockerResource(name="redis", image="redis:7"),
-                DockerResource(name="api", image="node:20").connect(db, cache)
-            )
+            # Chaining
+            api.connect(db).connect(redis).connect(queue)
         """
-        for resource in resources:
-            if not isinstance(resource, Resource):
-                raise TypeError(
-                    f"Can only connect Resource objects, got {type(resource).__name__}"
-                )
+        from clockwork.connections import Connection, DependencyConnection
 
-            # Check for duplicates in _connection_resources
-            if resource in self._connection_resources:
-                logging.warning(
-                    f"Resource '{resource.name}' is already connected to '{self.name}', skipping"
-                )
-                continue
+        if isinstance(target, Connection):
+            connection = target
+            connection.from_resource = self
+        else:
+            # Auto-create DependencyConnection
+            connection = DependencyConnection(
+                from_resource=self, to_resource=target
+            )
 
-            # Add to private list (for graph traversal)
-            self._connection_resources.append(resource)
-
-            # Add context to public connections field (for AI and serialization)
-            context = resource.get_connection_context()
-            if context not in self.connections:
-                self.connections.append(context)
+        self._connections.append(connection)
+        logger.debug(f"{self.name} connected to {connection.to_resource.name}")
 
         return self
 
@@ -538,11 +419,13 @@ class Resource(BaseModel):
         return descendants
 
     def _build_dependency_options(self) -> pulumi.ResourceOptions | None:
-        """Build Pulumi ResourceOptions from connection dependencies.
+        """Build Pulumi ResourceOptions from connections.
 
-        Iterates through connected resources and creates a ResourceOptions object
-        with depends_on set to the Pulumi resources of connected resources. This
-        ensures proper deployment ordering.
+        Creates ResourceOptions with depends_on set to:
+        1. The to_resource Pulumi resources from each connection
+        2. The connection's setup Pulumi resources (if any)
+
+        This ensures proper deployment ordering.
 
         Returns:
             pulumi.ResourceOptions with depends_on set if connections exist,
@@ -552,20 +435,29 @@ class Resource(BaseModel):
             db = DockerResource(name="postgres", image="postgres:15")
             # ... db.to_pulumi() creates db._pulumi_resource ...
 
-            api = DockerResource(name="api", connections=[db])
+            api = DockerResource(name="api")
+            api.connect(db)
             opts = api._build_dependency_options()
             # opts.depends_on contains db's Pulumi resource
         """
-        if not self._connection_resources:
+        if not self._connections:
             return None
 
         depends_on = []
-        for conn in self._connection_resources:
+        for conn in self._connections:
+            # Add dependency on to_resource
             if (
-                hasattr(conn, "_pulumi_resource")
-                and conn._pulumi_resource is not None
+                hasattr(conn.to_resource, "_pulumi_resource")
+                and conn.to_resource._pulumi_resource is not None
             ):
-                depends_on.append(conn._pulumi_resource)
+                depends_on.append(conn.to_resource._pulumi_resource)
+
+            # Add dependency on connection's setup resources
+            if (
+                hasattr(conn, "_pulumi_resources")
+                and conn._pulumi_resources is not None
+            ):
+                depends_on.extend(conn._pulumi_resources)
 
         if depends_on:
             return pulumi.ResourceOptions(depends_on=depends_on)

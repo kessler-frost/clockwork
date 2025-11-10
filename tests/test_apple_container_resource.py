@@ -3,7 +3,6 @@
 from unittest.mock import Mock, patch
 
 import pytest
-from pydantic import ValidationError
 
 from clockwork.resources import AppleContainerResource
 
@@ -155,13 +154,6 @@ def test_apple_container_resource_must_run_false():
 
     # Verify the must_run flag is set correctly
     assert container.must_run is False
-
-
-def test_pydantic_validation():
-    """Test Pydantic validation enforces required description field."""
-    with pytest.raises(ValidationError):
-        # Missing required 'description' field
-        AppleContainerResource(name="test")
 
 
 def test_get_connection_context():

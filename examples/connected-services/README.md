@@ -1,14 +1,17 @@
 # Connected Services Example
 
-Full-stack application demonstrating Clockwork's primitive connection system for intelligent dependency management and AI-powered configuration.
+Full-stack application demonstrating Clockwork's `DatabaseConnection` feature for automatic database configuration and intelligent dependency management.
 
 ## What it demonstrates
 
-The connection system enables three powerful capabilities:
+DatabaseConnection provides powerful capabilities for database integration:
 
-1. **Dependency-aware deployment ordering** - Resources with connections deploy after their dependencies
-2. **AI-powered configuration** - AI uses connection context to generate appropriate environment variables and network settings
-3. **Cross-resource context sharing** - Connected resources share configuration data automatically
+1. **Automatic connection string generation** - No manual URL construction required
+2. **Environment variable injection** - Automatically injects DATABASE_URL into your services
+3. **Database readiness checking** - Waits for database to be healthy before deploying dependent services
+4. **Schema file execution** - Optional automatic schema setup on deployment
+5. **Migrations support** - Optional automatic migrations from a directory
+6. **Type-safe configuration** - Pydantic validation for all connection parameters
 
 ## Architecture
 
@@ -26,82 +29,99 @@ Layer 2 (Connected):
 
 ## How it works
 
-### 1. Dependency Declaration
+### 1. Database Connection with DatabaseConnection
 
-Resources declare connections to other resources:
+Instead of manually constructing connection strings, use `DatabaseConnection`:
 
 ```python
-# Independent resources (deploy first)
+# Independent database resource (deploy first)
 postgres = DockerResource(
     description="PostgreSQL database",
     name="postgres-db",
     image="postgres:15-alpine",
     ports=["5432:5432"],
-    env_vars={...}
+    env_vars={
+        "POSTGRES_DB": "appdb",
+        "POSTGRES_USER": "admin",
+        "POSTGRES_PASSWORD": "secret123"  # pragma: allowlist secret
+    }
 )
 
-redis = DockerResource(
-    description="Redis cache",
-    name="redis-cache",
-    image="redis:7-alpine",
-    ports=["6379:6379"]
-)
-
-# Connected resource (deploys after dependencies)
+# API server resource
 api = DockerResource(
-    description="FastAPI backend server that needs database and cache",
-    ports=["8000:8000"],
-    connections=[postgres, redis]  # Declares dependencies
+    description="FastAPI backend server",
+    name="api-server",
+    ports=["8000:80"]
+)
+
+# Connect using DatabaseConnection for automatic configuration
+api.connect(
+    DatabaseConnection(
+        to_resource=postgres,
+        connection_string_template="postgresql://{user}:{password}@{host}:{port}/{database}",
+        username="admin",
+        password="secret123",  # pragma: allowlist secret
+        database_name="appdb",
+        env_var_name="DATABASE_URL",
+        wait_for_ready=True,
+        timeout=30
+    )
 )
 ```
 
-### 2. AI-Powered Configuration
+### 2. Automatic Configuration
 
-When completing the `api` resource, the AI receives connection context:
+DatabaseConnection automatically:
 
-```python
-# AI sees this context from postgres:
-{
-    "name": "postgres-db",
-    "type": "DockerResource",
-    "image": "postgres:15-alpine",
-    "ports": ["5432:5432"],
-    "env_vars": {"POSTGRES_DB": "appdb", "POSTGRES_USER": "admin", ...}
-}
+1. **Extracts connection info** from the postgres resource (host=postgres-db, port=5432)
+2. **Builds connection string**: `postgresql://admin:secret123@postgres-db:5432/appdb` <!-- pragma: allowlist secret -->
+3. **Injects into environment**: Adds `DATABASE_URL` to api's env_vars
+4. **Waits for readiness**: Runs `pg_isready` before deploying api
+5. **Manages dependencies**: Ensures postgres deploys before api
 
-# AI sees this context from redis:
-{
-    "name": "redis-cache",
-    "type": "DockerResource",
-    "image": "redis:7-alpine",
-    "ports": ["6379:6379"]
-}
+Result - api container gets this environment variable automatically:
+```bash
+DATABASE_URL=postgresql://admin:secret123@postgres-db:5432/appdb  # pragma: allowlist secret
 ```
 
-Based on this context, the AI should intelligently generate:
+### 3. Optional Schema and Migrations
+
+DatabaseConnection supports schema files and migrations:
 
 ```python
-# Expected AI completion for api-server:
-{
-    "name": "api-server",
-    "image": "appropriate-fastapi-image",
-    "env_vars": {
-        "DATABASE_URL": "postgresql://admin:secret123@postgres-db:5432/appdb",
-        "REDIS_URL": "redis://redis-cache:6379"
-    },
-    "networks": ["app_network"]  # Shared network for inter-container communication
-}
+api.connect(
+    DatabaseConnection(
+        to_resource=postgres,
+        connection_string_template="postgresql://{user}:{password}@{host}:{port}/{database}",
+        username="admin",
+        password="secret123",  # pragma: allowlist secret
+        database_name="appdb",
+        # Execute schema file on deployment
+        schema_file="schema.sql",
+        # Run migrations from directory
+        migrations_dir="migrations/"
+    )
+)
 ```
 
-### 3. Deployment Order
+This will:
+1. Wait for postgres to be ready (pg_isready)
+2. Execute `schema.sql` using psql
+3. Execute all `.sql` files in `migrations/` directory (sorted order)
+4. Then deploy the api service with DATABASE_URL injected
+
+### 4. Deployment Order
 
 Clockwork automatically determines deployment order based on connections:
 
 ```
 1. postgres-db      (no dependencies - deploys first)
 2. redis-cache      (no dependencies - deploys first)
-3. api-server       (depends on postgres + redis - deploys after)
-4. worker-service   (depends on redis - deploys after)
+3. Wait for postgres readiness (pg_isready check)
+4. Execute schema.sql (if provided)
+5. Execute migrations (if provided)
+6. api-server       (depends on postgres via DatabaseConnection + redis - deploys after)
+7. worker-service   (depends on redis - deploys after)
 ```
 
 ## Prerequisites
@@ -134,82 +154,166 @@ docker inspect api-server | jq '.[0].Config.Env'
 clockwork destroy
 ```
 
-## Expected AI behavior
+## DatabaseConnection vs Simple Connection
 
-### For api-server (connected to postgres + redis):
+This example shows both approaches:
 
-**Input to AI:**
-- Description: "FastAPI backend server that provides REST API endpoints. Needs database connection for user data and Redis for caching API responses."
-- Connection context from postgres-db (name, image, ports, env_vars)
-- Connection context from redis-cache (name, image, ports)
+### DatabaseConnection (for databases)
+```python
+# Full-featured database connection with automatic configuration
+api.connect(
+    DatabaseConnection(
+        to_resource=postgres,
+        connection_string_template="postgresql://{user}:{password}@{host}:{port}/{database}",
+        username="admin",
+        password="secret123",  # pragma: allowlist secret
+        database_name="appdb",
+        env_var_name="DATABASE_URL",
+        wait_for_ready=True,
+        schema_file="schema.sql",  # Optional
+        migrations_dir="migrations/"  # Optional
+    )
+)
+```
 
-**Expected AI completion:**
-- Generate appropriate image (e.g., `python:3.11-slim`, `tiangolo/uvicorn-gunicorn-fastapi`)
-- Generate DATABASE_URL environment variable using postgres connection info
-- Generate REDIS_URL environment variable using redis connection info
-- Place container on shared network for inter-container communication
-- Possibly generate additional env vars like `API_PORT=8000`, `ENV=development`
+**Benefits:**
+- Automatic connection string generation
+- DATABASE_URL injection
+- Database readiness checking
+- Schema/migration execution
+- Type-safe configuration
 
-### For worker-service (connected to redis):
+### Simple Connection (for other services)
+```python
+# Simple dependency connection (AI may generate config)
+api.connect(redis)
+```
 
-**Input to AI:**
-- Description: "Background worker service that processes async jobs from Redis queue. Monitors Redis for new tasks and executes them."
-- Connection context from redis-cache (name, image, ports)
-
-**Expected AI completion:**
-- Generate appropriate image (e.g., `python:3.11-slim`)
-- Generate REDIS_URL environment variable using redis connection info
-- Place container on same network as redis
-- No exposed ports (worker doesn't serve HTTP)
+**Benefits:**
+- Simpler syntax for non-database connections
+- AI can still generate REDIS_URL based on context
+- Dependency ordering still enforced
 
 ## Verification
 
 After running `clockwork apply`, check:
 
-1. **Deployment order** - postgres and redis start before api and worker
-2. **Environment variables** - API and worker have correct connection URLs
-3. **Network connectivity** - All containers on the same Docker network
-4. **Assertions pass** - All health checks and port accessibility tests succeed
+1. **DATABASE_URL injection** - Verify the environment variable was automatically added
+2. **Database readiness** - Confirm pg_isready check ran successfully
+3. **Deployment order** - postgres and redis start before api and worker
+4. **Network connectivity** - All containers on the same Docker network
+5. **Assertions pass** - All health checks and port accessibility tests succeed
 
 ```bash
+# Check DATABASE_URL was injected
+docker exec api-server env | grep DATABASE_URL
+# Expected output: DATABASE_URL=postgresql://admin:secret123@postgres-db:5432/appdb  # pragma: allowlist secret
+
+# Check all environment variables
+docker exec api-server env | grep -E "(DATABASE|REDIS)"
+
 # Check deployment order from docker logs
 docker ps --format "table {{.Names}}\t{{.CreatedAt}}"
-
-# Check environment variables
-docker exec api-server env | grep -E "(DATABASE|REDIS)"
 
 # Check network connectivity
 docker network inspect app_network
 
 # Run assertions
 clockwork assert
+
+# Test database connection (requires psql in api container)
+docker exec api-server env | grep DATABASE_URL | cut -d= -f2 | xargs -I {} psql {} -c "SELECT version();"
 ```
 
 ## Key benefits demonstrated
 
-1. **Declarative dependencies** - Just specify connections, system handles the rest
-2. **Intelligent AI completion** - AI understands service relationships and generates appropriate config
-3. **Zero boilerplate** - No manual network creation or URL construction needed
-4. **Type-safe connections** - Pydantic validation ensures connections are valid Resource objects
-5. **Deployment safety** - Dependencies always deploy before dependent services
+1. **Zero boilerplate** - No manual connection string construction or environment variable management
+2. **Automatic configuration** - DatabaseConnection handles URL generation and injection
+3. **Database readiness** - Built-in pg_isready checks ensure database is healthy
+4. **Schema/migration support** - Optional automatic schema setup and migrations
+5. **Type-safe connections** - Pydantic validation ensures all parameters are correct
+6. **Declarative dependencies** - Deployment order automatically determined
+7. **Hybrid approach** - Use DatabaseConnection for databases, simple connections for other services
 
 ## Extending the example
 
-Try adding more connected services:
+### Add schema file support
 
+Create a `schema.sql` file:
+```sql
+CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(255) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id),
+    token VARCHAR(255) NOT NULL,
+    expires_at TIMESTAMP NOT NULL
+);
+```
+
+Update the connection:
 ```python
-# Add a monitoring service connected to all services
-monitor = DockerResource(
-    description="Prometheus monitoring for all services",
-    ports=["9090:9090"],
-    connections=[postgres, redis, api, worker]  # AI can generate comprehensive config
+api.connect(
+    DatabaseConnection(
+        to_resource=postgres,
+        connection_string_template="postgresql://{user}:{password}@{host}:{port}/{database}",
+        username="admin",
+        password="secret123",  # pragma: allowlist secret
+        database_name="appdb",
+        schema_file="schema.sql"  # Now will execute on deployment
+    )
+)
+```
+
+### Add migrations support
+
+Create a `migrations/` directory with versioned files:
+```
+migrations/
+├── 001_add_users_table.sql
+├── 002_add_sessions_table.sql
+└── 003_add_indexes.sql
+```
+
+Update the connection:
+```python
+api.connect(
+    DatabaseConnection(
+        to_resource=postgres,
+        connection_string_template="postgresql://{user}:{password}@{host}:{port}/{database}",
+        username="admin",
+        password="secret123",  # pragma: allowlist secret
+        database_name="appdb",
+        schema_file="schema.sql",
+        migrations_dir="migrations/"  # Executes all .sql files in sorted order
+    )
+)
+```
+
+### Add more database connections
+
+Connect multiple services to the same database:
+```python
+admin_panel = DockerResource(
+    description="Admin panel",
+    name="admin-panel",
+    ports=["8001:80"]
 )
 
-# Add a frontend connected to the API
-frontend = DockerResource(
-    description="React frontend served by Nginx, makes API calls to backend",
-    ports=["80:80"],
-    connections=[api]  # AI generates API_URL env var
+admin_panel.connect(
+    DatabaseConnection(
+        to_resource=postgres,
+        connection_string_template="postgresql://{user}:{password}@{host}:{port}/{database}",
+        username="admin",
+        password="secret123",  # pragma: allowlist secret
+        database_name="appdb",
+        env_var_name="DATABASE_URL"  # Same database, different service
+    )
 )
 ```
 
@@ -240,16 +344,31 @@ clockwork destroy
 
 ## Troubleshooting
 
-**Issue**: Containers can't communicate with each other
-- Check if all containers are on the same network: `docker network inspect app_network`
-- Verify container names match what's in environment variables
+**Issue**: DATABASE_URL not injected into container
+- Verify DatabaseConnection was created before `clockwork apply`
+- Check that `to_resource` points to the correct database resource
+- Confirm connection_string_template has correct placeholders
 
-**Issue**: API or worker can't connect to database/redis
-- Check environment variables: `docker exec api-server env`
+**Issue**: Database readiness check fails
+- Ensure postgres container is healthy: `docker ps`
+- Verify pg_isready is available in the system (requires postgresql-client)
+- Check timeout value is sufficient for database startup
+- Increase timeout: `wait_for_ready=True, timeout=60`
+
+**Issue**: Schema file not executed
+- Verify schema_file path is correct and file exists
+- Check psql is available in the system
+- Look for errors in Pulumi output during deployment
+- Ensure connection string has correct permissions
+
+**Issue**: Migrations not running
+- Verify migrations_dir exists and contains .sql files
+- Check file naming follows convention (001_*.sql, 002_*.sql, etc.)
+- Ensure migrations have correct SQL syntax
+- Review Pulumi logs for migration errors
+
+**Issue**: API or worker can't connect to database
+- Check DATABASE_URL value: `docker exec api-server env | grep DATABASE_URL`
 - Verify postgres and redis are running: `docker ps`
 - Check connection URLs use container names, not localhost
-
-**Issue**: Deployment order seems wrong
-- Run `clockwork apply` with verbose logging to see order
-- Check for circular dependencies in connections
-- Verify connections are specified correctly in resource definitions
+- Confirm all containers are on the same network: `docker network inspect app_network`

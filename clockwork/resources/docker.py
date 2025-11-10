@@ -48,7 +48,7 @@ class DockerResource(Resource):
         # AI generates: name="nginx-server", image="nginx:alpine", volumes, env_vars
     """
 
-    description: str
+    description: str | None = None
     name: str | None = Field(
         None,
         description="Container name - must be unique",
@@ -190,18 +190,14 @@ class DockerResource(Resource):
                     docker.ContainerNetworksAdvancedArgs(name=network_name)
                 )
 
-        # Build resource options for dependencies
-        dep_opts = self._build_dependency_options()
-
         # Check if we have temporary compile options (from _compile_with_opts)
-        # This allows this resource to be a child in a composite
         if hasattr(self, "_temp_compile_opts"):
-            # Merge with dependency options
-            opts = self._merge_resource_options(
-                self._temp_compile_opts, dep_opts
-            )
+            # Already contains merged parent + dependencies from _compile_with_opts()
+            # Don't build or merge again - just use it directly
+            opts = self._temp_compile_opts
         else:
-            opts = dep_opts
+            # Not in composite - build dependencies normally
+            opts = self._build_dependency_options()
 
         # Create Pulumi Docker Container resource
         container = docker.Container(

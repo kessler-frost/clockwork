@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 import pytest
 
+from clockwork.connections import DependencyConnection
 from clockwork.core import ClockworkCore
 from clockwork.resources import DockerResource, FileResource
 
@@ -21,7 +22,7 @@ class TestCycleDetection:
     def test_simple_cycle(self):
         """Test detection of simple A → B → A cycle."""
         # To create a true cycle, we need both resources to reference each other
-        # We create them temporarily, then manually add to _connection_resources
+        # We create them temporarily, then manually add to _connections
 
         a = DockerResource(
             description="Service A",
@@ -34,13 +35,11 @@ class TestCycleDetection:
             name="b",
             image="alpine:latest",
             ports=["8002:80"],
-            connections=[a],
         )
 
-        # Now manually create the cycle by adding b to a's _connection_resources
-        # This simulates a scenario where both point to each other
-        a._connection_resources.append(b)
-        a.connections.append(b.get_connection_context())
+        # Create connections to form a cycle
+        b.connect(a)  # B → A
+        a.connect(b)  # A → B (creates cycle)
 
         core = ClockworkCore(api_key="test", model="test")
 
@@ -50,7 +49,6 @@ class TestCycleDetection:
     def test_complex_cycle(self):
         """Test detection of complex A → B → C → A cycle."""
         # Create cycle: A → B → C → A
-        # Build the chain first: A → B → C
         a = DockerResource(
             description="Service A",
             name="a",
@@ -62,19 +60,18 @@ class TestCycleDetection:
             name="b",
             image="alpine:latest",
             ports=["8002:80"],
-            connections=[a],
         )
         c = DockerResource(
             description="Service C",
             name="c",
             image="alpine:latest",
             ports=["8003:80"],
-            connections=[b],
         )
 
-        # Now close the cycle by making A point to C (completing A→B→C→A)
-        a._connection_resources.append(c)
-        a.connections.append(c.get_connection_context())
+        # Create cycle: B → A, C → B, A → C
+        b.connect(a)
+        c.connect(b)
+        a.connect(c)  # Completes the cycle
 
         core = ClockworkCore(api_key="test", model="test")
 
@@ -92,8 +89,7 @@ class TestCycleDetection:
         )
 
         # Make it reference itself
-        a._connection_resources.append(a)
-        a.connections.append(a.get_connection_context())
+        a.connect(a)
 
         core = ClockworkCore(api_key="test", model="test")
 
@@ -113,15 +109,17 @@ class TestCycleDetection:
             name="b",
             image="alpine:latest",
             ports=["8002:80"],
-            connections=[c],
         )
         a = DockerResource(
             description="Service A",
             name="a",
             image="alpine:latest",
             ports=["8001:80"],
-            connections=[b],
         )
+
+        # Create connections: A → B → C
+        b.connect(c)
+        a.connect(b)
 
         core = ClockworkCore(api_key="test", model="test")
 
@@ -150,22 +148,24 @@ class TestCycleDetection:
             name="b",
             image="alpine:latest",
             ports=["8002:80"],
-            connections=[d],
         )
         c = DockerResource(
             description="Service C",
             name="c",
             image="alpine:latest",
             ports=["8003:80"],
-            connections=[d],
         )
         a = DockerResource(
             description="Service A",
             name="a",
             image="alpine:latest",
             ports=["8001:80"],
-            connections=[b, c],
         )
+
+        # Create diamond pattern: B → D, C → D, A → B, A → C
+        b.connect(d)
+        c.connect(d)
+        a.connect(b).connect(c)
 
         core = ClockworkCore(api_key="test", model="test")
 
@@ -193,15 +193,17 @@ class TestDependencyOrdering:
             name="b",
             image="alpine:latest",
             ports=["8002:80"],
-            connections=[c],
         )
         a = DockerResource(
             description="Service A",
             name="a",
             image="alpine:latest",
             ports=["8001:80"],
-            connections=[b],
         )
+
+        # Create connections: A → B → C
+        b.connect(c)
+        a.connect(b)
 
         core = ClockworkCore(api_key="test", model="test")
         ordered = core._resolve_dependency_order([a, b, c])
@@ -236,22 +238,24 @@ class TestDependencyOrdering:
             name="b",
             image="alpine:latest",
             ports=["8002:80"],
-            connections=[d],
         )
         c = DockerResource(
             description="Service C",
             name="c",
             image="alpine:latest",
             ports=["8003:80"],
-            connections=[d],
         )
         a = DockerResource(
             description="Service A",
             name="a",
             image="alpine:latest",
             ports=["8001:80"],
-            connections=[b, c],
         )
+
+        # Create diamond pattern: B → D, C → D, A → B, A → C
+        b.connect(d)
+        c.connect(d)
+        a.connect(b).connect(c)
 
         core = ClockworkCore(api_key="test", model="test")
         ordered = core._resolve_dependency_order([a, b, c, d])
@@ -286,7 +290,6 @@ class TestDependencyOrdering:
             name="a",
             image="alpine:latest",
             ports=["8001:80"],
-            connections=[b],
         )
 
         y = DockerResource(
@@ -300,8 +303,11 @@ class TestDependencyOrdering:
             name="x",
             image="alpine:latest",
             ports=["8003:80"],
-            connections=[y],
         )
+
+        # Create connections: A → B, X → Y
+        a.connect(b)
+        x.connect(y)
 
         core = ClockworkCore(api_key="test", model="test")
         ordered = core._resolve_dependency_order([a, b, x, y])
@@ -357,15 +363,17 @@ class TestDependencyOrdering:
             name="b",
             image="alpine:latest",
             ports=["8002:80"],
-            connections=[c],
         )
         a = DockerResource(
             description="Service A",
             name="a",
             image="alpine:latest",
             ports=["8001:80"],
-            connections=[b],
         )
+
+        # Create connections: A → B → C
+        b.connect(c)
+        a.connect(b)
 
         core = ClockworkCore(api_key="test", model="test")
 
@@ -443,7 +451,7 @@ class TestConnectionContext:
         )
 
         # Empty connections list (default)
-        assert docker.connections == []
+        assert docker._connections == []
 
         context = docker.get_connection_context()
         assert context["name"] == "standalone"
@@ -513,8 +521,10 @@ class TestIntegration:
             name="app",
             image="node:18-alpine",
             ports=["3000:3000"],
-            connections=[db],
         )
+
+        # Create connection: app → db
+        app.connect(db)
 
         # Test that core processes connections
         core = ClockworkCore(api_key="test", model="test")
@@ -550,16 +560,24 @@ class TestIntegration:
             description="Web application",
             name="webapp",
             image="node:18-alpine",
-            connections=[db],
         )
 
-        # Verify connection context is stored
-        assert len(app.connections) == 1
-        conn = app.connections[0]
-        assert conn["name"] == "postgres"
-        assert conn["type"] == "DockerResource"
-        assert conn["image"] == "postgres:15-alpine"
-        assert "POSTGRES_PASSWORD" in conn["env_vars"]
+        # Create connection: app → db
+        app.connect(db)
+
+        # Verify connection is stored
+        assert len(app._connections) == 1
+        conn = app._connections[0]
+        assert isinstance(conn, DependencyConnection)
+        assert conn.from_resource == app
+        assert conn.to_resource == db
+
+        # Verify connection context can be retrieved from db
+        db_context = db.get_connection_context()
+        assert db_context["name"] == "postgres"
+        assert db_context["type"] == "DockerResource"
+        assert db_context["image"] == "postgres:15-alpine"
+        assert "POSTGRES_PASSWORD" in db_context["env_vars"]
 
     def test_format_connection_context(self):
         """Test that connection context can be retrieved from resources."""
@@ -613,20 +631,21 @@ class TestIntegration:
             name="app",
             image="node:18-alpine",
             ports=["3000:3000"],
-            connections=[db, cache],
         )
 
-        # Verify connections - they're now context dicts, not Resource objects
-        assert len(app.connections) == 2
-        # Check that connection dicts contain the expected resource names
-        connection_names = {conn["name"] for conn in app.connections}
-        assert "db" in connection_names
-        assert "redis" in connection_names
+        # Create connections: app → db, app → cache
+        app.connect(db).connect(cache)
 
-        # Verify _connection_resources holds the actual Resource objects
-        assert len(app._connection_resources) == 2
-        assert db in app._connection_resources
-        assert cache in app._connection_resources
+        # Verify connections are stored as Connection objects
+        assert len(app._connections) == 2
+        assert all(
+            isinstance(conn, DependencyConnection) for conn in app._connections
+        )
+
+        # Check that connections point to the right resources
+        connection_targets = [conn.to_resource for conn in app._connections]
+        assert db in connection_targets
+        assert cache in connection_targets
 
         # Test ordering
         core = ClockworkCore(api_key="test", model="test")
@@ -676,8 +695,10 @@ class TestEdgeCases:
             name="a",
             image="alpine:latest",
             ports=["8001:80"],
-            connections=[b],
         )
+
+        # Create connection: a → b
+        a.connect(b)
 
         core = ClockworkCore(api_key="test", model="test")
 
@@ -701,14 +722,14 @@ class TestEdgeCases:
         for i, name in enumerate(
             ["j", "i", "h", "g", "f", "e", "d", "c", "b", "a"]
         ):
-            connections = [prev] if prev else []
             resource = DockerResource(
                 description=f"Service {name}",
                 name=name,
                 image="alpine:latest",
                 ports=[f"{8001+i}:80"],
-                connections=connections,
             )
+            if prev:
+                resource.connect(prev)
             resources.append(resource)
             prev = resource
 
@@ -735,8 +756,10 @@ class TestEdgeCases:
             name="app",
             image="node:18-alpine",
             ports=["3000:3000"],
-            connections=[config_file],
         )
+
+        # Create connection: app → config_file
+        app.connect(config_file)
 
         core = ClockworkCore(api_key="test", model="test")
         ordered = core._resolve_dependency_order([app, config_file])

@@ -3,7 +3,6 @@
 from unittest.mock import Mock, patch
 
 import pytest
-from pydantic import ValidationError
 
 from clockwork.resources import DockerResource
 
@@ -298,8 +297,8 @@ def test_to_pulumi_with_connections(mock_container):
         description="Application",
         image="myapp:latest",
         ports=["8000:8000"],
-        connections=[db_container],
     )
+    app_container.connect(db_container)
 
     app_container.to_pulumi()
 
@@ -310,9 +309,9 @@ def test_to_pulumi_with_connections(mock_container):
     opts = call_args[1]["opts"]
     assert opts is None
 
-    # Verify connections are stored in _connection_resources
-    assert len(app_container._connection_resources) == 1
-    assert app_container._connection_resources[0] == db_container
+    # Verify connections are stored in _connections
+    assert len(app_container._connections) == 1
+    assert app_container._connections[0].to_resource == db_container
 
 
 @patch("clockwork.resources.docker.docker.Container")
@@ -360,13 +359,6 @@ def test_to_pulumi_port_internal_only(mock_container):
     assert len(ports) == 1
     assert ports[0].internal == 3000
     assert not hasattr(ports[0], "external") or ports[0].external is None
-
-
-def test_pydantic_validation():
-    """Test Pydantic validation enforces required description field."""
-    with pytest.raises(ValidationError):
-        # Missing required 'description' field
-        DockerResource(name="test")
 
 
 def test_get_connection_context():
