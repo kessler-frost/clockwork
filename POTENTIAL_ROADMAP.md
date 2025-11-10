@@ -23,8 +23,12 @@ _This is a living document of potential features and enhancements. Updated frequ
   - Hybrid mode (specify key details, AI fills gaps)
   - Fast mode (describe requirements, AI handles implementation)
 - **PydanticAI Integration**: Structured outputs with Pydantic validation
-- **Tool Support**: Web search (DuckDuckGo), custom Python tools
-- **MCP Server Support**: Filesystem, databases, GitHub, Google Drive
+- **Tool Support**:
+  - DuckDuckGo web search
+  - Custom Python functions
+  - Filesystem MCP server
+  - User-provided tools via `tools` parameter
+- **Tool Selection**: Automatic tool selection based on resource type and context
 
 ### Resource Connections
 
@@ -72,7 +76,77 @@ clockwork assert  # Validates all deployed primitives
 
 ## 🤔 Under Consideration
 
-### 1. Enhanced Reconciliation Service with AI Remediation
+### 1. Expanded Tool Support
+
+Integrate additional PydanticAI built-in tools and enhance tool capabilities.
+
+**Additional Built-in Tools:**
+
+**Web & Content:**
+- `WebSearchTool` - Enhanced web search with configurable max results and search context
+- `UrlContextTool` - Extract and process content from URLs for AI analysis
+- `BrowserTool` (future) - Full browser automation for dynamic content
+
+**Memory & State:**
+- `MemoryTool` - Persistent storage across agent runs (user sessions, preferences)
+- `VectorStoreTool` (future) - Semantic search over past deployments and configurations
+
+**Code & Execution:**
+- `CodeExecutionTool` - Sandboxed Python code execution for dynamic logic
+- `ShellCommandTool` (future) - Controlled shell command execution with safety policies
+
+**Multi-Modal:**
+- `ToolReturn` with rich content - Images, binary data, structured metadata
+- `ImageAnalysisTool` (future) - Analyze screenshots, diagrams, architecture visuals
+- `DocumentParserTool` (future) - Parse PDFs, Word docs, spreadsheets
+
+**External Integrations (via MCP):**
+- `PostgresMCP` - Database schema inspection and queries
+- `GitHubMCP` - Repository analysis, PR context, issue tracking
+- `SlackMCP` - Team notifications and context gathering
+- `GoogleDriveMCP` - Document access for configuration templates
+- `AWSMCP` (future) - Cloud resource inspection
+- `KubernetesMCP` (future) - Cluster state and pod information
+
+**Tool Composition:**
+- `FunctionToolset` - Group related tools for organized access
+- `ConditionalToolset` - Enable/disable tools based on runtime context
+- `ApprovalRequiredToolset` - Require user approval for sensitive operations
+
+**Example - Enhanced Resource with Tools:**
+```python
+api_docs = FileResource(
+    name="api_documentation.md",
+    description="Generate API docs from the codebase and latest best practices",
+    tools=[
+        WebSearchTool(max_results=5, search_context="prioritize official docs"),
+        UrlContextTool(),  # Extract content from reference URLs
+        CodeExecutionTool(timeout=30),  # Run code examples
+        MCPServerStdio('npx', args=['-y', '@modelcontextprotocol/server-filesystem', '.']),
+        custom_api_analyzer  # Your own function
+    ],
+    assertions=[
+        FileExistsAssert(path="api_documentation.md"),
+        FileContentMatchesAssert(path="api_documentation.md", pattern="API Reference")
+    ]
+)
+```
+
+**Smart Tool Selection Enhancements:**
+- Context-aware tool filtering based on resource state
+- Cost-aware tool selection (prefer cached/local tools)
+- Tool performance metrics and optimization
+- User-defined tool selection policies
+
+**Tool Security & Safety:**
+- Sandboxing for code execution tools
+- Rate limiting for API-based tools
+- Audit logging for all tool invocations
+- Tool approval workflows for sensitive operations
+
+---
+
+### 2. Enhanced Reconciliation Service with AI Remediation
 
 **Current State**: Basic service exists but doesn't actively monitor or remediate.
 
@@ -137,7 +211,7 @@ nginx = DockerResource(
 
 ---
 
-### 2. Stateful Service Evolution (`clockwork update`)
+### 3. Stateful Service Evolution (`clockwork update`)
 
 Transform Clockwork from one-time deployments to long-lived project management.
 
@@ -184,7 +258,7 @@ clockwork update
 
 ---
 
-### 3. Additional Built-in Assertions
+### 4. Additional Built-in Assertions
 
 Expand the type-safe assertion library for common scenarios (not yet implemented):
 
@@ -223,7 +297,7 @@ Expand the type-safe assertion library for common scenarios (not yet implemented
 
 ---
 
-### 4. Cross-Primitive Assertions
+### 5. Cross-Primitive Assertions
 
 Validate interactions and dependencies between multiple primitives.
 
@@ -255,7 +329,7 @@ workflow = WorkflowAssert(
 
 ---
 
-### 5. Python-Based Custom Assertions
+### 6. Python-Based Custom Assertions
 
 Support programmatic assertions using Python functions.
 
@@ -286,7 +360,7 @@ def validate_api_response(resource):
 
 ---
 
-### 6. More Primitive Types
+### 7. More Primitive Types
 
 Expand beyond current primitives:
 
