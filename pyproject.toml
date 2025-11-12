@@ -86,7 +86,4 @@ indent-style = "space"
 [tool.pytest.ini_options]
 markers = [
     "functional: functional tests that test real examples",
-    "slow: slow tests that require AI service (run with -m slow)",
 ]
-# Skip slow tests by default
-addopts = "-m 'not slow'"
