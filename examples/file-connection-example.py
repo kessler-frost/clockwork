@@ -93,7 +93,7 @@ db_volume = FileConnection(
     volume_name="postgres-data",
     mount_path="/var/lib/postgresql/data",
     create_volume=True,
-    volume_driver="local",
+    volume_size="5G",  # Apple Container volume size
     read_only=False,
 )
 db.connect(db_volume)

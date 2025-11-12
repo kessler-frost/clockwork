@@ -109,7 +109,6 @@ class ToolSelector:
 
         Maps resource types to relevant tools:
         - FileResource: web search (for content generation)
-        - DockerResource: web search (for image suggestions)
         - AppleContainerResource: web search (for image suggestions)
         - GitRepoResource: web search (for finding repos)
         - Default: web search (general purpose)
@@ -138,7 +137,7 @@ class ToolSelector:
 
         # Container resources benefit from web search for image suggestions
         elif (
-            resource_type in ["DockerResource", "AppleContainerResource"]
+            resource_type == "AppleContainerResource"
             or resource_type == "GitRepoResource"
         ):
             search_tool = self._get_tool("duckduckgo_search")
@@ -297,8 +296,8 @@ class ToolSelector:
 
         Example:
             >>> selector = ToolSelector()
-            >>> custom_mcp = MCPServerStdio('docker', args=['run', '-i', 'my-tool'])
-            >>> selector.register_tool("custom_docker_tool", custom_mcp)
+            >>> custom_mcp = MCPServerStdio('mcp-server', args=['--stdio'])
+            >>> selector.register_tool("custom_mcp_tool", custom_mcp)
         """
         self._tool_registry[name] = tool
         logger.debug(f"Registered custom tool: {name}")

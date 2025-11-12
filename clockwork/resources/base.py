@@ -572,13 +572,14 @@ class Resource(BaseModel):
             Pulumi Resource object(s)
 
         Example:
-            import pulumi_docker as docker
+            from pulumi_command import local
 
             def to_pulumi(self):
-                return docker.Container(
+                # Create an Apple Container using the container CLI
+                return local.Command(
                     self.name,
-                    image=self.image,
-                    ports=[docker.ContainerPortArgs(internal=80, external=8080)]
+                    create=f"container run -d --name {self.name} -p 8080:80 {self.image}",
+                    delete=f"container rm -f {self.name}"
                 )
         """
         raise NotImplementedError(

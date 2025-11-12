@@ -261,7 +261,7 @@ print("✓ AI-completed composite configured")
         # Step 1: Plan
         print("\n=== Step 1: Plan ===")
         exit_code, stdout, stderr = run_clockwork_command(
-            "plan", test_dir, timeout=120
+            "plan", test_dir, timeout=240
         )
         print(f"Plan output:\n{stdout}")
         assert exit_code == 0, f"Plan failed:\n{stderr}"

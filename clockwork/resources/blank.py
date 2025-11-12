@@ -49,9 +49,9 @@ class BlankResource(Resource):
         ...     description="Microservices architecture with database and cache"
         ... )
         >>> services.add(
-        ...     DockerResource(description="PostgreSQL database"),
-        ...     DockerResource(description="Redis cache"),
-        ...     DockerResource(description="FastAPI backend")
+        ...     AppleContainerResource(description="PostgreSQL database"),
+        ...     AppleContainerResource(description="Redis cache"),
+        ...     AppleContainerResource(description="FastAPI backend")
         ... )
     """
 
@@ -119,7 +119,7 @@ class BlankResource(Resource):
 
         Example:
             >>> app = BlankResource(name="app")
-            >>> app.add(DockerResource(description="web server"))  # needs completion
+            >>> app.add(AppleContainerResource(description="web server"))  # needs completion
             >>> app.needs_completion()  # True
         """
         # Check if any child needs completion
@@ -140,8 +140,8 @@ class BlankResource(Resource):
         Example:
             >>> backend = BlankResource(name="backend")
             >>> backend.add(
-            ...     DockerResource(name="postgres", image="postgres:15"),
-            ...     DockerResource(name="redis", image="redis:7")
+            ...     AppleContainerResource(name="postgres", image="postgres:15"),
+            ...     AppleContainerResource(name="redis", image="redis:7")
             ... )
             >>> backend.get_connection_context()
             {
@@ -149,8 +149,8 @@ class BlankResource(Resource):
                 'type': 'BlankResource',
                 'description': None,
                 'children': [
-                    {'name': 'postgres', 'type': 'DockerResource', ...},
-                    {'name': 'redis', 'type': 'DockerResource', ...}
+                    {'name': 'postgres', 'type': 'AppleContainerResource', ...},
+                    {'name': 'redis', 'type': 'AppleContainerResource', ...}
                 ]
             }
         """

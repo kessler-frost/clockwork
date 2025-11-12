@@ -17,7 +17,7 @@ def test_file_connection_instantiation():
     assert connection.volume_name == "test-volume"
     assert connection.read_only is False
     assert connection.create_volume is True
-    assert connection.volume_driver == "local"
+    assert connection.volume_size == "1G"
 
 
 def test_file_connection_needs_completion_no_description():
@@ -86,9 +86,9 @@ def test_file_connection_context():
     assert context["create_volume"] is True
 
 
-def test_file_connection_with_docker_resource():
+def test_file_connection_with_apple_container_resource():
     """Test FileConnection modifies AppleContainerResource volumes."""
-    docker_res = AppleContainerResource(
+    container_res = AppleContainerResource(
         description="test container",
         name="test",
         image="nginx:alpine",
@@ -96,7 +96,7 @@ def test_file_connection_with_docker_resource():
     )
 
     connection = FileConnection(
-        from_resource=docker_res,
+        from_resource=container_res,
         to_resource=None,
         mount_path="/data",
         volume_name="test-volume",
@@ -107,8 +107,8 @@ def test_file_connection_with_docker_resource():
     connection.to_pulumi()
 
     # Verify volume was added to AppleContainerResource
-    assert len(docker_res.volumes) == 1
-    assert docker_res.volumes[0] == "test-volume:/data"
+    assert len(container_res.volumes) == 1
+    assert container_res.volumes[0] == "test-volume:/data"
 
 
 def test_file_connection_with_file_resource():
@@ -121,7 +121,7 @@ def test_file_connection_with_file_resource():
         mode="644",
     )
 
-    docker_res = AppleContainerResource(
+    container_res = AppleContainerResource(
         description="test container",
         name="test",
         image="nginx:alpine",
@@ -129,7 +129,7 @@ def test_file_connection_with_file_resource():
     )
 
     connection = FileConnection(
-        from_resource=docker_res,
+        from_resource=container_res,
         to_resource=file_res,
         mount_path="/etc/config.yaml",
         read_only=True,
@@ -139,13 +139,13 @@ def test_file_connection_with_file_resource():
     connection.to_pulumi()
 
     # Verify volume was added to AppleContainerResource
-    assert len(docker_res.volumes) == 1
-    assert docker_res.volumes[0] == "/tmp/config.yaml:/etc/config.yaml:ro"
+    assert len(container_res.volumes) == 1
+    assert container_res.volumes[0] == "/tmp/config.yaml:/etc/config.yaml:ro"
 
 
 def test_file_connection_bind_mount():
     """Test FileConnection with bind mount."""
-    docker_res = AppleContainerResource(
+    container_res = AppleContainerResource(
         description="test container",
         name="test",
         image="nginx:alpine",
@@ -153,7 +153,7 @@ def test_file_connection_bind_mount():
     )
 
     connection = FileConnection(
-        from_resource=docker_res,
+        from_resource=container_res,
         to_resource=None,
         mount_path="/data",
         source_path="/host/data",
@@ -164,13 +164,13 @@ def test_file_connection_bind_mount():
     connection.to_pulumi()
 
     # Verify bind mount was added to AppleContainerResource
-    assert len(docker_res.volumes) == 1
-    assert docker_res.volumes[0] == "/host/data:/data"
+    assert len(container_res.volumes) == 1
+    assert container_res.volumes[0] == "/host/data:/data"
 
 
 def test_file_connection_read_only():
     """Test FileConnection with read_only flag."""
-    docker_res = AppleContainerResource(
+    container_res = AppleContainerResource(
         description="test container",
         name="test",
         image="nginx:alpine",
@@ -178,7 +178,7 @@ def test_file_connection_read_only():
     )
 
     connection = FileConnection(
-        from_resource=docker_res,
+        from_resource=container_res,
         to_resource=None,
         mount_path="/data",
         source_path="/host/data",
@@ -190,5 +190,5 @@ def test_file_connection_read_only():
     connection.to_pulumi()
 
     # Verify read-only mount was added
-    assert len(docker_res.volumes) == 1
-    assert docker_res.volumes[0] == "/host/data:/data:ro"
+    assert len(container_res.volumes) == 1
+    assert container_res.volumes[0] == "/host/data:/data:ro"

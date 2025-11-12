@@ -6,7 +6,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 import pulumi
-import pulumi_docker as docker
+import pulumi_command as command
 from pydantic import Field
 
 from .base import Connection
@@ -23,7 +23,7 @@ class FileConnection(Connection):
     This connection enables file sharing between resources, typically for
     configuration files, shared data, or persistent storage. It can:
     - Mount host paths as bind mounts
-    - Create and mount Docker volumes
+    - Create and mount Apple Container volumes
     - Share FileResource outputs to containers
 
     The connection can be AI-completed to determine mount paths and volume names.
@@ -31,10 +31,10 @@ class FileConnection(Connection):
     Attributes:
         mount_path: Where to mount in from_resource (required for completion)
         source_path: Path in to_resource (if FileResource) or host path for bind mount
-        volume_name: Docker volume name (can be AI-generated)
+        volume_name: Apple Container volume name (can be AI-generated)
         read_only: Mount as read-only (default: False)
-        create_volume: Auto-create Docker volume if it doesn't exist (default: True)
-        volume_driver: Volume driver to use (default: "local")
+        create_volume: Auto-create Apple Container volume if it doesn't exist (default: True)
+        volume_size: Volume size with optional K, M, G, T, or P suffix (default: "1G")
 
     Examples:
         # Share a volume between containers (AI completes mount_path and volume_name)
@@ -81,7 +81,7 @@ class FileConnection(Connection):
     )
     volume_name: str | None = Field(
         default=None,
-        description="Docker volume name - AI can generate based on context",
+        description="Apple Container volume name - AI can generate based on context",
         examples=["app-data", "postgres-data", "shared-config"],
     )
     read_only: bool = Field(
@@ -90,12 +90,12 @@ class FileConnection(Connection):
     )
     create_volume: bool = Field(
         default=True,
-        description="Auto-create Docker volume if it doesn't exist",
+        description="Auto-create Apple Container volume if it doesn't exist",
     )
-    volume_driver: str = Field(
-        default="local",
-        description="Docker volume driver",
-        examples=["local", "nfs", "cifs"],
+    volume_size: str = Field(
+        default="1G",
+        description="Volume size with optional K, M, G, T, or P suffix",
+        examples=["100M", "1G", "10G", "1T"],
     )
 
     def needs_completion(self) -> bool:
@@ -123,7 +123,7 @@ class FileConnection(Connection):
 
         This method:
         1. Determines mount type (bind mount or volume)
-        2. Creates Docker volume if needed
+        2. Creates Apple Container volume if needed
         3. Modifies from_resource to add volume mount
         4. Handles FileResource source files
 
@@ -167,21 +167,24 @@ class FileConnection(Connection):
         elif self.source_path:
             mount_source = self.source_path
 
-        # Case 3: Docker volume
+        # Case 3: Apple Container volume
         elif self.volume_name:
             # Create volume if requested
             if self.create_volume:
                 # Build dependency options
                 opts = self._build_dependency_options()
 
-                volume = docker.Volume(
-                    self.volume_name,
-                    driver=self.volume_driver,
-                    name=self.volume_name,
+                # Create Apple Container volume using CLI
+                volume = command.local.Command(
+                    f"volume-{self.volume_name}",
+                    create=f"container volume create -s {self.volume_size} {self.volume_name}",
+                    delete=f"container volume rm {self.volume_name} || true",
                     opts=opts,
                 )
                 resources.append(volume)
-                logger.info(f"Created Docker volume: {self.volume_name}")
+                logger.info(
+                    f"Created Apple Container volume: {self.volume_name}"
+                )
 
             mount_source = self.volume_name
         else:

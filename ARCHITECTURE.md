@@ -510,11 +510,11 @@ uv run clockwork apply
 ```
 Previewing (dev)
 
-     Type                 Name           Plan
- +   pulumi:pulumi:Stack  showcase-dev   create
- +   ├─ docker:Container  postgres-db    create
- +   ├─ docker:Container  redis-cache    create
- +   └─ docker:Container  api-server     create
+     Type                 Name                Plan
+ +   pulumi:pulumi:Stack  showcase-dev        create
+ +   ├─ pulumi:Container  postgres-db         create
+ +   ├─ pulumi:Container  redis-cache         create
+ +   └─ pulumi:Container  api-server          create
 
 Resources:
     + 4 to create
@@ -859,7 +859,6 @@ dependencies = [
     "pydantic-ai-slim[mcp,duckduckgo]>=0.0.49", # AI framework with MCP support
     "openai>=1.99.9",                            # OpenAI-compatible client
     "pulumi>=3.0",                               # Infrastructure as code engine
-    "pulumi-docker>=4.0",                        # Docker provider
     "pulumi-command>=1.0",                       # Command provider
 ]
 ```

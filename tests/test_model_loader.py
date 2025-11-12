@@ -149,7 +149,7 @@ async def test_load_model_not_found():
 
     with (
         patch.dict("sys.modules", {"lmstudio": mock_lmstudio}),
-        pytest.raises(ValueError, match="Model .* not found in LM Studio"),
+        pytest.raises(ValueError, match=r"Model .* not found in LM Studio"),
     ):
         await loader.load_model("qwen/qwen3-4b-2507")
 

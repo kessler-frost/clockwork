@@ -10,8 +10,6 @@ NOTE: This example demonstrates Pattern 3 (Hybrid Approach) at module level.
 Other patterns are shown in helper functions for educational purposes.
 """
 
-import os
-
 from clockwork.assertions import (
     ContainerRunningAssert,
     HealthcheckAssert,
@@ -63,13 +61,14 @@ webapp.add(
 )
 
 # Conditionally override specific fields post-creation
-# Example: Add debug mode based on environment variable
-if os.getenv("DEBUG_MODE") == "true":
+# Example: Add debug mode based on configuration
+debug_mode = False  # Change to True to enable debug mode
+if debug_mode:
     webapp.children["api-service"].env_vars["DEBUG"] = "true"
     webapp.children["api-service"].env_vars["LOG_LEVEL"] = "debug"
 
 # Example: Adjust resources based on environment
-environment = os.getenv("ENVIRONMENT", "development")
+environment = "development"  # Change to "production" for production settings
 if environment == "production":
     # Production needs persistence and auto-restart
     webapp.children["postgres-db"].volumes = [
@@ -372,10 +371,12 @@ def pattern_4_shared_config():
 # uv run clockwork apply
 
 # To deploy with debug mode:
-# DEBUG_MODE=true uv run clockwork apply
+# Edit line 65 to set debug_mode = True, then run:
+# uv run clockwork apply
 
 # To deploy for production:
-# ENVIRONMENT=production uv run clockwork apply
+# Edit line 71 to set environment = "production", then run:
+# uv run clockwork apply
 
 # To verify assertions:
 # uv run clockwork assert

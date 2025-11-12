@@ -108,7 +108,7 @@ class ServiceMeshConnection(Connection):
         )
 
     def _extract_port(self, port_mapping: str) -> int:
-        """Extract port number from Docker port mapping string.
+        """Extract port number from container port mapping string.
 
         Args:
             port_mapping: Port mapping in format "host:container" or "port"

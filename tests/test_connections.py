@@ -397,9 +397,9 @@ class TestDependencyOrdering:
 class TestConnectionContext:
     """Tests for connection context sharing between resources."""
 
-    def test_docker_connection_context(self):
+    def test_apple_container_connection_context(self):
         """Test AppleContainerResource exposes correct connection context."""
-        docker = AppleContainerResource(
+        container = AppleContainerResource(
             description="PostgreSQL database",
             name="postgres",
             image="postgres:15-alpine",
@@ -408,7 +408,7 @@ class TestConnectionContext:
             networks=["backend"],
         )
 
-        context = docker.get_connection_context()
+        context = container.get_connection_context()
 
         # Check required fields
         assert context["name"] == "postgres"
@@ -443,7 +443,7 @@ class TestConnectionContext:
 
     def test_empty_connections(self):
         """Test resource with no connections."""
-        docker = AppleContainerResource(
+        container = AppleContainerResource(
             description="Standalone service",
             name="standalone",
             image="alpine:latest",
@@ -451,15 +451,15 @@ class TestConnectionContext:
         )
 
         # Empty connections list (default)
-        assert docker._connections == []
+        assert container._connections == []
 
-        context = docker.get_connection_context()
+        context = container.get_connection_context()
         assert context["name"] == "standalone"
         assert context["type"] == "AppleContainerResource"
 
     def test_connection_context_filtering(self):
         """Test that only non-None fields are included in context."""
-        docker = AppleContainerResource(
+        container = AppleContainerResource(
             description="Minimal service",
             name="minimal",
             image="alpine:latest",
@@ -467,7 +467,7 @@ class TestConnectionContext:
             # volumes, env_vars, networks are empty/default
         )
 
-        context = docker.get_connection_context()
+        context = container.get_connection_context()
 
         # Required fields should be present
         assert "name" in context
@@ -726,7 +726,7 @@ class TestEdgeCases:
                 description=f"Service {name}",
                 name=name,
                 image="alpine:latest",
-                ports=[f"{8001+i}:80"],
+                ports=[f"{8001 + i}:80"],
             )
             if prev:
                 resource.connect(prev)

@@ -612,13 +612,13 @@ class TestFileConnection:
             create_volume=True,
         )
 
-        with patch("pulumi_docker.Volume") as mock_volume:
+        with patch("pulumi_command.local.Command") as mock_command:
             conn.to_pulumi()
 
-            # Verify volume was created
-            mock_volume.assert_called_once()
-            call_args = mock_volume.call_args
-            assert call_args[0][0] == "test-volume"
+            # Verify volume was created via command
+            mock_command.assert_called_once()
+            call_args = mock_command.call_args
+            assert call_args[0][0] == "volume-test-volume"
 
     def test_mount_configuration(self):
         """Test mount is added to container."""

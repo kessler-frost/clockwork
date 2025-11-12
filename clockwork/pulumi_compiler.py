@@ -31,14 +31,13 @@ class PulumiCompiler:
         settings = get_settings()
         self.project_dir = project_dir or Path.cwd()
 
-        # Set Pulumi passphrase from settings if not already set in environment
-        if "PULUMI_CONFIG_PASSPHRASE" not in os.environ:
-            os.environ["PULUMI_CONFIG_PASSPHRASE"] = (
-                settings.pulumi_config_passphrase
-            )
-            logger.debug("Set PULUMI_CONFIG_PASSPHRASE from settings")
+        # Set Pulumi passphrase from settings
+        os.environ["PULUMI_CONFIG_PASSPHRASE"] = (
+            settings.pulumi_config_passphrase
+        )
+        logger.debug("Set PULUMI_CONFIG_PASSPHRASE from settings")
 
-    def create_program(self, resources: list[Any]) -> Callable:
+    def create_program(self, resources: list[Any]) -> Callable[[], None]:
         """
         Create a Pulumi program function from resources.
 

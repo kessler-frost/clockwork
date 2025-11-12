@@ -1,4 +1,4 @@
-"""Container-specific assertions for both Docker and Apple Containers."""
+"""Container-specific assertions for Apple Containers."""
 
 import subprocess
 from typing import TYPE_CHECKING
@@ -39,29 +39,15 @@ class ContainerRunningAssert(BaseAssertion):
         try:
             container_name = resolve_container_name(self, resource)
 
-            # Determine if this is Docker or Apple Container based on resource type
-            resource_type = resource.__class__.__name__
-
-            if resource_type == "AppleContainerResource":
-                cmd = [
-                    "container",
-                    "ps",
-                    "--filter",
-                    f"name={container_name}",
-                    "--format",
-                    "{{.Status}}",
-                ]
-            else:
-                # Default to Docker for DockerResource and others
-                cmd = [
-                    "docker",
-                    "ps",
-                    "-a",
-                    "--filter",
-                    f"name={container_name}",
-                    "--format",
-                    "{{.Status}}",
-                ]
+            # Use Apple Container CLI
+            cmd = [
+                "container",
+                "ps",
+                "--filter",
+                f"name={container_name}",
+                "--format",
+                "{{.Status}}",
+            ]
 
             result = subprocess.run(
                 cmd,

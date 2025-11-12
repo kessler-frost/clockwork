@@ -19,9 +19,9 @@ class NetworkConnection(Connection):
     enabling service discovery and isolation. The AI can generate network names
     if not provided.
 
-    Note: Apple Container networking (v0.1.0) is simpler than Docker - only network names
-    are supported. Advanced features like custom drivers, subnets, and gateways are not
-    available.
+    Note: Apple Container networking (v0.1.0) supports network names for basic
+    connectivity. Advanced features like custom drivers, subnets, and gateways are not
+    currently available in this version.
 
     Attributes:
         network_name: Apple Container network name (AI generates if None and description provided)
@@ -104,7 +104,7 @@ class NetworkConnection(Connection):
         self._pulumi_resources = [network]
 
         # Modify from_resource if it's a AppleContainerResource
-        if self.from_resource is not None and self._is_docker_resource(
+        if self.from_resource is not None and self._is_container_resource(
             self.from_resource
         ):
             # Add network to from_resource
@@ -112,7 +112,7 @@ class NetworkConnection(Connection):
                 self.from_resource.networks.append(self.network_name)
 
             # Inject hostname env var for to_resource
-            if self.to_resource is not None and self._is_docker_resource(
+            if self.to_resource is not None and self._is_container_resource(
                 self.to_resource
             ):
                 hostname_key = (
@@ -126,7 +126,7 @@ class NetworkConnection(Connection):
                 )
 
         # Modify to_resource if it's a AppleContainerResource
-        if self.to_resource is not None and self._is_docker_resource(
+        if self.to_resource is not None and self._is_container_resource(
             self.to_resource
         ):
             # Add network to to_resource
@@ -134,7 +134,7 @@ class NetworkConnection(Connection):
                 self.to_resource.networks.append(self.network_name)
 
             # Inject hostname env var for from_resource
-            if self.from_resource is not None and self._is_docker_resource(
+            if self.from_resource is not None and self._is_container_resource(
                 self.from_resource
             ):
                 hostname_key = (
@@ -149,7 +149,7 @@ class NetworkConnection(Connection):
 
         return self._pulumi_resources
 
-    def _is_docker_resource(self, resource: Any) -> bool:
+    def _is_container_resource(self, resource: Any) -> bool:
         """Check if a resource is a AppleContainerResource.
 
         Args:
