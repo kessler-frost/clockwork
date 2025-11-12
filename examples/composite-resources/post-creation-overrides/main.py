@@ -17,7 +17,7 @@ from clockwork.assertions import (
     HealthcheckAssert,
     PortAccessibleAssert,
 )
-from clockwork.resources import BlankResource, DockerResource
+from clockwork.resources import AppleContainerResource, BlankResource
 
 # ==================================================================
 # PATTERN 3: Hybrid Approach (Deployed Example)
@@ -36,7 +36,7 @@ webapp = BlankResource(
 
 # Specify core config in constructor
 webapp.add(
-    DockerResource(
+    AppleContainerResource(
         name="postgres-db",
         description="PostgreSQL database",
         image="postgres:15-alpine",
@@ -50,7 +50,7 @@ webapp.add(
 )
 
 webapp.add(
-    DockerResource(
+    AppleContainerResource(
         name="api-service",
         description="API service",
         image="node:18-alpine",
@@ -127,7 +127,7 @@ def pattern_1_constructor_config():
 
     # All configuration specified in constructor
     database = webapp.add(
-        DockerResource(
+        AppleContainerResource(
             name="postgres-db",
             description="PostgreSQL database",
             image="postgres:15-alpine",
@@ -149,7 +149,7 @@ def pattern_1_constructor_config():
     )
 
     api = webapp.add(
-        DockerResource(
+        AppleContainerResource(
             name="api-service",
             description="API service with full configuration",
             image="node:18-alpine",
@@ -202,14 +202,14 @@ def pattern_2_post_creation_overrides():
 
     # Step 1: Add resources with minimal config
     webapp.add(
-        DockerResource(
+        AppleContainerResource(
             name="postgres-db",
             description="PostgreSQL database",
         )
     )
 
     webapp.add(
-        DockerResource(
+        AppleContainerResource(
             name="api-service",
             description="API service",
         )
@@ -277,7 +277,7 @@ def pattern_4_shared_config():
     service_names = ["api-service", "worker-service", "scheduler-service"]
     for name in service_names:
         webapp.add(
-            DockerResource(
+            AppleContainerResource(
                 name=name,
                 description=f"{name} for the web application",
             )

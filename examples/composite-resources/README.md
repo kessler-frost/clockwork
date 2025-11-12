@@ -75,14 +75,14 @@ uv run clockwork destroy
 
 ### Basic Composite Pattern
 ```python
-from clockwork.resources import BlankResource, DockerResource
+from clockwork.resources import BlankResource, AppleContainerResource
 
 # Create composite
 app = BlankResource(name="my-app", description="Web application stack")
 
 # Add children
-db = app.add(DockerResource(name="db", description="Database"))
-api = app.add(DockerResource(name="api", description="API server"))
+db = app.add(AppleContainerResource(name="db", description="Database"))
+api = app.add(AppleContainerResource(name="api", description="API server"))
 
 # Connect children
 api.connect(db)  # API depends on database
@@ -98,8 +98,8 @@ db_cluster = stack.add(BlankResource(name="databases", description="Database clu
 app_tier = stack.add(BlankResource(name="app-tier", description="Application services"))
 
 # Add resources to child composites
-primary = db_cluster.add(DockerResource(name="primary", description="Primary DB"))
-api = app_tier.add(DockerResource(name="api", description="API"))
+primary = db_cluster.add(AppleContainerResource(name="primary", description="Primary DB"))
+api = app_tier.add(AppleContainerResource(name="api", description="API"))
 
 # Connect across composites
 api.connect(primary)

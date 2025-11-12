@@ -38,8 +38,8 @@ class FileConnection(Connection):
 
     Examples:
         # Share a volume between containers (AI completes mount_path and volume_name)
-        storage = DockerResource(name="storage", description="storage container")
-        app = DockerResource(name="app", description="app container")
+        storage = AppleContainerResource(name="storage", description="storage container")
+        app = AppleContainerResource(name="app", description="app container")
         connection = FileConnection(
             to_resource=storage,
             description="shared data volume"
@@ -51,7 +51,7 @@ class FileConnection(Connection):
             description="nginx config",
             directory="./config"
         )
-        web = DockerResource(name="nginx", image="nginx:alpine")
+        web = AppleContainerResource(name="nginx", image="nginx:alpine")
         connection = FileConnection(
             to_resource=config,
             mount_path="/etc/nginx/nginx.conf",
@@ -60,7 +60,7 @@ class FileConnection(Connection):
         web.connect(connection)
 
         # Bind mount with explicit paths
-        app = DockerResource(name="app", description="web app")
+        app = AppleContainerResource(name="app", description="web app")
         connection = FileConnection(
             to_resource=None,  # No target resource for bind mounts
             mount_path="/data",
@@ -130,7 +130,7 @@ class FileConnection(Connection):
         Returns:
             List of Pulumi resources created, or None if no resources needed
         """
-        from clockwork.resources.docker import DockerResource
+        from clockwork.resources.apple_container import AppleContainerResource
         from clockwork.resources.file import FileResource
 
         resources = []
@@ -190,8 +190,8 @@ class FileConnection(Connection):
             )
             return None
 
-        # Add mount to from_resource if it's a DockerResource
-        if isinstance(self.from_resource, DockerResource):
+        # Add mount to from_resource if it's a AppleContainerResource
+        if isinstance(self.from_resource, AppleContainerResource):
             # Determine mount type for logging
             mount_type = (
                 "bind"
@@ -218,7 +218,7 @@ class FileConnection(Connection):
         else:
             logger.warning(
                 f"from_resource {getattr(self.from_resource, 'name', 'unknown')} "
-                f"is not a DockerResource - cannot add mount"
+                f"is not a AppleContainerResource - cannot add mount"
             )
 
         # Store created resources

@@ -75,7 +75,7 @@ class FileResource(Resource):
 
 **Behavioral Determinism**: Assertions validate functionality, not implementation
 ```python
-web_server = DockerResource(
+web_server = AppleContainerResource(
     description="web server for static files",
     assertions=[
         ContainerRunningAssert(),           # Must be running
@@ -267,16 +267,16 @@ Composite resources enable building complex infrastructure from simpler componen
 - **Pulumi integration**: Compiles to `ComponentResource` with parent-child hierarchy
 
 ```python
-from clockwork.resources import BlankResource, DockerResource
+from clockwork.resources import BlankResource, AppleContainerResource
 
 # Simple grouping
 webapp = BlankResource(
     name="web-app",
     description="Complete web application stack"
 ).add(
-    DockerResource(description="PostgreSQL database", ports=["5432:5432"]),
-    DockerResource(description="Redis cache", ports=["6379:6379"]),
-    DockerResource(description="FastAPI backend", ports=["8000:8000"])
+    AppleContainerResource(description="PostgreSQL database", ports=["5432:5432"]),
+    AppleContainerResource(description="Redis cache", ports=["6379:6379"]),
+    AppleContainerResource(description="FastAPI backend", ports=["8000:8000"])
 )
 ```
 
@@ -316,13 +316,13 @@ Understanding when to use `.add()` versus `.connect()` is fundamental to Clockwo
 ```python
 # Composition (.add) - One "web-app" resource with 3 children
 web_app = BlankResource(name="web-app").add(
-    DockerResource(description="nginx", name="web"),
+    AppleContainerResource(description="nginx", name="web"),
     FileResource(description="nginx config", name="config")
 )
 
 # Connection (.connect) - 2 separate resources with dependencies
-db = DockerResource(name="postgres", ports=["5432:5432"])
-api = DockerResource(name="api", ports=["8000:8000"]).connect(db)
+db = AppleContainerResource(name="postgres", ports=["5432:5432"])
+api = AppleContainerResource(name="api", ports=["8000:8000"]).connect(db)
 ```
 
 See `examples/composite-resources/` for complete examples.
@@ -384,13 +384,13 @@ _connection_resources: list["Resource"] = PrivateAttr(default_factory=list)
 3. **Pydantic Compatibility**: Public field remains `list[dict]` to avoid circular schema references
 4. **State Preservation**: Resource objects maintain their `_pulumi_resource` attributes
 
-**Example Connection Context** (DockerResource):
+**Example Connection Context** (AppleContainerResource):
 
 ```python
 def get_connection_context(self) -> dict[str, Any]:
     context = {
         "name": self.name,
-        "type": "DockerResource",
+        "type": "AppleContainerResource",
         "image": self.image,
     }
     if self.ports:

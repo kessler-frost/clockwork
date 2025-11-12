@@ -23,13 +23,13 @@ class DependencyConnection(Connection):
 
     Example:
         # Automatic creation
-        db = DockerResource(name="postgres", image="postgres:15")
-        api = DockerResource(name="api", image="node:20").connect(db)
+        db = AppleContainerResource(name="postgres", image="postgres:15")
+        api = AppleContainerResource(name="api", image="node:20").connect(db)
         # Creates: DependencyConnection(from_resource=api, to_resource=db)
 
         # Manual creation
-        db = DockerResource(name="postgres", image="postgres:15")
-        api = DockerResource(name="api", image="node:20")
+        db = AppleContainerResource(name="postgres", image="postgres:15")
+        api = AppleContainerResource(name="api", image="node:20")
         connection = DependencyConnection(
             from_resource=api,
             to_resource=db

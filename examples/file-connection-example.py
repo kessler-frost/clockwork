@@ -5,12 +5,18 @@ files and volumes between resources.
 """
 
 from clockwork.connections import FileConnection
-from clockwork.resources import BlankResource, DockerResource, FileResource
+from clockwork.resources import (
+    AppleContainerResource,
+    BlankResource,
+    FileResource,
+)
 
 # Example 1: Share a volume between two containers
 # AI can complete mount_path and volume_name based on description
-storage = DockerResource(name="storage", description="data storage container")
-app = DockerResource(name="app", description="application container")
+storage = AppleContainerResource(
+    name="storage", description="data storage container"
+)
+app = AppleContainerResource(name="app", description="application container")
 
 connection = FileConnection(
     to_resource=storage, description="shared data volume for app and storage"
@@ -40,7 +46,7 @@ http {
     mode="644",
 )
 
-nginx = DockerResource(
+nginx = AppleContainerResource(
     description="nginx web server",
     name="nginx",
     image="nginx:alpine",
@@ -53,7 +59,7 @@ config_connection = FileConnection(
 nginx.connect(config_connection)
 
 # Example 3: Bind mount a host directory
-web = DockerResource(
+web = AppleContainerResource(
     description="static web server",
     name="web",
     image="nginx:alpine",
@@ -71,8 +77,8 @@ bind_mount = FileConnection(
 )
 web.connect(bind_mount)
 
-# Example 4: Docker volume with explicit settings
-db = DockerResource(
+# Example 4: Container volume with explicit settings
+db = AppleContainerResource(
     description="postgres database",
     name="postgres",
     image="postgres:15-alpine",
@@ -107,7 +113,7 @@ print("\nExample 3: Bind mount")
 print(f"  - Web: {web.name}")
 print(f"  - Mount: {bind_mount.source_path} -> {bind_mount.mount_path}")
 
-print("\nExample 4: Docker volume")
+print("\nExample 4: Container volume")
 print(f"  - Database: {db.name}")
 print(f"  - Volume: {db_volume.volume_name}")
 print(f"  - Mount: {db_volume.mount_path}")

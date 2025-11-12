@@ -1,10 +1,10 @@
-"""Network connection - creates Docker networks for container communication."""
+"""Network connection - creates Apple Container networks for container communication."""
 
 import logging
 from typing import Any
 
 import pulumi
-import pulumi_docker as docker
+import pulumi_command as command
 from pydantic import Field
 
 from .base import Connection
@@ -13,24 +13,23 @@ logger = logging.getLogger(__name__)
 
 
 class NetworkConnection(Connection):
-    """Network connection that creates Docker networks for container communication.
+    """Network connection that creates Apple Container networks for container communication.
 
-    This connection automatically creates Docker networks and connects containers,
+    This connection automatically creates Apple Container networks and connects containers,
     enabling service discovery and isolation. The AI can generate network names
     if not provided.
 
+    Note: Apple Container networking (v0.1.0) is simpler than Docker - only network names
+    are supported. Advanced features like custom drivers, subnets, and gateways are not
+    available.
+
     Attributes:
-        network_name: Docker network name (AI generates if None and description provided)
-        driver: Network driver - "bridge", "overlay", "host", or "macvlan"
-        internal: Whether network is internal (no external access)
-        enable_ipv6: Whether to enable IPv6
-        subnet: Custom subnet in CIDR notation (e.g., "172.20.0.0/16")
-        gateway: Custom gateway IP address
+        network_name: Apple Container network name (AI generates if None and description provided)
 
     Examples:
         # AI generates network name
-        >>> db = DockerResource(name="postgres", image="postgres:15")
-        >>> api = DockerResource(name="api", image="node:20")
+        >>> db = AppleContainerResource(name="postgres", image="postgres:15")
+        >>> api = AppleContainerResource(name="api", image="node:20")
         >>> connection = NetworkConnection(
         ...     description="backend network for API and database",
         ...     to_resource=db
@@ -39,44 +38,19 @@ class NetworkConnection(Connection):
         # AI generates: network_name="backend-network"
 
         # Manual network configuration
-        >>> db = DockerResource(name="postgres", image="postgres:15")
-        >>> api = DockerResource(name="api", image="node:20")
+        >>> db = AppleContainerResource(name="postgres", image="postgres:15")
+        >>> api = AppleContainerResource(name="api", image="node:20")
         >>> connection = NetworkConnection(
         ...     to_resource=db,
-        ...     network_name="my-network",
-        ...     driver="bridge",
-        ...     internal=True
+        ...     network_name="my-network"
         ... )
         >>> api.connect(connection)
     """
 
     network_name: str | None = Field(
         None,
-        description="Docker network name - AI generates if not provided",
+        description="Apple Container network name - AI generates if not provided",
         examples=["backend-network", "frontend-network", "app-network"],
-    )
-    driver: str = Field(
-        default="bridge",
-        description="Network driver type",
-        examples=["bridge", "overlay", "host", "macvlan"],
-    )
-    internal: bool = Field(
-        default=False,
-        description="Whether network is internal (no external access)",
-    )
-    enable_ipv6: bool = Field(
-        default=False,
-        description="Whether to enable IPv6 on this network",
-    )
-    subnet: str | None = Field(
-        None,
-        description="Custom subnet in CIDR notation",
-        examples=["172.20.0.0/16", "192.168.1.0/24"],
-    )
-    gateway: str | None = Field(
-        None,
-        description="Custom gateway IP address",
-        examples=["172.20.0.1", "192.168.1.1"],
     )
 
     def needs_completion(self) -> bool:
@@ -90,22 +64,22 @@ class NetworkConnection(Connection):
         return self.description is not None and self.network_name is None
 
     def to_pulumi(self) -> list[pulumi.Resource] | None:
-        """Create Pulumi Docker Network resource and attach to containers.
+        """Create Apple Container network via CLI and attach to containers.
 
-        Creates the Docker network and modifies both from_resource and to_resource
-        (if they are DockerResources) to:
+        Creates the Apple Container network using `container network create` and modifies
+        both from_resource and to_resource (if they are AppleContainerResources) to:
         1. Add network to their networks list
         2. Inject hostname environment variables for service discovery
 
         Returns:
-            list[pulumi.Resource]: List containing the network resource, or None if network_name not set
+            list[pulumi.Resource]: List containing the network command resource, or None if network_name not set
 
         Raises:
             ValueError: If network_name is not set after completion
 
         Example:
-            >>> db = DockerResource(name="postgres", image="postgres:15")
-            >>> api = DockerResource(name="api", image="node:20")
+            >>> db = AppleContainerResource(name="postgres", image="postgres:15")
+            >>> api = AppleContainerResource(name="api", image="node:20")
             >>> conn = NetworkConnection(
             ...     from_resource=api,
             ...     to_resource=db,
@@ -119,32 +93,17 @@ class NetworkConnection(Connection):
                 "network_name must be set before calling to_pulumi()"
             )
 
-        # Build IPAM config if subnet or gateway is specified
-        ipam_config = None
-        if self.subnet or self.gateway:
-            ipam_config_list = []
-            config = {}
-            if self.subnet:
-                config["subnet"] = self.subnet
-            if self.gateway:
-                config["gateway"] = self.gateway
-            ipam_config_list.append(docker.NetworkIpamConfigArgs(**config))
-            ipam_config = docker.NetworkIpamArgs(configs=ipam_config_list)
-
-        # Create the Docker network
-        network = docker.Network(
-            self.network_name,
-            name=self.network_name,
-            driver=self.driver,
-            internal=self.internal,
-            enable_ipv6=self.enable_ipv6,
-            ipam=ipam_config,
+        # Create the Apple Container network using CLI
+        network = command.local.Command(
+            f"network-{self.network_name}",
+            create=f"container network create {self.network_name}",
+            delete=f"container network rm {self.network_name} || true",
         )
 
         # Store for later dependency tracking
         self._pulumi_resources = [network]
 
-        # Modify from_resource if it's a DockerResource
+        # Modify from_resource if it's a AppleContainerResource
         if self.from_resource is not None and self._is_docker_resource(
             self.from_resource
         ):
@@ -166,7 +125,7 @@ class NetworkConnection(Connection):
                     f"Injected {hostname_key}={self.to_resource.name} into {self.from_resource.name}"
                 )
 
-        # Modify to_resource if it's a DockerResource
+        # Modify to_resource if it's a AppleContainerResource
         if self.to_resource is not None and self._is_docker_resource(
             self.to_resource
         ):
@@ -191,15 +150,15 @@ class NetworkConnection(Connection):
         return self._pulumi_resources
 
     def _is_docker_resource(self, resource: Any) -> bool:
-        """Check if a resource is a DockerResource.
+        """Check if a resource is a AppleContainerResource.
 
         Args:
             resource: Resource to check
 
         Returns:
-            bool: True if resource is a DockerResource, False otherwise
+            bool: True if resource is a AppleContainerResource, False otherwise
         """
-        return resource.__class__.__name__ == "DockerResource"
+        return resource.__class__.__name__ == "AppleContainerResource"
 
     def get_connection_context(self) -> dict[str, Any]:
         """Get connection context for AI completion.
@@ -212,16 +171,12 @@ class NetworkConnection(Connection):
 
         Example:
             >>> conn = NetworkConnection(
-            ...     network_name="backend-network",
-            ...     driver="bridge",
-            ...     internal=True
+            ...     network_name="backend-network"
             ... )
             >>> conn.get_connection_context()
             {
                 'type': 'NetworkConnection',
                 'network_name': 'backend-network',
-                'driver': 'bridge',
-                'internal': True,
                 'from_resource': None,
                 'to_resource': None
             }
@@ -235,22 +190,9 @@ class NetworkConnection(Connection):
         if self.to_resource is not None:
             to_name = getattr(self.to_resource, "name", None)
 
-        context = {
+        return {
             "type": "NetworkConnection",
             "network_name": self.network_name,
-            "driver": self.driver,
             "from_resource": from_name,
             "to_resource": to_name,
         }
-
-        # Add optional fields if they're set
-        if self.internal:
-            context["internal"] = self.internal
-        if self.enable_ipv6:
-            context["enable_ipv6"] = self.enable_ipv6
-        if self.subnet:
-            context["subnet"] = self.subnet
-        if self.gateway:
-            context["gateway"] = self.gateway
-
-        return context

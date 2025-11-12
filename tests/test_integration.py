@@ -347,7 +347,7 @@ static_file = FileResource(
 # AI-generated content
 dynamic_file = FileResource(
     name="dynamic.md",
-    description="Generate documentation about Docker",
+    description="Generate documentation about Containers",
     content="Test content"
 )
 """)
@@ -362,9 +362,7 @@ dynamic_file = FileResource(
         async def mock_complete(resources):
             for r in resources:
                 if hasattr(r, "content") and r.content is None:
-                    r.content = (
-                        "# Docker\n\nDocker is a containerization platform."
-                    )
+                    r.content = "# Containers\n\nContainers are a lightweight virtualization platform."
                 if hasattr(r, "directory") and r.directory is None:
                     r.directory = "."
                 if hasattr(r, "mode") and r.mode is None:

@@ -16,7 +16,6 @@ dependencies = [
     "pydantic-ai-slim[mcp,duckduckgo]>=0.0.49",
     "openai>=1.99.9",
     "pulumi>=3.0.0",
-    "pulumi-docker>=4.0.0",
     "pulumi-command>=1.0.0",
     "mcp>=1.0.0",
     "httpx>=0.27.0",

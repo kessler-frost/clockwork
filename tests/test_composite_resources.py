@@ -10,8 +10,8 @@ import pytest
 
 from clockwork.connections import Connection, DependencyConnection
 from clockwork.resources import (
+    AppleContainerResource,
     BlankResource,
-    DockerResource,
     FileResource,
 )
 
@@ -32,7 +32,7 @@ def event_loop():
 
 def test_add_single_child():
     """Test adding a single child resource to a parent."""
-    parent = DockerResource(
+    parent = AppleContainerResource(
         description="Parent container",
         name="parent",
         image="nginx:alpine",
@@ -59,7 +59,7 @@ def test_add_single_child():
 
 def test_add_multiple_children_at_once():
     """Test adding multiple children in a single .add() call."""
-    parent = DockerResource(
+    parent = AppleContainerResource(
         description="Parent",
         name="parent",
         image="nginx:alpine",
@@ -91,7 +91,7 @@ def test_add_multiple_children_at_once():
 
 def test_add_chaining():
     """Test chaining multiple .add() calls."""
-    parent = DockerResource(
+    parent = AppleContainerResource(
         description="Parent",
         name="parent",
         image="nginx:alpine",
@@ -121,7 +121,7 @@ def test_add_chaining():
 
 def test_add_type_checking():
     """Test that .add() raises TypeError when adding non-Resource objects."""
-    parent = DockerResource(
+    parent = AppleContainerResource(
         description="Parent",
         name="parent",
         image="nginx:alpine",
@@ -141,7 +141,7 @@ def test_add_type_checking():
 
 def test_add_duplicate_prevention():
     """Test that adding the same child twice is prevented."""
-    parent = DockerResource(
+    parent = AppleContainerResource(
         description="Parent",
         name="parent",
         image="nginx:alpine",
@@ -162,13 +162,13 @@ def test_add_duplicate_prevention():
 
 def test_add_reparenting_warning(caplog):
     """Test that re-parenting a child resource logs a warning."""
-    parent1 = DockerResource(
+    parent1 = AppleContainerResource(
         description="Parent 1",
         name="parent1",
         image="nginx:alpine",
         ports=["80:80"],
     )
-    parent2 = DockerResource(
+    parent2 = AppleContainerResource(
         description="Parent 2",
         name="parent2",
         image="redis:alpine",
@@ -199,13 +199,13 @@ def test_add_reparenting_warning(caplog):
 
 def test_connect_single_resource():
     """Test connecting to a single resource."""
-    db = DockerResource(
+    db = AppleContainerResource(
         description="Database",
         name="postgres",
         image="postgres:15-alpine",
         ports=["5432:5432"],
     )
-    api = DockerResource(
+    api = AppleContainerResource(
         description="API",
         name="api",
         image="node:20-alpine",
@@ -225,19 +225,19 @@ def test_connect_single_resource():
 
 def test_connect_multiple_resources():
     """Test connecting to multiple resources using chaining."""
-    db = DockerResource(
+    db = AppleContainerResource(
         description="Database",
         name="postgres",
         image="postgres:15-alpine",
         ports=["5432:5432"],
     )
-    cache = DockerResource(
+    cache = AppleContainerResource(
         description="Cache",
         name="redis",
         image="redis:7-alpine",
         ports=["6379:6379"],
     )
-    api = DockerResource(
+    api = AppleContainerResource(
         description="API",
         name="api",
         image="node:20-alpine",
@@ -255,25 +255,25 @@ def test_connect_multiple_resources():
 
 def test_connect_chaining():
     """Test chaining multiple .connect() calls."""
-    db = DockerResource(
+    db = AppleContainerResource(
         description="Database",
         name="postgres",
         image="postgres:15-alpine",
         ports=["5432:5432"],
     )
-    cache = DockerResource(
+    cache = AppleContainerResource(
         description="Cache",
         name="redis",
         image="redis:7-alpine",
         ports=["6379:6379"],
     )
-    queue = DockerResource(
+    queue = AppleContainerResource(
         description="Queue",
         name="rabbitmq",
         image="rabbitmq:3-alpine",
         ports=["5672:5672"],
     )
-    api = DockerResource(
+    api = AppleContainerResource(
         description="API",
         name="api",
         image="node:20-alpine",
@@ -294,13 +294,13 @@ def test_connect_chaining():
 
 def test_connect_type_checking():
     """Test that .connect() accepts Resource or Connection objects."""
-    api = DockerResource(
+    api = AppleContainerResource(
         description="API",
         name="api",
         image="node:20-alpine",
         ports=["8000:8000"],
     )
-    db = DockerResource(
+    db = AppleContainerResource(
         description="Database",
         name="postgres",
         image="postgres:15-alpine",
@@ -313,7 +313,7 @@ def test_connect_type_checking():
     assert isinstance(api._connections[0], DependencyConnection)
 
     # Should accept Connection instance directly
-    cache = DockerResource(
+    cache = AppleContainerResource(
         description="Cache",
         name="redis",
         image="redis:7-alpine",
@@ -327,13 +327,13 @@ def test_connect_type_checking():
 
 def test_connect_duplicate_prevention():
     """Test that connecting to the same resource twice creates separate connections."""
-    db = DockerResource(
+    db = AppleContainerResource(
         description="Database",
         name="postgres",
         image="postgres:15-alpine",
         ports=["5432:5432"],
     )
-    api = DockerResource(
+    api = AppleContainerResource(
         description="API",
         name="api",
         image="node:20-alpine",
@@ -353,13 +353,13 @@ def test_connect_duplicate_prevention():
 
 def test_connect_creates_connection_objects():
     """Test that .connect() creates Connection objects with proper structure."""
-    db = DockerResource(
+    db = AppleContainerResource(
         description="Database",
         name="postgres",
         image="postgres:15-alpine",
         ports=["5432:5432"],
     )
-    api = DockerResource(
+    api = AppleContainerResource(
         description="API",
         name="api",
         image="node:20-alpine",
@@ -386,7 +386,7 @@ def test_connect_creates_connection_objects():
 
 def test_children_dict_access():
     """Test that .children dict-style access works correctly."""
-    parent = DockerResource(
+    parent = AppleContainerResource(
         description="Parent",
         name="parent",
         image="nginx:alpine",
@@ -420,7 +420,7 @@ def test_children_dict_access():
 
 def test_children_dict_is_immutable():
     """Test that modifying .children dict doesn't affect internal state."""
-    parent = DockerResource(
+    parent = AppleContainerResource(
         description="Parent",
         name="parent",
         image="nginx:alpine",
@@ -442,7 +442,7 @@ def test_children_dict_is_immutable():
 
 def test_parent_returns_correct_parent():
     """Test that .parent property returns the correct parent."""
-    parent = DockerResource(
+    parent = AppleContainerResource(
         description="Parent",
         name="parent",
         image="nginx:alpine",
@@ -460,7 +460,7 @@ def test_parent_returns_correct_parent():
 
 def test_children_len_check():
     """Test that len(children) can be used to check for children."""
-    parent = DockerResource(
+    parent = AppleContainerResource(
         description="Parent",
         name="parent",
         image="nginx:alpine",
@@ -480,7 +480,7 @@ def test_children_len_check():
 
 def test_parent_none_check():
     """Test that checking parent is not None works correctly."""
-    parent = DockerResource(
+    parent = AppleContainerResource(
         description="Parent",
         name="parent",
         image="nginx:alpine",
@@ -562,7 +562,7 @@ def test_add_then_connect_chaining():
     child = FileResource(
         description="Child", name="file.txt", content="content"
     )
-    db = DockerResource(
+    db = AppleContainerResource(
         description="Database",
         name="postgres",
         image="postgres:15-alpine",
@@ -587,7 +587,7 @@ def test_connect_then_add_chaining():
     child = FileResource(
         description="Child", name="file.txt", content="content"
     )
-    db = DockerResource(
+    db = AppleContainerResource(
         description="Database",
         name="postgres",
         image="postgres:15-alpine",
@@ -615,13 +615,13 @@ def test_multiple_chained_operations():
     child2 = FileResource(
         description="Child 2", name="file2.txt", content="content2"
     )
-    db = DockerResource(
+    db = AppleContainerResource(
         description="Database",
         name="postgres",
         image="postgres:15-alpine",
         ports=["5432:5432"],
     )
-    cache = DockerResource(
+    cache = AppleContainerResource(
         description="Cache",
         name="redis",
         image="redis:7-alpine",
@@ -705,13 +705,13 @@ def test_blank_resource_needs_completion_delegates():
 def test_blank_resource_get_connection_context_includes_children():
     """Test that BlankResource.get_connection_context() includes children info."""
     blank = BlankResource(name="blank", description="Blank resource")
-    child1 = DockerResource(
+    child1 = AppleContainerResource(
         description="Child 1",
         name="nginx",
         image="nginx:alpine",
         ports=["80:80"],
     )
-    child2 = DockerResource(
+    child2 = AppleContainerResource(
         description="Child 2",
         name="redis",
         image="redis:alpine",
@@ -739,7 +739,7 @@ def test_blank_resource_get_connection_context_includes_children():
 
 def test_bidirectional_relationships():
     """Test that parent-child relationships are bidirectional."""
-    parent = DockerResource(
+    parent = AppleContainerResource(
         description="Parent",
         name="parent",
         image="nginx:alpine",
@@ -762,7 +762,7 @@ def test_bidirectional_relationships():
 
 def test_post_creation_field_access():
     """Test accessing child properties after adding to parent."""
-    parent = DockerResource(
+    parent = AppleContainerResource(
         description="Parent",
         name="parent",
         image="nginx:alpine",
@@ -788,7 +788,7 @@ def test_modifying_child_after_adding():
     that the child object remains the same instance and maintains
     its connection to the parent.
     """
-    parent = DockerResource(
+    parent = AppleContainerResource(
         description="Parent",
         name="parent",
         image="nginx:alpine",
@@ -836,7 +836,7 @@ def test_multiple_levels_of_hierarchy():
 
 def test_empty_parent_has_no_children():
     """Test that a parent with no children behaves correctly."""
-    parent = DockerResource(
+    parent = AppleContainerResource(
         description="Parent",
         name="parent",
         image="nginx:alpine",
@@ -850,7 +850,7 @@ def test_empty_parent_has_no_children():
 
 def test_root_resource_has_no_parent():
     """Test that a root resource (not added to any parent) has no parent."""
-    root = DockerResource(
+    root = AppleContainerResource(
         description="Root", name="root", image="nginx:alpine", ports=["80:80"]
     )
 

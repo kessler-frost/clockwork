@@ -17,7 +17,7 @@ from clockwork.assertions import (
     HealthcheckAssert,
     PortAccessibleAssert,
 )
-from clockwork.resources import BlankResource, DockerResource
+from clockwork.resources import AppleContainerResource, BlankResource
 
 # ==================================================================
 # STANDALONE RESOURCE: Shared Monitoring Service
@@ -31,7 +31,7 @@ from clockwork.resources import BlankResource, DockerResource
 # - Resource has independent lifecycle
 # - Resource doesn't logically belong to a specific group
 
-monitoring = DockerResource(
+monitoring = AppleContainerResource(
     name="prometheus",
     description="Shared Prometheus monitoring service for metrics collection",
     image="prom/prometheus:v2.45.0",
@@ -64,7 +64,7 @@ webapp = BlankResource(
 
 # --- Database (part of webapp composite) ---
 webapp.add(
-    DockerResource(
+    AppleContainerResource(
         name="postgres-db",
         description="PostgreSQL database for the web application",
         image="postgres:15-alpine",
@@ -83,7 +83,7 @@ webapp.add(
 
 # --- API Service (part of webapp composite) ---
 webapp.add(
-    DockerResource(
+    AppleContainerResource(
         name="api-service",
         description="FastAPI service with metrics endpoint for Prometheus scraping",
         ports=["8000:8000"],
@@ -180,9 +180,11 @@ def alternative_pattern():
     without composites - just for comparison.
     """
     # Without composites, you have flat structure
-    monitoring = DockerResource(name="prometheus", description="Monitoring")
-    database = DockerResource(name="postgres", description="Database")
-    api = DockerResource(name="api", description="API")
+    monitoring = AppleContainerResource(
+        name="prometheus", description="Monitoring"
+    )
+    database = AppleContainerResource(name="postgres", description="Database")
+    api = AppleContainerResource(name="api", description="API")
 
     api.connect(database)
     api.connect(monitoring)

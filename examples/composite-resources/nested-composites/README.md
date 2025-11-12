@@ -106,8 +106,8 @@ curl http://localhost:8000/health
 curl http://localhost:3000
 
 # Check database connections
-docker exec postgres-primary psql -U appuser -d appdb -c "SELECT version();"
-docker exec postgres-replica psql -U appuser -d appdb -c "SELECT version();"
+container exec postgres-primary psql -U appuser -d appdb -c "SELECT version();"
+container exec postgres-replica psql -U appuser -d appdb -c "SELECT version();"
 ```
 
 ### Clean Up

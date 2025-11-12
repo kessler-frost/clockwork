@@ -18,7 +18,6 @@ uv run pytest tests/ --cov=clockwork --cov-report=html
 ## Test Files
 
 - **`test_resources.py`** - FileResource and base Resource tests
-- **`test_docker_resource.py`** - DockerResource tests
 - **`test_apple_container_resource.py`** - AppleContainerResource tests (macOS native containers)
 - **`test_connections.py`** - Resource connection and dependency tests
 - **`test_tool_selector.py`** - Tool selection and integration tests

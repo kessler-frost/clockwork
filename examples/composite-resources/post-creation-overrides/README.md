@@ -22,7 +22,7 @@ This example demonstrates and compares different approaches to configuring child
 ```python
 # All configuration in constructor
 database = webapp.add(
-    DockerResource(
+    AppleContainerResource(
         name="postgres-db",
         description="PostgreSQL database",
         image="postgres:15-alpine",
@@ -51,7 +51,7 @@ database = webapp.add(
 ```python
 # Minimal constructor
 database = webapp.add(
-    DockerResource(
+    AppleContainerResource(
         name="postgres-db",
         description="PostgreSQL database",
     )
@@ -82,7 +82,7 @@ database.restart_policy = "always"
 ```python
 # Core config in constructor
 api = webapp.add(
-    DockerResource(
+    AppleContainerResource(
         name="api-service",
         image="node:18-alpine",
         ports=["8000:8000"],
@@ -120,7 +120,7 @@ if environment == "production":
 # Create multiple services
 services = []
 for name in ["api", "worker", "scheduler"]:
-    service = webapp.add(DockerResource(name=name, description=f"{name} service"))
+    service = webapp.add(AppleContainerResource(name=name, description=f"{name} service"))
     services.append(service)
 
 # Apply common config
@@ -298,7 +298,7 @@ For production systems, hybrid approach (Pattern 3) provides the best balance:
 
 ```python
 # Core config
-api = webapp.add(DockerResource(name="api", image="node:18"))
+api = webapp.add(AppleContainerResource(name="api", image="node:18"))
 
 # Environment-specific
 import os
@@ -316,7 +316,7 @@ elif env == "development":
 
 ```python
 # Core config
-api = webapp.add(DockerResource(name="api", image="node:18"))
+api = webapp.add(AppleContainerResource(name="api", image="node:18"))
 
 # Feature flags
 import os
@@ -329,7 +329,7 @@ if os.getenv("FEATURE_METRICS") == "enabled":
 
 ```python
 # Core config
-api = webapp.add(DockerResource(name="api", image="node:18"))
+api = webapp.add(AppleContainerResource(name="api", image="node:18"))
 
 # Adjust resources
 import os

@@ -33,7 +33,7 @@ webapp (Composite - Application-Specific)
 ### Standalone Resource
 
 **prometheus** - Shared monitoring service
-- **Type**: Standalone DockerResource
+- **Type**: Standalone AppleContainerResource
 - **Purpose**: Collects metrics from multiple applications
 - **Why Standalone**: Shared infrastructure, independent lifecycle
 - **Port**: 9090
@@ -48,12 +48,12 @@ webapp (Composite - Application-Specific)
 #### Children of webapp:
 
 1. **postgres-db** - Application database
-   - **Type**: DockerResource
+   - **Type**: AppleContainerResource
    - **Port**: 5432
    - **Purpose**: Stores application data
 
 2. **api-service** - REST API server
-   - **Type**: DockerResource
+   - **Type**: AppleContainerResource
    - **Port**: 8000
    - **Dependencies**: postgres-db (internal), prometheus (external)
    - **Purpose**: Serves API requests, exposes metrics
@@ -174,9 +174,9 @@ This is powerful because:
 ### Pattern 1: Everything Standalone (Flat)
 
 ```python
-monitoring = DockerResource(...)
-database = DockerResource(...)
-api = DockerResource(...)
+monitoring = AppleContainerResource(...)
+database = AppleContainerResource(...)
+api = AppleContainerResource(...)
 ```
 
 **Pros**: Simple, explicit
@@ -197,7 +197,7 @@ infrastructure.add(api)
 ### Pattern 3: Mixed (This Example)
 
 ```python
-monitoring = DockerResource(...)  # Standalone
+monitoring = AppleContainerResource(...)  # Standalone
 webapp = BlankResource(...)       # Composite
 webapp.add(database)
 webapp.add(api)
@@ -296,7 +296,7 @@ webapp.add(app_api)
 ✅ **Do**: Keep shared services standalone
 ```python
 # Good: Shared service standalone
-monitoring = DockerResource(...)
+monitoring = AppleContainerResource(...)
 ```
 
 ## Next Steps

@@ -21,7 +21,7 @@ from clockwork.connections import (
     NetworkConnection,
     ServiceMeshConnection,
 )
-from clockwork.resources import DockerResource, FileResource
+from clockwork.resources import AppleContainerResource, FileResource
 
 
 @pytest.fixture(autouse=True)
@@ -54,14 +54,14 @@ class TestDependencyConnection:
 
     def test_basic_instantiation(self):
         """Test DependencyConnection can be instantiated."""
-        db = DockerResource(
+        db = AppleContainerResource(
             description="postgres database",
             name="postgres",
             image="postgres:15",
             ports=["5432:5432"],
         )
 
-        api = DockerResource(
+        api = AppleContainerResource(
             description="api server",
             name="api",
             image="node:20",
@@ -76,10 +76,12 @@ class TestDependencyConnection:
 
     def test_needs_completion_always_false(self):
         """Test DependencyConnection never needs AI completion."""
-        db = DockerResource(
+        db = AppleContainerResource(
             description="database", name="db", image="postgres:15"
         )
-        api = DockerResource(description="api", name="api", image="node:20")
+        api = AppleContainerResource(
+            description="api", name="api", image="node:20"
+        )
 
         # Without description
         conn1 = DependencyConnection(from_resource=api, to_resource=db)
@@ -95,10 +97,12 @@ class TestDependencyConnection:
 
     def test_get_connection_context(self):
         """Test get_connection_context returns correct info."""
-        db = DockerResource(
+        db = AppleContainerResource(
             description="database", name="postgres", image="postgres:15"
         )
-        api = DockerResource(description="api", name="api", image="node:20")
+        api = AppleContainerResource(
+            description="api", name="api", image="node:20"
+        )
 
         conn = DependencyConnection(
             from_resource=api,
@@ -115,10 +119,12 @@ class TestDependencyConnection:
 
     def test_to_pulumi_returns_none(self):
         """Test to_pulumi returns None (no setup resources)."""
-        db = DockerResource(
+        db = AppleContainerResource(
             description="database", name="db", image="postgres:15"
         )
-        api = DockerResource(description="api", name="api", image="node:20")
+        api = AppleContainerResource(
+            description="api", name="api", image="node:20"
+        )
 
         conn = DependencyConnection(from_resource=api, to_resource=db)
 
@@ -128,10 +134,12 @@ class TestDependencyConnection:
 
     def test_automatic_creation_via_connect(self):
         """Test DependencyConnection is auto-created by connect()."""
-        db = DockerResource(
+        db = AppleContainerResource(
             description="database", name="postgres", image="postgres:15"
         )
-        api = DockerResource(description="api", name="api", image="node:20")
+        api = AppleContainerResource(
+            description="api", name="api", image="node:20"
+        )
 
         # connect() should create a DependencyConnection internally
         api.connect(db)
@@ -145,34 +153,24 @@ class TestDependencyConnection:
 
 
 class TestNetworkConnection:
-    """Tests for NetworkConnection - creates Docker networks."""
+    """Tests for NetworkConnection - creates container networks."""
 
     def test_instantiation_with_all_fields(self):
-        """Test NetworkConnection with all fields specified."""
-        db = DockerResource(
+        """Test NetworkConnection with network name specified."""
+        db = AppleContainerResource(
             description="test", name="postgres", image="postgres:15"
         )
 
         conn = NetworkConnection(
             to_resource=db,
             network_name="backend-network",
-            driver="bridge",
-            internal=True,
-            enable_ipv6=True,
-            subnet="172.20.0.0/16",
-            gateway="172.20.0.1",
         )
 
         assert conn.network_name == "backend-network"
-        assert conn.driver == "bridge"
-        assert conn.internal is True
-        assert conn.enable_ipv6 is True
-        assert conn.subnet == "172.20.0.0/16"
-        assert conn.gateway == "172.20.0.1"
 
     def test_needs_completion_logic(self):
         """Test needs_completion returns True when network_name is missing."""
-        db = DockerResource(
+        db = AppleContainerResource(
             description="test", name="postgres", image="postgres:15"
         )
 
@@ -196,58 +194,60 @@ class TestNetworkConnection:
 
     def test_get_connection_context(self):
         """Test get_connection_context returns network details."""
-        db = DockerResource(
+        db = AppleContainerResource(
             description="test", name="postgres", image="postgres:15"
         )
-        api = DockerResource(description="test", name="api", image="node:20")
+        api = AppleContainerResource(
+            description="test", name="api", image="node:20"
+        )
 
         conn = NetworkConnection(
             from_resource=api,
             to_resource=db,
             network_name="backend-network",
-            driver="overlay",
-            internal=True,
-            subnet="172.20.0.0/16",
         )
 
         context = conn.get_connection_context()
 
         assert context["type"] == "NetworkConnection"
         assert context["network_name"] == "backend-network"
-        assert context["driver"] == "overlay"
-        assert context["internal"] is True
-        assert context["subnet"] == "172.20.0.0/16"
         assert context["from_resource"] == "api"
         assert context["to_resource"] == "postgres"
 
-    @patch("pulumi_docker.Network")
-    def test_network_creation(self, mock_network):
-        """Test NetworkConnection creates Docker network."""
-        db = DockerResource(
+    @patch("pulumi_command.local.Command")
+    def test_network_creation(self, mock_command):
+        """Test NetworkConnection creates container network."""
+        db = AppleContainerResource(
             description="test", name="postgres", image="postgres:15"
         )
-        api = DockerResource(description="test", name="api", image="node:20")
+        api = AppleContainerResource(
+            description="test", name="api", image="node:20"
+        )
 
         conn = NetworkConnection(
             from_resource=api,
             to_resource=db,
             network_name="backend-network",
-            driver="bridge",
         )
 
         # Mock the network creation
-        mock_network_instance = MagicMock()
-        mock_network.return_value = mock_network_instance
+        mock_command_instance = MagicMock()
+        mock_command.return_value = mock_command_instance
 
         resources = conn.to_pulumi()
 
-        # Verify network was created
-        mock_network.assert_called_once()
-        call_args = mock_network.call_args
+        # Verify network was created via command
+        mock_command.assert_called_once()
+        call_args = mock_command.call_args
 
-        assert call_args[0][0] == "backend-network"
-        assert call_args[1]["name"] == "backend-network"
-        assert call_args[1]["driver"] == "bridge"
+        # Check the command resource name
+        assert call_args[0][0] == "network-backend-network"
+        # Check create command
+        assert (
+            "container network create backend-network" in call_args[1]["create"]
+        )
+        # Check delete command
+        assert "container network rm backend-network" in call_args[1]["delete"]
 
         # Verify resources returned
         assert resources is not None
@@ -255,10 +255,12 @@ class TestNetworkConnection:
 
     def test_resource_modification_adding_to_networks(self):
         """Test that connection adds network to both resources."""
-        db = DockerResource(
+        db = AppleContainerResource(
             description="test", name="postgres", image="postgres:15"
         )
-        api = DockerResource(description="test", name="api", image="node:20")
+        api = AppleContainerResource(
+            description="test", name="api", image="node:20"
+        )
 
         conn = NetworkConnection(
             from_resource=api,
@@ -266,8 +268,8 @@ class TestNetworkConnection:
             network_name="backend-network",
         )
 
-        # Mock Pulumi Network to avoid actual resource creation
-        with patch("pulumi_docker.Network"):
+        # Mock Pulumi Command to avoid actual resource creation
+        with patch("pulumi_command.local.Command"):
             conn.to_pulumi()
 
         # Verify network was added to both resources
@@ -276,10 +278,10 @@ class TestNetworkConnection:
 
     def test_hostname_injection(self):
         """Test that connection injects hostname env vars."""
-        db = DockerResource(
+        db = AppleContainerResource(
             description="test", name="postgres-db", image="postgres:15"
         )
-        api = DockerResource(
+        api = AppleContainerResource(
             description="test", name="api-server", image="node:20"
         )
 
@@ -289,8 +291,8 @@ class TestNetworkConnection:
             network_name="backend-network",
         )
 
-        # Mock Pulumi Network
-        with patch("pulumi_docker.Network"):
+        # Mock Pulumi Command
+        with patch("pulumi_command.local.Command"):
             conn.to_pulumi()
 
         # Verify hostname env vars were injected
@@ -300,33 +302,9 @@ class TestNetworkConnection:
         assert "API_SERVER_HOST" in db.env_vars
         assert db.env_vars["API_SERVER_HOST"] == "api-server"
 
-    @pytest.mark.skip(
-        reason="NetworkIpamArgs does not exist in pulumi_docker - bug in NetworkConnection.to_pulumi()"
-    )
-    def test_network_with_ipam_config(self):
-        """Test NetworkConnection with custom IPAM configuration."""
-        db = DockerResource(
-            description="test", name="postgres", image="postgres:15"
-        )
-
-        conn = NetworkConnection(
-            to_resource=db,
-            network_name="custom-network",
-            subnet="192.168.1.0/24",
-            gateway="192.168.1.1",
-        )
-
-        with patch("pulumi_docker.Network") as mock_network:
-            conn.to_pulumi()
-
-            # Verify IPAM config was passed
-            call_args = mock_network.call_args
-            ipam = call_args[1]["ipam"]
-            assert ipam is not None
-
     def test_network_missing_network_name_raises_error(self):
         """Test that to_pulumi raises error if network_name not set."""
-        db = DockerResource(
+        db = AppleContainerResource(
             description="test", name="postgres", image="postgres:15"
         )
 
@@ -344,7 +322,7 @@ class TestDatabaseConnection:
 
     def test_instantiation(self):
         """Test DatabaseConnection can be instantiated."""
-        db = DockerResource(
+        db = AppleContainerResource(
             description="postgres database",
             name="postgres",
             image="postgres:15",
@@ -366,7 +344,7 @@ class TestDatabaseConnection:
 
     def test_connection_string_generation(self):
         """Test connection string is generated correctly."""
-        db = DockerResource(
+        db = AppleContainerResource(
             description="postgres database",
             name="postgres",
             image="postgres:15",
@@ -390,7 +368,7 @@ class TestDatabaseConnection:
 
     def test_needs_completion_logic(self):
         """Test needs_completion returns True when fields are missing."""
-        db = DockerResource(
+        db = AppleContainerResource(
             description="test", name="postgres", image="postgres:15"
         )
 
@@ -410,13 +388,15 @@ class TestDatabaseConnection:
 
     def test_env_var_injection(self):
         """Test DATABASE_URL is injected into from_resource."""
-        db = DockerResource(
+        db = AppleContainerResource(
             description="postgres database",
             name="postgres",
             image="postgres:15",
             ports=["5432:5432"],
         )
-        api = DockerResource(description="test", name="api", image="node:20")
+        api = AppleContainerResource(
+            description="test", name="api", image="node:20"
+        )
 
         conn = DatabaseConnection(
             from_resource=api,
@@ -441,13 +421,15 @@ class TestDatabaseConnection:
 
     def test_custom_env_var_name(self):
         """Test custom environment variable name."""
-        db = DockerResource(
+        db = AppleContainerResource(
             description="test",
             name="postgres",
             image="postgres:15",
             ports=["5432:5432"],
         )
-        api = DockerResource(description="test", name="api", image="node:20")
+        api = AppleContainerResource(
+            description="test", name="api", image="node:20"
+        )
 
         conn = DatabaseConnection(
             from_resource=api,
@@ -467,7 +449,7 @@ class TestDatabaseConnection:
 
     def test_port_extraction(self):
         """Test port is correctly extracted from ports list."""
-        db = DockerResource(
+        db = AppleContainerResource(
             description="postgres database",
             name="postgres",
             image="postgres:15",
@@ -489,13 +471,15 @@ class TestDatabaseConnection:
 
     def test_wait_for_ready_command(self):
         """Test wait-for-ready command is created."""
-        db = DockerResource(
+        db = AppleContainerResource(
             description="test",
             name="postgres",
             image="postgres:15",
             ports=["5432:5432"],
         )
-        api = DockerResource(description="test", name="api", image="node:20")
+        api = AppleContainerResource(
+            description="test", name="api", image="node:20"
+        )
 
         conn = DatabaseConnection(
             from_resource=api,
@@ -521,13 +505,15 @@ class TestDatabaseConnection:
         schema_file = tmp_path / "schema.sql"
         schema_file.write_text("CREATE TABLE users (id SERIAL PRIMARY KEY);")
 
-        db = DockerResource(
+        db = AppleContainerResource(
             description="test",
             name="postgres",
             image="postgres:15",
             ports=["5432:5432"],
         )
-        api = DockerResource(description="test", name="api", image="node:20")
+        api = AppleContainerResource(
+            description="test", name="api", image="node:20"
+        )
 
         conn = DatabaseConnection(
             from_resource=api,
@@ -555,13 +541,15 @@ class TestDatabaseConnection:
             "ALTER TABLE users ADD COLUMN email TEXT;"
         )
 
-        db = DockerResource(
+        db = AppleContainerResource(
             description="test",
             name="postgres",
             image="postgres:15",
             ports=["5432:5432"],
         )
-        api = DockerResource(description="test", name="api", image="node:20")
+        api = AppleContainerResource(
+            description="test", name="api", image="node:20"
+        )
 
         conn = DatabaseConnection(
             from_resource=api,
@@ -580,7 +568,7 @@ class TestDatabaseConnection:
 
     def test_get_connection_context(self):
         """Test get_connection_context returns database info."""
-        db = DockerResource(
+        db = AppleContainerResource(
             description="test", name="postgres", image="postgres:15"
         )
 
@@ -608,8 +596,8 @@ class TestFileConnection:
     """Tests for FileConnection - file and volume sharing."""
 
     def test_volume_creation(self):
-        """Test FileConnection creates Docker volume."""
-        docker_res = DockerResource(
+        """Test FileConnection creates container volume."""
+        container_res = AppleContainerResource(
             description="test container",
             name="test",
             image="nginx:alpine",
@@ -617,7 +605,7 @@ class TestFileConnection:
         )
 
         conn = FileConnection(
-            from_resource=docker_res,
+            from_resource=container_res,
             to_resource=None,
             mount_path="/data",
             volume_name="test-volume",
@@ -634,7 +622,7 @@ class TestFileConnection:
 
     def test_mount_configuration(self):
         """Test mount is added to container."""
-        docker_res = DockerResource(
+        container_res = AppleContainerResource(
             description="test container",
             name="test",
             image="nginx:alpine",
@@ -642,7 +630,7 @@ class TestFileConnection:
         )
 
         conn = FileConnection(
-            from_resource=docker_res,
+            from_resource=container_res,
             to_resource=None,
             mount_path="/data",
             volume_name="test-volume",
@@ -652,8 +640,8 @@ class TestFileConnection:
         conn.to_pulumi()
 
         # Verify mount was added
-        assert len(docker_res.volumes) == 1
-        assert docker_res.volumes[0] == "test-volume:/data"
+        assert len(container_res.volumes) == 1
+        assert container_res.volumes[0] == "test-volume:/data"
 
     def test_needs_completion_logic(self):
         """Test needs_completion logic for FileConnection."""
@@ -684,7 +672,7 @@ class TestFileConnection:
 
     def test_read_only_mounts(self):
         """Test read-only mount configuration."""
-        docker_res = DockerResource(
+        container_res = AppleContainerResource(
             description="test container",
             name="test",
             image="nginx:alpine",
@@ -692,7 +680,7 @@ class TestFileConnection:
         )
 
         conn = FileConnection(
-            from_resource=docker_res,
+            from_resource=container_res,
             to_resource=None,
             mount_path="/data",
             source_path="/host/data",
@@ -703,7 +691,7 @@ class TestFileConnection:
         conn.to_pulumi()
 
         # Verify read-only flag is set
-        assert docker_res.volumes[0] == "/host/data:/data:ro"
+        assert container_res.volumes[0] == "/host/data:/data:ro"
 
     def test_file_resource_mount(self):
         """Test FileConnection with FileResource."""
@@ -714,7 +702,7 @@ class TestFileConnection:
             content="test: value",
         )
 
-        docker_res = DockerResource(
+        container_res = AppleContainerResource(
             description="test container",
             name="test",
             image="nginx:alpine",
@@ -722,7 +710,7 @@ class TestFileConnection:
         )
 
         conn = FileConnection(
-            from_resource=docker_res,
+            from_resource=container_res,
             to_resource=file_res,
             mount_path="/etc/config.yaml",
             read_only=True,
@@ -731,12 +719,14 @@ class TestFileConnection:
         conn.to_pulumi()
 
         # Verify bind mount was created
-        assert len(docker_res.volumes) == 1
-        assert docker_res.volumes[0] == "/tmp/config.yaml:/etc/config.yaml:ro"
+        assert len(container_res.volumes) == 1
+        assert (
+            container_res.volumes[0] == "/tmp/config.yaml:/etc/config.yaml:ro"
+        )
 
     def test_bind_mount_with_source_path(self):
         """Test bind mount with explicit source_path."""
-        docker_res = DockerResource(
+        container_res = AppleContainerResource(
             description="test container",
             name="test",
             image="nginx:alpine",
@@ -744,7 +734,7 @@ class TestFileConnection:
         )
 
         conn = FileConnection(
-            from_resource=docker_res,
+            from_resource=container_res,
             to_resource=None,
             mount_path="/data",
             source_path="/host/data",
@@ -753,7 +743,7 @@ class TestFileConnection:
 
         conn.to_pulumi()
 
-        assert docker_res.volumes[0] == "/host/data:/data"
+        assert container_res.volumes[0] == "/host/data:/data"
 
     def test_get_connection_context(self):
         """Test get_connection_context returns file connection info."""
@@ -781,7 +771,7 @@ class TestServiceMeshConnection:
 
     def test_port_discovery(self):
         """Test port is discovered from to_resource."""
-        api = DockerResource(
+        api = AppleContainerResource(
             description="API backend",
             name="api-server",
             image="node:20",
@@ -798,7 +788,7 @@ class TestServiceMeshConnection:
 
     def test_port_discovery_simple_format(self):
         """Test port discovery with simple port format."""
-        api = DockerResource(
+        api = AppleContainerResource(
             description="API backend",
             name="api-server",
             image="node:20",
@@ -815,14 +805,14 @@ class TestServiceMeshConnection:
 
     def test_service_url_injection(self):
         """Test service URL is injected into from_resource."""
-        api = DockerResource(
+        api = AppleContainerResource(
             description="API backend",
             name="api-server",
             image="node:20",
             ports=["8000:8000"],
         )
 
-        web = DockerResource(
+        web = AppleContainerResource(
             description="Web frontend",
             name="web-frontend",
             image="nginx:alpine",
@@ -843,14 +833,14 @@ class TestServiceMeshConnection:
 
     def test_health_check_assertion_creation(self):
         """Test health check assertion is created."""
-        api = DockerResource(
+        api = AppleContainerResource(
             description="API backend",
             name="api-server",
             image="node:20",
             ports=["8000:8000"],
         )
 
-        web = DockerResource(
+        web = AppleContainerResource(
             description="Web frontend",
             name="web-frontend",
             image="nginx:alpine",
@@ -874,7 +864,7 @@ class TestServiceMeshConnection:
 
     def test_needs_completion_logic(self):
         """Test needs_completion returns True when fields are missing."""
-        api = DockerResource(
+        api = AppleContainerResource(
             name="api-server",
             description="API backend",
             ports=["8000:8000"],
@@ -899,7 +889,7 @@ class TestServiceMeshConnection:
 
     def test_tls_certificate_creation(self):
         """Test TLS certificates are created when TLS is enabled."""
-        api = DockerResource(
+        api = AppleContainerResource(
             description="API backend",
             name="api-server",
             image="node:20",
@@ -922,10 +912,10 @@ class TestServiceMeshConnection:
 
     def test_get_connection_context(self):
         """Test get_connection_context returns service mesh info."""
-        api = DockerResource(
+        api = AppleContainerResource(
             description="API backend", name="api-server", image="node:20"
         )
-        web = DockerResource(
+        web = AppleContainerResource(
             description="Web frontend",
             name="web-frontend",
             image="nginx:alpine",
@@ -953,7 +943,7 @@ class TestServiceMeshConnection:
 
     def test_extract_port_helper(self):
         """Test _extract_port helper method."""
-        api = DockerResource(
+        api = AppleContainerResource(
             description="test",
             name="api-server",
             image="node:20",
@@ -972,14 +962,14 @@ class TestServiceMeshConnection:
 
     def test_full_to_pulumi_workflow(self):
         """Test complete to_pulumi workflow."""
-        api = DockerResource(
+        api = AppleContainerResource(
             description="API backend",
             name="api-server",
             image="node:20",
             ports=["8000:8000"],
         )
 
-        web = DockerResource(
+        web = AppleContainerResource(
             description="Web frontend",
             name="web-frontend",
             image="nginx:alpine",
@@ -1018,19 +1008,19 @@ class TestConnectionIntegration:
 
     def test_multiple_connection_types_on_resource(self):
         """Test resource with multiple different connection types."""
-        db = DockerResource(
+        db = AppleContainerResource(
             description="test",
             name="postgres",
             image="postgres:15",
             ports=["5432:5432"],
         )
-        cache = DockerResource(
+        cache = AppleContainerResource(
             description="test",
             name="redis",
             image="redis:7",
             ports=["6379:6379"],
         )
-        api = DockerResource(
+        api = AppleContainerResource(
             description="test", name="api", image="node:20", ports=["3000:3000"]
         )
 
@@ -1059,7 +1049,7 @@ class TestConnectionIntegration:
 
     def test_connection_context_inheritance(self):
         """Test that all connection types properly inherit from base Connection."""
-        db = DockerResource(
+        db = AppleContainerResource(
             description="test", name="postgres", image="postgres:15"
         )
 

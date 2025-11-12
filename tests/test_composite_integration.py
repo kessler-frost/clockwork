@@ -16,7 +16,11 @@ import pytest
 from pydantic import ValidationError
 
 from clockwork.core import ClockworkCore
-from clockwork.resources import BlankResource, DockerResource, FileResource
+from clockwork.resources import (
+    AppleContainerResource,
+    BlankResource,
+    FileResource,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -37,13 +41,13 @@ class TestEndToEndWorkflow:
         backend = BlankResource(name="backend", description="Backend services")
 
         # 2. Add children
-        db = DockerResource(
+        db = AppleContainerResource(
             description="Database",
             name="db",
             image="postgres:15",
             ports=["5432:5432"],
         )
-        cache = DockerResource(
+        cache = AppleContainerResource(
             description="Cache",
             name="cache",
             image="redis:7",
@@ -72,7 +76,7 @@ class TestEndToEndWorkflow:
     def test_nested_composite_workflow(self):
         """Test complete workflow with nested composites."""
         # Create nested structure
-        db = DockerResource(
+        db = AppleContainerResource(
             description="Database",
             name="db",
             image="postgres:15",
@@ -82,7 +86,7 @@ class TestEndToEndWorkflow:
         backend = BlankResource(name="backend", description="Backend")
         backend.add(db)
 
-        api = DockerResource(
+        api = AppleContainerResource(
             description="API",
             name="api",
             image="node:20",
@@ -116,7 +120,7 @@ class TestEndToEndWorkflow:
     def test_cross_composite_connection_workflow(self):
         """Test workflow with connections across composite boundaries."""
         # Composite A
-        db = DockerResource(
+        db = AppleContainerResource(
             description="Database",
             name="db",
             image="postgres:15",
@@ -126,7 +130,7 @@ class TestEndToEndWorkflow:
         backend.add(db)
 
         # Composite B (API connects to db in composite A)
-        api = DockerResource(
+        api = AppleContainerResource(
             description="API",
             name="api",
             image="node:20",
@@ -155,7 +159,7 @@ class TestAICompletion:
         # Create composite with incomplete child
         backend = BlankResource(name="backend", description="Backend")
         backend.add(
-            DockerResource(
+            AppleContainerResource(
                 description="PostgreSQL database"
             )  # No name or image
         )
@@ -169,8 +173,8 @@ class TestAICompletion:
         # Create composite with incomplete children
         backend = BlankResource(name="backend", description="Backend services")
         backend.add(
-            DockerResource(description="PostgreSQL database"),
-            DockerResource(description="Redis cache"),
+            AppleContainerResource(description="PostgreSQL database"),
+            AppleContainerResource(description="Redis cache"),
         )
 
         # Mock ResourceCompleter
@@ -181,7 +185,7 @@ class TestAICompletion:
             async def mock_complete(resources):
                 completed = []
                 for r in resources:
-                    if isinstance(r, DockerResource):
+                    if isinstance(r, AppleContainerResource):
                         if r.name is None:
                             r.name = (
                                 "completed-" + r.description.split()[0].lower()
@@ -215,7 +219,7 @@ class TestAICompletion:
     async def test_composite_completion_preserves_hierarchy(self):
         """Test that AI completion preserves parent-child relationships."""
         # Create composite with children (name is needed for children collection)
-        db = DockerResource(
+        db = AppleContainerResource(
             name="db",
             description="Database",
             image="postgres:15",
@@ -242,7 +246,7 @@ class TestAssertions:
         from clockwork.assertions import ContainerRunningAssert
 
         # Create composite with child that has assertions
-        db = DockerResource(
+        db = AppleContainerResource(
             description="Database",
             name="db",
             image="postgres:15",
@@ -276,7 +280,7 @@ class TestAssertions:
         from clockwork.assertions import ContainerRunningAssert
 
         # Create nested structure with assertions
-        db = DockerResource(
+        db = AppleContainerResource(
             description="Database",
             name="db",
             image="postgres:15",
@@ -311,7 +315,7 @@ class TestMixedResources:
         )
 
         # Composite with children
-        db = DockerResource(
+        db = AppleContainerResource(
             description="Database",
             name="db",
             image="postgres:15",
@@ -322,7 +326,7 @@ class TestMixedResources:
         backend.add(db)
 
         # Another standalone primitive
-        api = DockerResource(
+        api = AppleContainerResource(
             description="API",
             name="api",
             image="node:20",
@@ -362,7 +366,7 @@ class TestMixedResources:
             content="database: postgres",
         )
 
-        db = DockerResource(
+        db = AppleContainerResource(
             description="Database",
             name="db",
             image="postgres:15",
@@ -398,7 +402,7 @@ class TestMixedResources:
                 mode="w", suffix=".py", delete=False
             ) as f:
                 f.write("""
-from clockwork.resources import FileResource, DockerResource, BlankResource
+from clockwork.resources import FileResource, AppleContainerResource, BlankResource
 
 config = FileResource(
     description="Config",
@@ -406,7 +410,7 @@ config = FileResource(
     content="database: postgres"
 )
 
-db = DockerResource(
+db = AppleContainerResource(
     description="Database",
     name="db",
     image="postgres:15",
@@ -436,7 +440,7 @@ class TestPostCreationOverrides:
     def test_override_child_fields_after_adding(self):
         """Test that child fields can be overridden after adding to composite."""
         # Create child with initial values
-        db = DockerResource(
+        db = AppleContainerResource(
             description="Database",
             name="db",
             image="postgres:15",
@@ -459,14 +463,14 @@ class TestPostCreationOverrides:
     def test_override_connection_after_creation(self):
         """Test adding connections to child after adding to composite."""
         # Create resources
-        cache = DockerResource(
+        cache = AppleContainerResource(
             description="Cache",
             name="cache",
             image="redis:7",
             ports=["6379:6379"],
         )
 
-        db = DockerResource(
+        db = AppleContainerResource(
             description="Database",
             name="db",
             image="postgres:15",
@@ -486,7 +490,7 @@ class TestPostCreationOverrides:
     def test_add_more_children_after_creation(self):
         """Test adding more children to composite after initial creation."""
         # Create composite with initial child
-        db = DockerResource(
+        db = AppleContainerResource(
             description="Database",
             name="db",
             image="postgres:15",
@@ -499,7 +503,7 @@ class TestPostCreationOverrides:
         assert len(backend.children) == 1
 
         # Add more children later
-        cache = DockerResource(
+        cache = AppleContainerResource(
             description="Cache",
             name="cache",
             image="redis:7",
@@ -520,14 +524,14 @@ class TestComplexScenarios:
     def test_microservices_architecture(self):
         """Test complex microservices architecture with multiple composites."""
         # Database layer
-        postgres = DockerResource(
+        postgres = AppleContainerResource(
             description="PostgreSQL",
             name="postgres",
             image="postgres:15",
             ports=["5432:5432"],
         )
 
-        redis = DockerResource(
+        redis = AppleContainerResource(
             description="Redis",
             name="redis",
             image="redis:7",
@@ -538,7 +542,7 @@ class TestComplexScenarios:
         data_layer.add(postgres, redis)
 
         # Service layer
-        auth_service = DockerResource(
+        auth_service = AppleContainerResource(
             description="Auth service",
             name="auth",
             image="auth:latest",
@@ -546,7 +550,7 @@ class TestComplexScenarios:
         )
         auth_service.connect(postgres).connect(redis)
 
-        api_service = DockerResource(
+        api_service = AppleContainerResource(
             description="API service",
             name="api",
             image="api:latest",
@@ -560,7 +564,7 @@ class TestComplexScenarios:
         service_layer.add(auth_service, api_service)
 
         # Gateway layer
-        gateway = DockerResource(
+        gateway = AppleContainerResource(
             description="API Gateway",
             name="gateway",
             image="nginx:latest",
@@ -618,7 +622,7 @@ class TestComplexScenarios:
     def test_three_tier_web_application(self):
         """Test three-tier web application architecture."""
         # Backend tier
-        db = DockerResource(
+        db = AppleContainerResource(
             description="PostgreSQL database",
             name="db",
             image="postgres:15",
@@ -631,7 +635,7 @@ class TestComplexScenarios:
         backend_tier.add(db)
 
         # Application tier
-        api = DockerResource(
+        api = AppleContainerResource(
             description="REST API",
             name="api",
             image="api:latest",
@@ -645,7 +649,7 @@ class TestComplexScenarios:
         app_tier.add(api)
 
         # Frontend tier
-        web = DockerResource(
+        web = AppleContainerResource(
             description="Web frontend",
             name="web",
             image="nginx:latest",
@@ -698,14 +702,14 @@ class TestErrorHandling:
         from clockwork.connections import DependencyConnection
 
         # Create cycle
-        db = DockerResource(
+        db = AppleContainerResource(
             description="Database",
             name="db",
             image="postgres:15",
             ports=["5432:5432"],
         )
 
-        api = DockerResource(
+        api = AppleContainerResource(
             description="API",
             name="api",
             image="node:20",

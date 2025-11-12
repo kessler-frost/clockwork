@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 import pulumi
 import pytest
 
-from clockwork.resources import BlankResource, DockerResource
+from clockwork.resources import AppleContainerResource, BlankResource
 
 
 @pytest.fixture(autouse=True)
@@ -59,13 +59,13 @@ class TestParentChildReferences:
         mock_component.return_value = component_mock
 
         # Create composite with multiple children
-        db = DockerResource(
+        db = AppleContainerResource(
             description="Database",
             name="db",
             image="postgres:15",
             ports=["5432:5432"],
         )
-        cache = DockerResource(
+        cache = AppleContainerResource(
             description="Cache",
             name="cache",
             image="redis:7",
@@ -100,7 +100,7 @@ class TestDependencyOptions:
 
     def test_build_dependency_options_no_connections(self):
         """Test _build_dependency_options returns None when no connections."""
-        resource = DockerResource(
+        resource = AppleContainerResource(
             description="Standalone service",
             name="standalone",
             image="alpine:latest",
@@ -112,7 +112,7 @@ class TestDependencyOptions:
 
     def test_merge_resource_options_both_none(self):
         """Test _merge_resource_options returns None when both inputs are None."""
-        resource = DockerResource(
+        resource = AppleContainerResource(
             description="Test",
             name="test",
             image="alpine:latest",
@@ -124,7 +124,7 @@ class TestDependencyOptions:
 
     def test_merge_resource_options_parent_only(self):
         """Test _merge_resource_options with only parent options."""
-        resource = DockerResource(
+        resource = AppleContainerResource(
             description="Test",
             name="test",
             image="alpine:latest",

@@ -1,7 +1,7 @@
 """Tests for FileConnection class."""
 
 from clockwork.connections.file import FileConnection
-from clockwork.resources.docker import DockerResource
+from clockwork.resources.apple_container import AppleContainerResource
 from clockwork.resources.file import FileResource
 
 
@@ -87,8 +87,8 @@ def test_file_connection_context():
 
 
 def test_file_connection_with_docker_resource():
-    """Test FileConnection modifies DockerResource volumes."""
-    docker_res = DockerResource(
+    """Test FileConnection modifies AppleContainerResource volumes."""
+    docker_res = AppleContainerResource(
         description="test container",
         name="test",
         image="nginx:alpine",
@@ -106,7 +106,7 @@ def test_file_connection_with_docker_resource():
     # Call to_pulumi to trigger mount addition
     connection.to_pulumi()
 
-    # Verify volume was added to DockerResource
+    # Verify volume was added to AppleContainerResource
     assert len(docker_res.volumes) == 1
     assert docker_res.volumes[0] == "test-volume:/data"
 
@@ -121,7 +121,7 @@ def test_file_connection_with_file_resource():
         mode="644",
     )
 
-    docker_res = DockerResource(
+    docker_res = AppleContainerResource(
         description="test container",
         name="test",
         image="nginx:alpine",
@@ -138,14 +138,14 @@ def test_file_connection_with_file_resource():
     # Call to_pulumi to trigger mount addition
     connection.to_pulumi()
 
-    # Verify volume was added to DockerResource
+    # Verify volume was added to AppleContainerResource
     assert len(docker_res.volumes) == 1
     assert docker_res.volumes[0] == "/tmp/config.yaml:/etc/config.yaml:ro"
 
 
 def test_file_connection_bind_mount():
     """Test FileConnection with bind mount."""
-    docker_res = DockerResource(
+    docker_res = AppleContainerResource(
         description="test container",
         name="test",
         image="nginx:alpine",
@@ -163,14 +163,14 @@ def test_file_connection_bind_mount():
     # Call to_pulumi to trigger mount addition
     connection.to_pulumi()
 
-    # Verify bind mount was added to DockerResource
+    # Verify bind mount was added to AppleContainerResource
     assert len(docker_res.volumes) == 1
     assert docker_res.volumes[0] == "/host/data:/data"
 
 
 def test_file_connection_read_only():
     """Test FileConnection with read_only flag."""
-    docker_res = DockerResource(
+    docker_res = AppleContainerResource(
         description="test container",
         name="test",
         image="nginx:alpine",

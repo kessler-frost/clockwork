@@ -37,8 +37,8 @@ class ChildrenCollection(Mapping):
     Example:
         >>> webapp = BlankResource(name="webapp")
         >>> webapp.add(
-        ...     DockerResource(name="postgres", image="postgres:15"),
-        ...     DockerResource(name="redis", image="redis:7")
+        ...     AppleContainerResource(name="postgres", image="postgres:15"),
+        ...     AppleContainerResource(name="redis", image="redis:7")
         ... )
         >>>
         >>> # Dict-style access
@@ -251,11 +251,11 @@ class Resource(BaseModel):
 
         Example:
             # Single child
-            parent = DockerResource(name="web-app", image="nginx")
+            parent = AppleContainerResource(name="web-app", image="nginx")
             parent.add(FileResource(name="config", path="/etc/nginx/nginx.conf"))
 
             # Multiple children (chainable)
-            parent = DockerResource(name="app", image="node:20")
+            parent = AppleContainerResource(name="app", image="node:20")
             parent.add(
                 FileResource(name="package.json", path="/app/package.json"),
                 FileResource(name="server.js", path="/app/server.js")
@@ -266,9 +266,9 @@ class Resource(BaseModel):
             # Hierarchical structure
             project = Resource(name="my-project")
             project.add(
-                DockerResource(name="database", image="postgres:15"),
-                DockerResource(name="cache", image="redis:7"),
-                DockerResource(name="api", image="node:20")
+                AppleContainerResource(name="database", image="postgres:15"),
+                AppleContainerResource(name="cache", image="redis:7"),
+                AppleContainerResource(name="api", image="node:20")
             )
         """
         for resource in resources:
@@ -432,10 +432,10 @@ class Resource(BaseModel):
             None if no connections or no Pulumi resources available
 
         Example:
-            db = DockerResource(name="postgres", image="postgres:15")
+            db = AppleContainerResource(name="postgres", image="postgres:15")
             # ... db.to_pulumi() creates db._pulumi_resource ...
 
-            api = DockerResource(name="api")
+            api = AppleContainerResource(name="api")
             api.connect(db)
             opts = api._build_dependency_options()
             # opts.depends_on contains db's Pulumi resource

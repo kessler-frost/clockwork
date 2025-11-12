@@ -33,13 +33,13 @@ class DatabaseConnection(Connection):
 
     Examples:
         # Basic usage with automatic connection string:
-        >>> db = DockerResource(
+        >>> db = AppleContainerResource(
         ...     name="postgres",
         ...     image="postgres:15",
         ...     ports=["5432:5432"],
         ...     env_vars={"POSTGRES_PASSWORD": "secret"}  # pragma: allowlist secret
         ... )
-        >>> api = DockerResource(name="api", image="node:20")
+        >>> api = AppleContainerResource(name="api", image="node:20")
         >>> connection = DatabaseConnection(
         ...     to_resource=db,
         ...     connection_string_template="postgresql://{user}:{password}@{host}:{port}/{database}",
@@ -162,10 +162,10 @@ class DatabaseConnection(Connection):
         Raises:
             ValueError: If to_resource type is not supported
         """
-        from clockwork.resources.docker import DockerResource
+        from clockwork.resources.apple_container import AppleContainerResource
 
-        if isinstance(self.to_resource, DockerResource):
-            # For Docker containers, host is the container name
+        if isinstance(self.to_resource, AppleContainerResource):
+            # For containers, host is the container name
             host = self.to_resource.name
             # Extract port from ports list
             port = self._extract_port(self.to_resource.ports)

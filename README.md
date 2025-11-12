@@ -15,7 +15,7 @@ Clockwork provides intelligent primitives that adapt to how you want to work.
 
 **The insight:** What's tedious is personal.
 
-- Some people love writing Docker configs, others just want containers running
+- Some people love writing container configs, others just want containers running
 - Some enjoy crafting nginx rules, others prefer describing requirements
 - Some care about specific image versions, others just need something that works
 
@@ -34,7 +34,7 @@ Same primitive, different levels of control - you choose per resource:
 **Full control** (No AI):
 
 ```python
-nginx = DockerResource(
+nginx = AppleContainerResource(
     description="Nginx web server",
     name="my-nginx",
     image="nginx:1.25-alpine",
@@ -47,7 +47,7 @@ nginx = DockerResource(
 **Hybrid** (AI assists):
 
 ```python
-nginx = DockerResource(
+nginx = AppleContainerResource(
     description="web server with caching enabled",
     ports=["8080:80"]  # You care about the port
     # AI picks image, generates config with caching
@@ -57,7 +57,7 @@ nginx = DockerResource(
 **Fast** (AI handles implementation):
 
 ```python
-nginx = DockerResource(
+nginx = AppleContainerResource(
     description="web server for static files",
     assertions=[HealthcheckAssert(url="http://localhost:8080")]
 )
@@ -83,7 +83,7 @@ Before getting started, ensure you have:
 - **Python 3.12 or higher** - Required for modern Python features
 - **uv package manager** - Fast Python package installer and resolver
 - **Git** - For cloning the repository
-- **Docker** (Linux/Windows) or **Apple Containers** (macOS) - For container resources
+- **Apple Containers** (macOS) - For container resources
 
 ## Installation
 
@@ -146,7 +146,7 @@ uv run clockwork apply
 ## Example
 
 ```python
-from clockwork.resources import FileResource, DockerResource
+from clockwork.resources import FileResource, AppleContainerResource
 from clockwork.assertions import HealthcheckAssert
 
 # AI-generated content
@@ -164,7 +164,7 @@ readme = FileResource(
 )
 
 # Container with health check
-nginx = DockerResource(
+nginx = AppleContainerResource(
     description="web server for static files",
     ports=["8080:80"],
     assertions=[HealthcheckAssert(url="http://localhost:8080")]
@@ -179,7 +179,7 @@ uv run clockwork apply
 
 After your first deployment:
 
-1. **Explore other resources**: Try `DockerResource`, `AppleContainerResource`, `GitRepoResource`
+1. **Explore other resources**: Try `AppleContainerResource`, `GitRepoResource`
 2. **Add assertions**: Validate your deployments with `HealthcheckAssert`, `PortAccessibleAssert`
 3. **Connect resources**: Use `.connect()` to link services with automatic configuration
 4. **Build composites**: Group related resources with `BlankResource` for reusable patterns
@@ -207,29 +207,23 @@ FileResource(
 
 ### Container Resources
 
-Clockwork provides two container resource types:
+Clockwork provides container resources for macOS:
 
 | Resource | Platform | Runtime |
 |----------|----------|---------|
-| `DockerResource` | Cross-platform (macOS, Linux, Windows) | Docker Engine via Pulumi provider |
 | `AppleContainerResource` | macOS only | Apple Containers CLI (native runtime) |
 
-Both support AI-powered image suggestion when `image` is not specified (e.g., nginx:alpine, redis:alpine).
+Supports AI-powered image suggestion when `image` is not specified (e.g., nginx:alpine, redis:alpine).
 
-**Example Usage** (identical syntax for both):
+**Example Usage**:
 
 ```python
-# Use DockerResource or AppleContainerResource - syntax is identical
-resource = DockerResource(
+resource = AppleContainerResource(
     name="web-server",
     description="A lightweight web server for testing and demos",
     ports=["8080:80"]  # Host port 8080 -> Container port 80
 )
 ```
-
-**When to use which:**
-- Use `DockerResource` for cross-platform compatibility or when deploying to Linux/Windows
-- Use `AppleContainerResource` for macOS-optimized local development with Apple's native container runtime
 
 ### GitRepoResource
 
@@ -342,17 +336,17 @@ Declare dependencies between resources for proper deployment ordering and AI-pow
 **How it works:**
 
 ```python
-from clockwork.resources import DockerResource
+from clockwork.resources import AppleContainerResource
 
 # Create independent resources
-postgres = DockerResource(
+postgres = AppleContainerResource(
     name="postgres-db",
     description="PostgreSQL database",
     image="postgres:15-alpine",
     ports=["5432:5432"]
 )
 
-redis = DockerResource(
+redis = AppleContainerResource(
     name="redis-cache",
     description="Redis cache",
     image="redis:7-alpine",
@@ -360,7 +354,7 @@ redis = DockerResource(
 )
 
 # Connect API to dependencies
-api = DockerResource(
+api = AppleContainerResource(
     name="api-server",
     description="FastAPI backend with database and cache",
     ports=["8000:8000"]
@@ -387,16 +381,16 @@ See `examples/connected-services/` for complete examples.
 ### Basic Usage
 
 ```python
-from clockwork.resources import BlankResource, DockerResource
+from clockwork.resources import BlankResource, AppleContainerResource
 
 # Create a composite web application
 webapp = BlankResource(
     name="webapp",
     description="Web application with database and cache"
 ).add(
-    DockerResource(name="db", image="postgres:15-alpine", ports=["5432:5432"]),
-    DockerResource(name="cache", image="redis:7-alpine", ports=["6379:6379"]),
-    DockerResource(name="api", description="API server", ports=["8000:8000"])
+    AppleContainerResource(name="db", image="postgres:15-alpine", ports=["5432:5432"]),
+    AppleContainerResource(name="cache", image="redis:7-alpine", ports=["6379:6379"]),
+    AppleContainerResource(name="api", description="API server", ports=["8000:8000"])
 )
 
 # Access and modify children
@@ -471,7 +465,6 @@ uv run clockwork apply --model "anthropic/claude-haiku-4.5"
 
 **Platform-Specific Resources**:
 - **AppleContainerResource**: macOS only - requires Apple Containers CLI
-- **DockerResource**: Cross-platform - works on macOS, Linux, and Windows
 
 ## Getting Help
 
@@ -486,7 +479,7 @@ Make sure you're in the clockwork directory, then explore these examples:
 
 ```bash
 # Comprehensive showcase - Demonstrates all Clockwork features
-# Includes: FileResource, DockerResource, AppleContainerResource, GitRepoResource, assertions, connections
+# Includes: FileResource, AppleContainerResource, GitRepoResource, assertions, connections
 cd examples/showcase
 uv run clockwork apply
 uv run clockwork assert

@@ -8,7 +8,7 @@ _This is a living document of potential features and enhancements. Updated frequ
 
 ### Core Primitives & CLI Commands
 
-- **Primitive Types**: FileResource, DockerResource, AppleContainerResource, GitRepoResource
+- **Primitive Types**: FileResource, AppleContainerResource, AppleContainerResource, GitRepoResource
 - **CLI Commands**:
   - `clockwork apply` - Deploy primitives
   - `clockwork plan` - Preview without deploying
@@ -55,7 +55,7 @@ Built-in assertion classes for validating deployed resources (no AI required, Py
 **Example:**
 
 ```python
-nginx = DockerResource(
+nginx = AppleContainerResource(
     description="Web server",
     name="nginx-web",
     ports=["8080:80"],
@@ -176,7 +176,7 @@ api_docs = FileResource(
 
 **Example Configuration:**
 ```python
-nginx = DockerResource(
+nginx = AppleContainerResource(
     name="nginx",
     description="Web server",
     reconcile=True,                    # Enable reconciliation
@@ -235,13 +235,13 @@ Transform Clockwork from one-time deployments to long-lived project management.
 **Example:**
 ```python
 # Initial: main.py
-api = DockerResource(
+api = AppleContainerResource(
     name="api-service",
     description="REST API with user schema"
 )
 
 # Later: update.py (no need for original main.py!)
-api = DockerResource(
+api = AppleContainerResource(
     name="api-service",
     description="Add organization schema and update user endpoints"
 )
@@ -263,7 +263,7 @@ clockwork update
 Expand the type-safe assertion library for common scenarios (not yet implemented):
 
 **Container:**
-- `ContainerHealthyAssert()` - Docker health status
+- `ContainerHealthyAssert()` - Container health status
 - `LogContainsAssert(pattern, since)` - Log content validation
 - `ContainerRestartCountAssert(max_restarts)` - Stability check
 

@@ -16,7 +16,7 @@ from clockwork.assertions import (
     HealthcheckAssert,
     PortAccessibleAssert,
 )
-from clockwork.resources import BlankResource, DockerResource
+from clockwork.resources import AppleContainerResource, BlankResource
 
 # ==================================================================
 # LEVEL 1: Top-level composite (Full Stack)
@@ -59,7 +59,7 @@ full_stack.add(
 
 # Primary database (read-write)
 full_stack.children["database-cluster"].add(
-    DockerResource(
+    AppleContainerResource(
         name="postgres-primary",
         description="Primary PostgreSQL database with read-write access",
         image="postgres:15-alpine",
@@ -80,7 +80,7 @@ full_stack.children["database-cluster"].add(
 
 # Read replica (read-only)
 full_stack.children["database-cluster"].add(
-    DockerResource(
+    AppleContainerResource(
         name="postgres-replica",
         description="PostgreSQL read replica for scaling read operations",
         image="postgres:15-alpine",
@@ -105,7 +105,7 @@ full_stack.children["database-cluster"].add(
 
 # REST API server
 full_stack.children["application-tier"].add(
-    DockerResource(
+    AppleContainerResource(
         name="api-service",
         description="REST API service handling HTTP requests, connected to primary database",
         ports=["8000:8000"],
@@ -125,7 +125,7 @@ full_stack.children["application-tier"].add(
 
 # Background worker service
 full_stack.children["application-tier"].add(
-    DockerResource(
+    AppleContainerResource(
         name="worker-service",
         description="Background worker processing jobs from queue, connected to primary database",
         env_vars={
@@ -141,7 +141,7 @@ full_stack.children["application-tier"].add(
 
 # Web frontend (reads from replica)
 full_stack.children["application-tier"].add(
-    DockerResource(
+    AppleContainerResource(
         name="web-frontend",
         description="Web frontend serving static content, connected to read replica",
         ports=["3000:3000"],

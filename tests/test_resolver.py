@@ -12,7 +12,11 @@ This module tests the dependency resolution system including:
 import pytest
 
 from clockwork.core import ClockworkCore
-from clockwork.resources import BlankResource, DockerResource, FileResource
+from clockwork.resources import (
+    AppleContainerResource,
+    BlankResource,
+    FileResource,
+)
 
 
 class TestCompositeFlattening:
@@ -21,10 +25,10 @@ class TestCompositeFlattening:
     def test_flatten_single_composite(self):
         """Test flattening a composite with children extracts all resources."""
         # Create composite with children
-        db = DockerResource(
+        db = AppleContainerResource(
             description="Database", name="db", image="postgres:15"
         )
-        cache = DockerResource(
+        cache = AppleContainerResource(
             description="Cache", name="cache", image="redis:7"
         )
 
@@ -43,17 +47,17 @@ class TestCompositeFlattening:
     def test_flatten_multiple_composites(self):
         """Test flattening multiple composites."""
         # First composite
-        db = DockerResource(
+        db = AppleContainerResource(
             description="Database", name="db", image="postgres:15"
         )
-        cache = DockerResource(
+        cache = AppleContainerResource(
             description="Cache", name="cache", image="redis:7"
         )
         backend = BlankResource(name="backend", description="Backend services")
         backend.add(db, cache)
 
         # Second composite
-        nginx = DockerResource(
+        nginx = AppleContainerResource(
             description="Web server", name="nginx", image="nginx:latest"
         )
         cdn = FileResource(
@@ -81,10 +85,10 @@ class TestCompositeFlattening:
     def test_flatten_nested_composites(self):
         """Test flattening nested composites (composites containing composites)."""
         # Innermost resources
-        db = DockerResource(
+        db = AppleContainerResource(
             description="Database", name="db", image="postgres:15"
         )
-        cache = DockerResource(
+        cache = AppleContainerResource(
             description="Cache", name="cache", image="redis:7"
         )
 
@@ -93,7 +97,9 @@ class TestCompositeFlattening:
         backend.add(db, cache)
 
         # API resource
-        api = DockerResource(description="API", name="api", image="node:20")
+        api = AppleContainerResource(
+            description="API", name="api", image="node:20"
+        )
 
         # Top-level composite
         app = BlankResource(name="app", description="Full application")
@@ -118,7 +124,7 @@ class TestCompositeFlattening:
         )
 
         # Composite with children
-        db = DockerResource(
+        db = AppleContainerResource(
             description="Database", name="db", image="postgres:15"
         )
         backend = BlankResource(name="backend", description="Backend")
@@ -146,7 +152,7 @@ class TestCompositeFlattening:
 
     def test_flatten_preserves_hierarchy(self):
         """Test that flattening preserves parent-child relationships."""
-        db = DockerResource(
+        db = AppleContainerResource(
             description="Database", name="db", image="postgres:15"
         )
         backend = BlankResource(name="backend", description="Backend")
@@ -165,7 +171,7 @@ class TestImplicitParentChildDependencies:
 
     def test_add_implicit_dependency_parent_to_child(self):
         """Test that child has implicit dependency on parent after resolution."""
-        db = DockerResource(
+        db = AppleContainerResource(
             description="Database", name="db", image="postgres:15"
         )
         backend = BlankResource(name="backend", description="Backend")
@@ -182,7 +188,7 @@ class TestImplicitParentChildDependencies:
 
     def test_implicit_dependencies_nested_composites(self):
         """Test implicit dependencies in nested composites."""
-        db = DockerResource(
+        db = AppleContainerResource(
             description="Database", name="db", image="postgres:15"
         )
         backend = BlankResource(name="backend", description="Backend")
@@ -205,13 +211,15 @@ class TestImplicitParentChildDependencies:
 
     def test_implicit_dependencies_multiple_children(self):
         """Test implicit dependencies with multiple children."""
-        db = DockerResource(
+        db = AppleContainerResource(
             description="Database", name="db", image="postgres:15"
         )
-        cache = DockerResource(
+        cache = AppleContainerResource(
             description="Cache", name="cache", image="redis:7"
         )
-        api = DockerResource(description="API", name="api", image="node:20")
+        api = AppleContainerResource(
+            description="API", name="api", image="node:20"
+        )
 
         backend = BlankResource(name="backend", description="Backend")
         backend.add(db, cache, api)
@@ -234,14 +242,14 @@ class TestCrossCompositConnections:
     def test_cross_composite_connection(self):
         """Test connection from child in composite A to child in composite B."""
         # Composite A
-        db = DockerResource(
+        db = AppleContainerResource(
             description="Database", name="db", image="postgres:15"
         )
         backend = BlankResource(name="backend", description="Backend")
         backend.add(db)
 
         # Composite B (API connects to db in composite A)
-        api = DockerResource(
+        api = AppleContainerResource(
             description="API", name="api", image="node:20", connections=[db]
         )
         services = BlankResource(name="services", description="Services")
@@ -272,17 +280,17 @@ class TestCrossCompositConnections:
     def test_multiple_cross_composite_connections(self):
         """Test multiple connections across composite boundaries."""
         # Composite A
-        db = DockerResource(
+        db = AppleContainerResource(
             description="Database", name="db", image="postgres:15"
         )
-        cache = DockerResource(
+        cache = AppleContainerResource(
             description="Cache", name="cache", image="redis:7"
         )
         backend = BlankResource(name="backend", description="Backend")
         backend.add(db, cache)
 
         # Composite B (API connects to both db and cache)
-        api = DockerResource(
+        api = AppleContainerResource(
             description="API",
             name="api",
             image="node:20",
@@ -306,14 +314,16 @@ class TestCrossCompositConnections:
     def test_bidirectional_cross_composite_cycle_detection(self):
         """Test cycle detection across composite boundaries."""
         # Composite A
-        db = DockerResource(
+        db = AppleContainerResource(
             description="Database", name="db", image="postgres:15"
         )
         backend = BlankResource(name="backend", description="Backend")
         backend.add(db)
 
         # Composite B (API connects to db)
-        api = DockerResource(description="API", name="api", image="node:20")
+        api = AppleContainerResource(
+            description="API", name="api", image="node:20"
+        )
         api.connect(db)
         services = BlankResource(name="services", description="Services")
         services.add(api)
@@ -334,10 +344,12 @@ class TestCycleDetectionComposites:
     def test_simple_composite_cycle(self):
         """Test detection of cycle within composite."""
         # Create resources that reference each other
-        db = DockerResource(
+        db = AppleContainerResource(
             description="Database", name="db", image="postgres:15"
         )
-        api = DockerResource(description="API", name="api", image="node:20")
+        api = AppleContainerResource(
+            description="API", name="api", image="node:20"
+        )
         api.connect(db)
 
         # Add to composite first
@@ -355,14 +367,16 @@ class TestCycleDetectionComposites:
     def test_nested_composite_cycle(self):
         """Test detection of cycle in nested composites."""
         # Inner composite
-        db = DockerResource(
+        db = AppleContainerResource(
             description="Database", name="db", image="postgres:15"
         )
         inner = BlankResource(name="inner", description="Inner")
         inner.add(db)
 
         # Middle composite with connection to db
-        api = DockerResource(description="API", name="api", image="node:20")
+        api = AppleContainerResource(
+            description="API", name="api", image="node:20"
+        )
         api.connect(db)
         middle = BlankResource(name="middle", description="Middle")
         middle.add(api)
@@ -382,16 +396,16 @@ class TestCycleDetectionComposites:
     def test_no_cycle_composite_linear_chain(self):
         """Test valid linear dependency chain in composite has no cycle."""
         # Create linear dependency: c → b → a
-        c = DockerResource(
+        c = AppleContainerResource(
             description="Service C", name="c", image="alpine:latest"
         )
-        b = DockerResource(
+        b = AppleContainerResource(
             description="Service B",
             name="b",
             image="alpine:latest",
             connections=[c],
         )
-        a = DockerResource(
+        a = AppleContainerResource(
             description="Service A",
             name="a",
             image="alpine:latest",
@@ -414,10 +428,10 @@ class TestTopologicalOrderingComposites:
     def test_ordering_simple_composite(self):
         """Test correct ordering of composite with children."""
         # Create composite with dependencies
-        db = DockerResource(
+        db = AppleContainerResource(
             description="Database", name="db", image="postgres:15"
         )
-        api = DockerResource(
+        api = AppleContainerResource(
             description="API", name="api", image="node:20", connections=[db]
         )
 
@@ -442,17 +456,17 @@ class TestTopologicalOrderingComposites:
     def test_ordering_multiple_composites(self):
         """Test ordering with multiple composites and cross-composite connections."""
         # Backend composite
-        db = DockerResource(
+        db = AppleContainerResource(
             description="Database", name="db", image="postgres:15"
         )
-        cache = DockerResource(
+        cache = AppleContainerResource(
             description="Cache", name="cache", image="redis:7"
         )
         backend = BlankResource(name="backend", description="Backend")
         backend.add(db, cache)
 
         # Services composite (depends on backend children)
-        api = DockerResource(
+        api = AppleContainerResource(
             description="API",
             name="api",
             image="node:20",
@@ -489,10 +503,10 @@ class TestTopologicalOrderingComposites:
     def test_ordering_nested_composites(self):
         """Test ordering with deeply nested composites."""
         # Innermost resources
-        db = DockerResource(
+        db = AppleContainerResource(
             description="Database", name="db", image="postgres:15"
         )
-        cache = DockerResource(
+        cache = AppleContainerResource(
             description="Cache", name="cache", image="redis:7"
         )
 
@@ -501,7 +515,7 @@ class TestTopologicalOrderingComposites:
         backend.add(db, cache)
 
         # API depends on db
-        api = DockerResource(
+        api = AppleContainerResource(
             description="API", name="api", image="node:20", connections=[db]
         )
 
@@ -538,7 +552,7 @@ class TestTopologicalOrderingComposites:
         )
 
         # Composite depending on primitive
-        db = DockerResource(
+        db = AppleContainerResource(
             description="Database",
             name="db",
             image="postgres:15",
@@ -548,7 +562,7 @@ class TestTopologicalOrderingComposites:
         backend.add(db)
 
         # Another primitive depending on composite child
-        api = DockerResource(
+        api = AppleContainerResource(
             description="API", name="api", image="node:20", connections=[db]
         )
 
@@ -595,7 +609,7 @@ class TestCompositeEdgeCases:
 
     def test_composite_with_duplicate_children(self):
         """Test handling of duplicate children (should be deduplicated)."""
-        db = DockerResource(
+        db = AppleContainerResource(
             description="Database", name="db", image="postgres:15"
         )
         backend = BlankResource(name="backend", description="Backend")
@@ -610,7 +624,7 @@ class TestCompositeEdgeCases:
     def test_deeply_nested_composites(self):
         """Test deeply nested composite hierarchy."""
         # Create 4-level hierarchy
-        db = DockerResource(
+        db = AppleContainerResource(
             description="Database", name="db", image="postgres:15"
         )
 

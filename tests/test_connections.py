@@ -13,7 +13,7 @@ import pytest
 
 from clockwork.connections import DependencyConnection
 from clockwork.core import ClockworkCore
-from clockwork.resources import DockerResource, FileResource
+from clockwork.resources import AppleContainerResource, FileResource
 
 
 class TestCycleDetection:
@@ -24,13 +24,13 @@ class TestCycleDetection:
         # To create a true cycle, we need both resources to reference each other
         # We create them temporarily, then manually add to _connections
 
-        a = DockerResource(
+        a = AppleContainerResource(
             description="Service A",
             name="a",
             image="alpine:latest",
             ports=["8001:80"],
         )
-        b = DockerResource(
+        b = AppleContainerResource(
             description="Service B",
             name="b",
             image="alpine:latest",
@@ -49,19 +49,19 @@ class TestCycleDetection:
     def test_complex_cycle(self):
         """Test detection of complex A → B → C → A cycle."""
         # Create cycle: A → B → C → A
-        a = DockerResource(
+        a = AppleContainerResource(
             description="Service A",
             name="a",
             image="alpine:latest",
             ports=["8001:80"],
         )
-        b = DockerResource(
+        b = AppleContainerResource(
             description="Service B",
             name="b",
             image="alpine:latest",
             ports=["8002:80"],
         )
-        c = DockerResource(
+        c = AppleContainerResource(
             description="Service C",
             name="c",
             image="alpine:latest",
@@ -81,7 +81,7 @@ class TestCycleDetection:
     def test_self_reference(self):
         """Test detection of self-reference cycle A → A."""
         # Create resource that references itself
-        a = DockerResource(
+        a = AppleContainerResource(
             description="Service A",
             name="a",
             image="alpine:latest",
@@ -98,19 +98,19 @@ class TestCycleDetection:
 
     def test_no_cycle_linear_chain(self):
         """Test valid linear dependency chain has no cycle."""
-        c = DockerResource(
+        c = AppleContainerResource(
             description="Service C",
             name="c",
             image="alpine:latest",
             ports=["8003:80"],
         )
-        b = DockerResource(
+        b = AppleContainerResource(
             description="Service B",
             name="b",
             image="alpine:latest",
             ports=["8002:80"],
         )
-        a = DockerResource(
+        a = AppleContainerResource(
             description="Service A",
             name="a",
             image="alpine:latest",
@@ -137,25 +137,25 @@ class TestCycleDetection:
            \\ /
             D
         """
-        d = DockerResource(
+        d = AppleContainerResource(
             description="Service D",
             name="d",
             image="alpine:latest",
             ports=["8004:80"],
         )
-        b = DockerResource(
+        b = AppleContainerResource(
             description="Service B",
             name="b",
             image="alpine:latest",
             ports=["8002:80"],
         )
-        c = DockerResource(
+        c = AppleContainerResource(
             description="Service C",
             name="c",
             image="alpine:latest",
             ports=["8003:80"],
         )
-        a = DockerResource(
+        a = AppleContainerResource(
             description="Service A",
             name="a",
             image="alpine:latest",
@@ -182,19 +182,19 @@ class TestDependencyOrdering:
 
         Expected order: C, B, A (dependencies first)
         """
-        c = DockerResource(
+        c = AppleContainerResource(
             description="Service C",
             name="c",
             image="alpine:latest",
             ports=["8003:80"],
         )
-        b = DockerResource(
+        b = AppleContainerResource(
             description="Service B",
             name="b",
             image="alpine:latest",
             ports=["8002:80"],
         )
-        a = DockerResource(
+        a = AppleContainerResource(
             description="Service A",
             name="a",
             image="alpine:latest",
@@ -227,25 +227,25 @@ class TestDependencyOrdering:
 
         Expected order: D first, then B and C (in any order), then A last
         """
-        d = DockerResource(
+        d = AppleContainerResource(
             description="Service D",
             name="d",
             image="alpine:latest",
             ports=["8004:80"],
         )
-        b = DockerResource(
+        b = AppleContainerResource(
             description="Service B",
             name="b",
             image="alpine:latest",
             ports=["8002:80"],
         )
-        c = DockerResource(
+        c = AppleContainerResource(
             description="Service C",
             name="c",
             image="alpine:latest",
             ports=["8003:80"],
         )
-        a = DockerResource(
+        a = AppleContainerResource(
             description="Service A",
             name="a",
             image="alpine:latest",
@@ -279,26 +279,26 @@ class TestDependencyOrdering:
 
         Expected: Dependencies before dependents in each tree
         """
-        b = DockerResource(
+        b = AppleContainerResource(
             description="Service B",
             name="b",
             image="alpine:latest",
             ports=["8002:80"],
         )
-        a = DockerResource(
+        a = AppleContainerResource(
             description="Service A",
             name="a",
             image="alpine:latest",
             ports=["8001:80"],
         )
 
-        y = DockerResource(
+        y = AppleContainerResource(
             description="Service Y",
             name="y",
             image="alpine:latest",
             ports=["8004:80"],
         )
-        x = DockerResource(
+        x = AppleContainerResource(
             description="Service X",
             name="x",
             image="alpine:latest",
@@ -326,7 +326,7 @@ class TestDependencyOrdering:
 
     def test_single_resource(self):
         """Test ordering with single resource (no connections)."""
-        a = DockerResource(
+        a = AppleContainerResource(
             description="Service A",
             name="a",
             image="alpine:latest",
@@ -352,19 +352,19 @@ class TestDependencyOrdering:
 
         Given A → B → C, try different input orders.
         """
-        c = DockerResource(
+        c = AppleContainerResource(
             description="Service C",
             name="c",
             image="alpine:latest",
             ports=["8003:80"],
         )
-        b = DockerResource(
+        b = AppleContainerResource(
             description="Service B",
             name="b",
             image="alpine:latest",
             ports=["8002:80"],
         )
-        a = DockerResource(
+        a = AppleContainerResource(
             description="Service A",
             name="a",
             image="alpine:latest",
@@ -398,8 +398,8 @@ class TestConnectionContext:
     """Tests for connection context sharing between resources."""
 
     def test_docker_connection_context(self):
-        """Test DockerResource exposes correct connection context."""
-        docker = DockerResource(
+        """Test AppleContainerResource exposes correct connection context."""
+        docker = AppleContainerResource(
             description="PostgreSQL database",
             name="postgres",
             image="postgres:15-alpine",
@@ -412,7 +412,7 @@ class TestConnectionContext:
 
         # Check required fields
         assert context["name"] == "postgres"
-        assert context["type"] == "DockerResource"
+        assert context["type"] == "AppleContainerResource"
         assert context["image"] == "postgres:15-alpine"
 
         # Check optional fields that are set
@@ -443,7 +443,7 @@ class TestConnectionContext:
 
     def test_empty_connections(self):
         """Test resource with no connections."""
-        docker = DockerResource(
+        docker = AppleContainerResource(
             description="Standalone service",
             name="standalone",
             image="alpine:latest",
@@ -455,11 +455,11 @@ class TestConnectionContext:
 
         context = docker.get_connection_context()
         assert context["name"] == "standalone"
-        assert context["type"] == "DockerResource"
+        assert context["type"] == "AppleContainerResource"
 
     def test_connection_context_filtering(self):
         """Test that only non-None fields are included in context."""
-        docker = DockerResource(
+        docker = AppleContainerResource(
             description="Minimal service",
             name="minimal",
             image="alpine:latest",
@@ -486,8 +486,8 @@ class TestConnectionContext:
     def test_base_resource_connection_context(self):
         """Test base Resource class connection context."""
 
-        # Create a basic resource (using DockerResource since Resource is abstract)
-        resource = DockerResource(
+        # Create a basic resource (using AppleContainerResource since Resource is abstract)
+        resource = AppleContainerResource(
             description="Test resource",
             name="test",
             image="alpine:latest",
@@ -500,7 +500,7 @@ class TestConnectionContext:
         assert "name" in context
         assert "type" in context
         assert context["name"] == "test"
-        assert context["type"] == "DockerResource"
+        assert context["type"] == "AppleContainerResource"
 
 
 class TestIntegration:
@@ -509,14 +509,14 @@ class TestIntegration:
     def test_core_with_connections(self):
         """Test ClockworkCore processes connected resources in correct order."""
         # Create resources with connections
-        db = DockerResource(
+        db = AppleContainerResource(
             description="Database",
             name="db",
             image="postgres:15-alpine",
             ports=["5432:5432"],
         )
 
-        app = DockerResource(
+        app = AppleContainerResource(
             description="Application server",
             name="app",
             image="node:18-alpine",
@@ -548,7 +548,7 @@ class TestIntegration:
     def test_connection_context_in_prompt(self):
         """Test that connection context is properly stored on resources."""
         # Create resources with connections
-        db = DockerResource(
+        db = AppleContainerResource(
             description="PostgreSQL database",
             name="postgres",
             image="postgres:15-alpine",
@@ -556,7 +556,7 @@ class TestIntegration:
             env_vars={"POSTGRES_PASSWORD": "secret"},
         )
 
-        app = DockerResource(
+        app = AppleContainerResource(
             description="Web application",
             name="webapp",
             image="node:18-alpine",
@@ -575,13 +575,13 @@ class TestIntegration:
         # Verify connection context can be retrieved from db
         db_context = db.get_connection_context()
         assert db_context["name"] == "postgres"
-        assert db_context["type"] == "DockerResource"
+        assert db_context["type"] == "AppleContainerResource"
         assert db_context["image"] == "postgres:15-alpine"
         assert "POSTGRES_PASSWORD" in db_context["env_vars"]
 
     def test_format_connection_context(self):
         """Test that connection context can be retrieved from resources."""
-        db = DockerResource(
+        db = AppleContainerResource(
             description="Database",
             name="postgres",
             image="postgres:15-alpine",
@@ -602,7 +602,7 @@ class TestIntegration:
 
         # Verify db context
         assert db_context["name"] == "postgres"
-        assert db_context["type"] == "DockerResource"
+        assert db_context["type"] == "AppleContainerResource"
         assert db_context["image"] == "postgres:15-alpine"
 
         # Verify file context
@@ -612,21 +612,21 @@ class TestIntegration:
 
     def test_multiple_connections(self):
         """Test resource with multiple connections."""
-        db = DockerResource(
+        db = AppleContainerResource(
             description="Database",
             name="db",
             image="postgres:15-alpine",
             ports=["5432:5432"],
         )
 
-        cache = DockerResource(
+        cache = AppleContainerResource(
             description="Cache",
             name="redis",
             image="redis:7-alpine",
             ports=["6379:6379"],
         )
 
-        app = DockerResource(
+        app = AppleContainerResource(
             description="Application",
             name="app",
             image="node:18-alpine",
@@ -666,7 +666,7 @@ class TestEdgeCases:
 
     def test_duplicate_resources_in_list(self):
         """Test handling of duplicate resources in input list."""
-        a = DockerResource(
+        a = AppleContainerResource(
             description="Service A",
             name="a",
             image="alpine:latest",
@@ -684,13 +684,13 @@ class TestEdgeCases:
 
     def test_connection_to_nonexistent_resource(self):
         """Test connection referencing resource not in the list."""
-        b = DockerResource(
+        b = AppleContainerResource(
             description="Service B",
             name="b",
             image="alpine:latest",
             ports=["8002:80"],
         )
-        a = DockerResource(
+        a = AppleContainerResource(
             description="Service A",
             name="a",
             image="alpine:latest",
@@ -722,7 +722,7 @@ class TestEdgeCases:
         for i, name in enumerate(
             ["j", "i", "h", "g", "f", "e", "d", "c", "b", "a"]
         ):
-            resource = DockerResource(
+            resource = AppleContainerResource(
                 description=f"Service {name}",
                 name=name,
                 image="alpine:latest",
@@ -751,7 +751,7 @@ class TestEdgeCases:
             content="setting=value",
         )
 
-        app = DockerResource(
+        app = AppleContainerResource(
             description="Application",
             name="app",
             image="node:18-alpine",
@@ -770,4 +770,4 @@ class TestEdgeCases:
 
         # Verify types
         assert isinstance(ordered[0], FileResource)
-        assert isinstance(ordered[1], DockerResource)
+        assert isinstance(ordered[1], AppleContainerResource)

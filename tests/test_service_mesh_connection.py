@@ -1,18 +1,18 @@
 """Tests for ServiceMeshConnection."""
 
 from clockwork.connections import ServiceMeshConnection
-from clockwork.resources import DockerResource
+from clockwork.resources import AppleContainerResource
 
 
 def test_service_mesh_connection_instantiation():
     """Test that ServiceMeshConnection can be instantiated."""
-    api = DockerResource(
+    api = AppleContainerResource(
         name="api-server",
         description="API backend",
         ports=["8000:8000"],
     )
 
-    DockerResource(
+    AppleContainerResource(
         name="web-frontend",
         description="Web frontend",
     )
@@ -30,7 +30,7 @@ def test_service_mesh_connection_instantiation():
 
 def test_service_mesh_port_discovery():
     """Test that port is discovered from to_resource."""
-    api = DockerResource(
+    api = AppleContainerResource(
         name="api-server",
         description="API backend",
         ports=["8000:8000"],
@@ -48,7 +48,7 @@ def test_service_mesh_port_discovery():
 
 def test_service_mesh_port_discovery_simple_format():
     """Test port discovery with simple port format."""
-    api = DockerResource(
+    api = AppleContainerResource(
         name="api-server",
         description="API backend",
         ports=["8000"],
@@ -65,7 +65,7 @@ def test_service_mesh_port_discovery_simple_format():
 
 def test_service_mesh_service_name_setting():
     """Test that service_name is set to to_resource.name."""
-    api = DockerResource(
+    api = AppleContainerResource(
         name="api-server",
         description="API backend",
         ports=["8000:8000"],
@@ -82,13 +82,13 @@ def test_service_mesh_service_name_setting():
 
 def test_service_mesh_url_injection():
     """Test that service URL is injected into from_resource."""
-    api = DockerResource(
+    api = AppleContainerResource(
         name="api-server",
         description="API backend",
         ports=["8000:8000"],
     )
 
-    web = DockerResource(
+    web = AppleContainerResource(
         name="web-frontend",
         description="Web frontend",
     )
@@ -111,7 +111,7 @@ def test_service_mesh_url_injection():
 
 def test_service_mesh_needs_completion():
     """Test needs_completion logic."""
-    api = DockerResource(
+    api = AppleContainerResource(
         name="api-server",
         description="API backend",
         ports=["8000:8000"],
@@ -147,13 +147,13 @@ def test_service_mesh_needs_completion():
 
 def test_service_mesh_get_connection_context():
     """Test get_connection_context returns correct info."""
-    api = DockerResource(
+    api = AppleContainerResource(
         name="api-server",
         description="API backend",
         ports=["8000:8000"],
     )
 
-    web = DockerResource(
+    web = AppleContainerResource(
         name="web-frontend",
         description="Web frontend",
     )
@@ -184,7 +184,7 @@ def test_service_mesh_get_connection_context():
 
 def test_service_mesh_extract_port():
     """Test _extract_port helper method."""
-    api = DockerResource(
+    api = AppleContainerResource(
         name="api-server",
         description="API backend",
         ports=["8000:8000"],

@@ -4,7 +4,6 @@ from unittest.mock import Mock, patch
 
 from clockwork.resources import (
     AppleContainerResource,
-    DockerResource,
     FileResource,
     GitRepoResource,
 )
@@ -45,21 +44,6 @@ class TestResourceTypeTools:
 
         selector = ToolSelector(enable_mcp=False)
         resource = FileResource(description="Test file")
-
-        tools = selector.select_tools_for_resource(resource)
-
-        # Should call for duckduckgo_search
-        mock_get_tool.assert_called_with("duckduckgo_search")
-        assert len(tools) > 0
-
-    @patch("clockwork.tool_selector.ToolSelector._get_tool")
-    def test_docker_resource_gets_web_search(self, mock_get_tool):
-        """Test DockerResource gets web search tool."""
-        mock_search_tool = Mock()
-        mock_get_tool.return_value = mock_search_tool
-
-        selector = ToolSelector(enable_mcp=False)
-        resource = DockerResource(description="Test container")
 
         tools = selector.select_tools_for_resource(resource)
 

@@ -15,7 +15,7 @@ from clockwork.assertions import (
     HealthcheckAssert,
     PortAccessibleAssert,
 )
-from clockwork.resources import BlankResource, DockerResource
+from clockwork.resources import AppleContainerResource, BlankResource
 
 # Step 1: Create the composite resource at module level for Clockwork to discover
 # BlankResource acts as a container for related resources
@@ -26,7 +26,7 @@ webapp = BlankResource(
 
 # Step 2: Add database to the composite
 webapp.add(
-    DockerResource(
+    AppleContainerResource(
         name="postgres-db",
         description="PostgreSQL database for the web application",
         image="postgres:15-alpine",
@@ -46,7 +46,7 @@ webapp.add(
 
 # Step 3: Add cache to the composite
 webapp.add(
-    DockerResource(
+    AppleContainerResource(
         name="redis-cache",
         description="Redis cache for session storage and caching",
         image="redis:7-alpine",
@@ -61,7 +61,7 @@ webapp.add(
 
 # Step 4: Add API server to the composite
 webapp.add(
-    DockerResource(
+    AppleContainerResource(
         name="api-server",
         description="Node.js API server connected to database and cache",
         # Let AI choose appropriate Node.js API image based on connections

@@ -35,18 +35,18 @@ class ServiceMeshConnection(Connection):
         load_balancing: Load balancing strategy (default: "round_robin")
 
     Example:
-        >>> from clockwork.resources import DockerResource
+        >>> from clockwork.resources import AppleContainerResource
         >>> from clockwork.connections import ServiceMeshConnection
         >>>
         >>> # Create backend service
-        >>> api = DockerResource(
+        >>> api = AppleContainerResource(
         ...     name="api-server",
         ...     description="API backend",
         ...     ports=["8000:8000"]
         ... )
         >>>
         >>> # Create frontend that connects to backend
-        >>> web = DockerResource(
+        >>> web = AppleContainerResource(
         ...     name="web-frontend",
         ...     description="Web frontend"
         ... )
@@ -133,7 +133,7 @@ class ServiceMeshConnection(Connection):
         if self.port is not None:
             return
 
-        # Try to extract port from DockerResource
+        # Try to extract port from AppleContainerResource
         if hasattr(self.to_resource, "ports") and self.to_resource.ports:
             port_mapping = self.to_resource.ports[0]
             self.port = self._extract_port(port_mapping)

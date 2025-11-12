@@ -31,29 +31,6 @@ jobs:
           echo "CW_BASE_URL=https://openrouter.ai/api/v1" >> $GITHUB_ENV
           echo "CW_LOG_LEVEL=INFO" >> $GITHUB_ENV
 
-      - name: Test file-generation example
-        working-directory: examples/file-generation
-        run: |
-          echo "Testing file-generation example..."
-          uv run clockwork apply
-          uv run clockwork assert
-          uv run clockwork destroy
-
-      - name: Test docker-service example
-        working-directory: examples/docker-service
-        run: |
-          echo "Testing docker-service example..."
-          uv run clockwork apply
-          uv run clockwork assert
-          uv run clockwork destroy
-
-      - name: Test tool-integration example
-        working-directory: examples/tool-integration
-        run: |
-          echo "Testing tool-integration example..."
-          uv run clockwork apply
-          # No assertions for tool-integration example
-          uv run clockwork destroy
-
-      # Note: Skipping apple-container-service as it requires macOS
+      # Note: Most examples require macOS for Apple Containers
       # GitHub Actions ubuntu runners don't support Apple Containers CLI
+      # Individual examples can be tested manually on macOS

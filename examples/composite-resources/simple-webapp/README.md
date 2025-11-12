@@ -16,11 +16,11 @@ This example demonstrates the fundamental composite resource pattern by creating
 
 ```
 simple-webapp (BlankResource)
-├── postgres-db (DockerResource)
+├── postgres-db (AppleContainerResource)
 │   └── Port: 5432
-├── redis-cache (DockerResource)
+├── redis-cache (AppleContainerResource)
 │   └── Port: 6379
-└── api-server (DockerResource)
+└── api-server (AppleContainerResource)
     ├── Port: 3000
     ├── Depends on: postgres-db
     └── Depends on: redis-cache
@@ -139,7 +139,7 @@ Try modifying this example to:
 2. **Add monitoring**: Include a Prometheus container
 3. **Use AI completion**: Remove `image` field from API and let AI choose
 4. **Add volumes**: Persist database data across restarts
-5. **Create network**: Put all containers on a custom Docker network
+5. **Create network**: Put all containers on a custom container network
 
 ## When to Use This Pattern
 
