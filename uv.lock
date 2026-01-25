@@ -209,7 +209,6 @@ wheels = [
 
 [[package]]
 name = "clockwork"
-version = "0.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
@@ -248,7 +247,7 @@ requires-dist = [
     { name = "pulumi", specifier = ">=3.0.0" },
     { name = "pulumi-command", specifier = ">=1.0.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
-    { name = "pydantic-ai-slim", extras = ["mcp", "duckduckgo"], specifier = ">=0.0.49" },
+    { name = "pydantic-ai-slim", extras = ["duckduckgo", "mcp"], specifier = ">=0.0.49" },
     { name = "pydantic-settings", specifier = ">=2.0.0" },
     { name = "rich", specifier = ">=13.0.0" },
     { name = "typer", specifier = ">=0.16.0" },

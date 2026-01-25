@@ -1,80 +1,10 @@
-# Clockwork - Potential Roadmap
+# Clockwork Roadmap
 
 _This is a living document of potential features and enhancements. Updated frequently as priorities and ideas evolve._
 
 ---
 
-## ✅ Implemented Features
-
-### Core Primitives & CLI Commands
-
-- **Primitive Types**: FileResource, AppleContainerResource, AppleContainerResource, GitRepoResource
-- **CLI Commands**:
-  - `clockwork apply` - Deploy primitives
-  - `clockwork plan` - Preview without deploying
-  - `clockwork destroy` - Remove deployed infrastructure
-  - `clockwork assert` - Validate deployed primitives
-  - `clockwork version` - Show version
-
-### AI Completion & Flexibility
-
-- **Adjustable Intelligence**: Choose per-primitive control level
-  - Full control (specify everything, no AI)
-  - Hybrid mode (specify key details, AI fills gaps)
-  - Fast mode (describe requirements, AI handles implementation)
-- **PydanticAI Integration**: Structured outputs with Pydantic validation
-- **Tool Support**:
-  - DuckDuckGo web search
-  - Custom Python functions
-  - Filesystem MCP server
-  - User-provided tools via `tools` parameter
-- **Tool Selection**: Automatic tool selection based on resource type and context
-
-### Resource Connections
-
-- **Dependency Declarations**: Connect primitives to express dependencies
-- **Topological Sorting**: Automatic deployment ordering (O(V+E))
-- **Cycle Detection**: Prevents circular dependencies
-- **AI Context Sharing**: Connected primitives share configuration data for intelligent completion
-
-### Type-Safe Assertions
-
-Built-in assertion classes for validating deployed resources (no AI required, Pydantic-based):
-
-**HTTP/Network:**
-- `HealthcheckAssert(url, expected_status, timeout_seconds)` - HTTP health checks
-- `PortAccessibleAssert(port, host, protocol)` - Port accessibility validation
-
-**Container:**
-- `ContainerRunningAssert(timeout_seconds)` - Container status verification
-
-**File:**
-- `FileExistsAssert(path)` - File presence validation
-- `FileContentMatchesAssert(path, pattern)` - Content validation with regex
-
-**Example:**
-
-```python
-nginx = AppleContainerResource(
-    description="Web server",
-    name="nginx-web",
-    ports=["8080:80"],
-    assertions=[
-        ContainerRunningAssert(timeout_seconds=10),
-        PortAccessibleAssert(port=8080, host="localhost", protocol="tcp"),
-        HealthcheckAssert(url="http://localhost:8080", expected_status=200, timeout_seconds=5),
-    ]
-)
-```
-
-Run assertions:
-```bash
-clockwork assert  # Validates all deployed primitives
-```
-
----
-
-## 🤔 Under Consideration
+## Under Consideration
 
 ### 1. Expanded Tool Support
 
@@ -386,7 +316,77 @@ Expand beyond current primitives:
 
 ---
 
-## 📝 Notes
+## Implemented Features
+
+### Core Primitives & CLI Commands
+
+- **Primitive Types**: FileResource, AppleContainerResource, AppleContainerResource, GitRepoResource
+- **CLI Commands**:
+  - `clockwork apply` - Deploy primitives
+  - `clockwork plan` - Preview without deploying
+  - `clockwork destroy` - Remove deployed infrastructure
+  - `clockwork assert` - Validate deployed primitives
+  - `clockwork version` - Show version
+
+### AI Completion & Flexibility
+
+- **Adjustable Intelligence**: Choose per-primitive control level
+  - Full control (specify everything, no AI)
+  - Hybrid mode (specify key details, AI fills gaps)
+  - Fast mode (describe requirements, AI handles implementation)
+- **PydanticAI Integration**: Structured outputs with Pydantic validation
+- **Tool Support**:
+  - DuckDuckGo web search
+  - Custom Python functions
+  - Filesystem MCP server
+  - User-provided tools via `tools` parameter
+- **Tool Selection**: Automatic tool selection based on resource type and context
+
+### Resource Connections
+
+- **Dependency Declarations**: Connect primitives to express dependencies
+- **Topological Sorting**: Automatic deployment ordering (O(V+E))
+- **Cycle Detection**: Prevents circular dependencies
+- **AI Context Sharing**: Connected primitives share configuration data for intelligent completion
+
+### Type-Safe Assertions
+
+Built-in assertion classes for validating deployed resources (no AI required, Pydantic-based):
+
+**HTTP/Network:**
+- `HealthcheckAssert(url, expected_status, timeout_seconds)` - HTTP health checks
+- `PortAccessibleAssert(port, host, protocol)` - Port accessibility validation
+
+**Container:**
+- `ContainerRunningAssert(timeout_seconds)` - Container status verification
+
+**File:**
+- `FileExistsAssert(path)` - File presence validation
+- `FileContentMatchesAssert(path, pattern)` - Content validation with regex
+
+**Example:**
+
+```python
+nginx = AppleContainerResource(
+    description="Web server",
+    name="nginx-web",
+    ports=["8080:80"],
+    assertions=[
+        ContainerRunningAssert(timeout_seconds=10),
+        PortAccessibleAssert(port=8080, host="localhost", protocol="tcp"),
+        HealthcheckAssert(url="http://localhost:8080", expected_status=200, timeout_seconds=5),
+    ]
+)
+```
+
+Run assertions:
+```bash
+clockwork assert  # Validates all deployed primitives
+```
+
+---
+
+## Notes
 
 - This roadmap is speculative and priorities may change
 - Features move from "Under Consideration" to implementation based on user needs

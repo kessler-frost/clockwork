@@ -50,6 +50,7 @@ dmypy.json
 .claude/
 
 # Clockwork specific
+clockwork/_version.py
 .clockwork/
 *.cw.bak
 *.cwvars.bak

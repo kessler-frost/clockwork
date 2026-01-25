@@ -92,24 +92,16 @@ Before getting started, ensure you have:
 First, install the uv package manager if you don't have it:
 
 ```bash
-# Install uv package manager
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
 ### Install Clockwork
 
-Since Clockwork is not yet published to PyPI, clone and install directly from GitHub:
-
 ```bash
-# Clone the repository
-git clone https://github.com/kessler-frost/clockwork.git
-cd clockwork
-
-# Install dependencies
-uv sync
-
-# Create your main.py and start building (see Quick Start below)
+uv tool install git+https://github.com/kessler-frost/clockwork
 ```
+
+This installs `clockwork` as a global CLI tool. Create your `main.py` and start building (see Quick Start below).
 
 ## Quick Start
 
@@ -547,4 +539,4 @@ uv run pre-commit run --all-files
 
 ## Roadmap
 
-See [POTENTIAL_ROADMAP.md](./POTENTIAL_ROADMAP.md) for upcoming features.
+See [ROADMAP.md](./ROADMAP.md) for upcoming features.

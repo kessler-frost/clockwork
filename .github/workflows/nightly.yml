@@ -1,0 +1,60 @@
+name: Nightly Release
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # Daily at 6 AM UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  check-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for changes since last nightly
+        id: check
+        run: |
+          # Find the most recent CalVer tag (20*)
+          LAST_TAG=$(git tag -l '20*' --sort=-v:refname | head -n1)
+
+          if [ -z "$LAST_TAG" ]; then
+            echo "No previous nightly tag found, will create first release"
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            # Check if there are commits since the last tag
+            COMMITS=$(git rev-list ${LAST_TAG}..HEAD --count)
+            if [ "$COMMITS" -gt 0 ]; then
+              echo "Found $COMMITS commits since $LAST_TAG"
+              echo "has_changes=true" >> $GITHUB_OUTPUT
+            else
+              echo "No changes since $LAST_TAG"
+              echo "has_changes=false" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: Create CalVer tag
+        if: steps.check.outputs.has_changes == 'true'
+        run: |
+          TAG=$(date -u +%Y.%m.%d)
+          echo "Creating tag: $TAG"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Nightly release $TAG"
+          git push origin "$TAG"
+
+      - name: Trigger release workflow
+        if: steps.check.outputs.has_changes == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'release.yml',
+              ref: `refs/tags/${new Date().toISOString().slice(0,10).replace(/-/g,'.')}`
+            })
