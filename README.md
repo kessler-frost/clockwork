@@ -4,10 +4,11 @@
 
 Build infrastructure using composable primitives in Python - intelligence handles the parts you find tedious, you control what matters.
 
-[![Version](https://img.shields.io/badge/version-0.3.0-blue)](./pyproject.toml)
-[![Python](https://img.shields.io/badge/python-3.12%2B-blue)](./pyproject.toml)
+[![GitHub Release](https://img.shields.io/github/v/release/kessler-frost/clockwork?label=release)](https://github.com/kessler-frost/clockwork/releases/latest)
+[![Python](https://img.shields.io/badge/python-3.12+-blue)](https://www.python.org/downloads/)
+[![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)](https://developer.apple.com/documentation/virtualization)
 [![Deploy](https://img.shields.io/badge/deploy-Pulumi-blueviolet)](https://pulumi.com)
-[![License](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
+[![License](https://img.shields.io/github/license/kessler-frost/clockwork)](./LICENSE)
 
 ## Build Infrastructure Your Way
 
@@ -353,14 +354,14 @@ redis = AppleContainerResource(
     ports=["6379:6379"]
 )
 
-# Connect API to dependencies
+# Connect API to dependencies (chained)
 api = AppleContainerResource(
     name="api-server",
     description="FastAPI backend with database and cache",
     ports=["8000:8000"]
-).connect(postgres, redis)
+).connect(postgres).connect(redis)
 
-# Result: postgres → redis → api (deployment order)
+# Result: postgres and redis deploy before api
 # Intelligence auto-generates DATABASE_URL and REDIS_URL environment variables
 ```
 
