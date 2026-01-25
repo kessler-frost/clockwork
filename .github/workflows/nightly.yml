@@ -9,8 +9,11 @@ permissions:
   contents: write
 
 jobs:
-  check-and-release:
+  check-changes:
     runs-on: ubuntu-latest
+    outputs:
+      has_changes: ${{ steps.check.outputs.has_changes }}
+      tag: ${{ steps.check.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -21,6 +24,8 @@ jobs:
         run: |
           # Find the most recent CalVer tag (20*)
           LAST_TAG=$(git tag -l '20*' --sort=-v:refname | head -n1)
+          TAG=$(date -u +%Y.%m.%d)
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
 
           if [ -z "$LAST_TAG" ]; then
             echo "No previous nightly tag found, will create first release"
@@ -37,24 +42,27 @@ jobs:
             fi
           fi
 
+  create-tag:
+    needs: check-changes
+    if: needs.check-changes.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Create CalVer tag
-        if: steps.check.outputs.has_changes == 'true'
         run: |
-          TAG=$(date -u +%Y.%m.%d)
+          TAG=${{ needs.check-changes.outputs.tag }}
           echo "Creating tag: $TAG"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -a "$TAG" -m "Nightly release $TAG"
           git push origin "$TAG"
 
-      - name: Trigger release workflow
-        if: steps.check.outputs.has_changes == 'true'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'release.yml',
-              ref: `refs/tags/${new Date().toISOString().slice(0,10).replace(/-/g,'.')}`
-            })
+  release:
+    needs: [check-changes, create-tag]
+    if: needs.check-changes.outputs.has_changes == 'true'
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.check-changes.outputs.tag }}
