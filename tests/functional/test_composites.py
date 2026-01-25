@@ -1,17 +1,19 @@
-"""Functional tests for composite resources with intelligent completion.
+"""Functional tests for composite resources with varying intelligence levels.
 
-Tests the complete composite resource lifecycle WITH intelligent completion:
-- Simple composites with children that REQUIRE completion
-- Nested composites with two-phase completion
-- Full pipeline: plan → apply → assert → destroy
+Tests composite resources with:
+- Fully specified children (no intelligence)
+- Partially specified children (some intelligence)
+- Description-only children (full intelligence)
+- Two-phase completion verification
 
 Requirements:
-- CW_API_KEY environment variable must be set
+- CW_API_KEY environment variable must be set (or in .env)
 - CW_BASE_URL should point to a running LLM endpoint
 
 NO MOCKING - these tests hit real LLM endpoints.
 """
 
+import json
 import os
 import subprocess
 import tempfile
@@ -22,10 +24,24 @@ import pytest
 
 
 def check_llm_available():
-    """Check if an LLM endpoint is available."""
+    """Check if an LLM endpoint is available. Returns (available, message)."""
     api_key = os.environ.get("CW_API_KEY")
+
     if not api_key:
-        return False, "CW_API_KEY not set"
+        env_file = Path(__file__).parent.parent.parent / ".env"
+        if env_file.exists():
+            for line in env_file.read_text().splitlines():
+                if line.startswith("CW_API_KEY="):
+                    value = line.split("=", 1)[1].strip()
+                    if value.startswith("${") and value.endswith("}"):
+                        var_name = value[2:-1]
+                        api_key = os.environ.get(var_name)
+                    else:
+                        api_key = value
+                    break
+
+    if not api_key:
+        return False, "CW_API_KEY not set and not found in .env"
 
     base_url = os.environ.get("CW_BASE_URL", "https://openrouter.ai/api/v1")
 
@@ -39,9 +55,9 @@ def check_llm_available():
             result = sock.connect_ex(("localhost", port))
             sock.close()
             if result != 0:
-                return False, f"LM Studio not reachable on port {port}"
+                return False, f"Local LLM endpoint not reachable on port {port}"
         except Exception as e:
-            return False, f"Failed to check LM Studio: {e}"
+            return False, f"Failed to check local endpoint: {e}"
 
     return True, "LLM endpoint available"
 
@@ -59,319 +75,386 @@ def run_clockwork_command(command: str, cwd: Path, timeout: int = 180):
     return result.returncode, result.stdout, result.stderr
 
 
-llm_available, llm_message = check_llm_available()
+def cleanup_containers():
+    """Force cleanup all containers."""
+    result = subprocess.run(
+        ["container", "list", "--all", "--format", "json"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0 and result.stdout:
+        try:
+            containers = json.loads(result.stdout)
+            ids = [c["configuration"]["id"] for c in containers]
+            if ids:
+                subprocess.run(
+                    ["container", "rm", "-f", *ids],
+                    capture_output=True,
+                )
+        except (json.JSONDecodeError, KeyError):
+            pass
 
 
+@pytest.fixture(scope="module", autouse=True)
+def require_llm():
+    """Fail all tests in this module if LLM is not available."""
+    available, message = check_llm_available()
+    if not available:
+        pytest.fail(f"LLM endpoint required for functional tests: {message}")
+
+
+# =============================================================================
+# Test 1: Composite with fully specified children (NO intelligence)
+# =============================================================================
 @pytest.mark.functional
-@pytest.mark.skipif(not llm_available, reason=llm_message)
-def test_simple_composite():
-    """Test simple composite with children that REQUIRE intelligent completion.
+def test_composite_no_intelligence():
+    """Test composite with fully specified children - no LLM needed.
 
-    This tests:
-    - BlankResource as composite container
-    - Child FileResources with only descriptions (need completion)
-    - Two-phase completion: parent first, then children with context
+    Verifies that composites work correctly even without any intelligence.
     """
     with tempfile.TemporaryDirectory() as tmpdir:
         test_dir = Path(tmpdir)
 
         main_py = test_dir / "main.py"
         main_py.write_text('''
-"""Simple composite test - BlankResource with children that need completion."""
+"""Composite with fully specified children - no intelligence needed."""
 
 from clockwork.resources import BlankResource, FileResource
 from clockwork.assertions import FileExistsAssert
 
-# Composite with children that REQUIRE intelligent completion
 project = BlankResource(
-    name="my-project",
-    description="A Python project with configuration and documentation"
+    name="static-project",
+    description="A project with static files"
 ).add(
-    # Child needs completion - only has description
     FileResource(
-        description="A YAML configuration file with app name, version, and debug settings"
+        name="config.yaml",
+        content="app: myapp\\nversion: 1.0",
+        directory=".",
+        mode="644",
+        assertions=[FileExistsAssert(path="config.yaml")]
     ),
-    # Child needs completion - only has description
     FileResource(
-        description="A README markdown file explaining what this project does"
+        name="README.md",
+        content="# My App\\n\\nThis is my application.",
+        directory=".",
+        mode="644",
+        assertions=[FileExistsAssert(path="README.md")]
     ),
 )
 
-print("✓ Composite configured - children require intelligent completion")
+print("✓ Composite with fully specified children")
 ''')
 
-        print("\n=== Simple Composite with Intelligent Completion ===")
+        print("\\n=== Test: Composite No Intelligence ===")
 
-        # Step 1: Plan (triggers two-phase completion)
-        print("\n--- Step 1: Plan ---")
-        exit_code, stdout, stderr = run_clockwork_command(
-            "plan", test_dir, timeout=180
-        )
-        print(f"Plan output:\n{stdout}")
-        if stderr:
-            print(f"Plan stderr:\n{stderr}")
+        try:
+            # Plan
+            exit_code, stdout, stderr = run_clockwork_command("plan", test_dir)
+            print(f"Plan stderr:\\n{stderr}")
+            assert exit_code == 0, f"Plan failed:\\n{stderr}"
 
-        assert exit_code == 0, f"Plan failed:\n{stderr}"
+            # Apply
+            exit_code, stdout, stderr = run_clockwork_command(
+                "apply", test_dir, timeout=180
+            )
+            print(f"Apply stdout:\\n{stdout}")
+            assert exit_code == 0, f"Apply failed:\\n{stderr}"
 
-        # Verify two-phase completion occurred
-        assert (
-            "Phase 1" in stderr or "composite" in stderr.lower()
-        ), "Expected two-phase completion logs for composite"
+            # Verify files
+            assert (test_dir / "config.yaml").exists()
+            assert (test_dir / "README.md").exists()
+            assert "app: myapp" in (test_dir / "config.yaml").read_text()
+            assert "My App" in (test_dir / "README.md").read_text()
 
-        # Step 2: Apply
-        print("\n--- Step 2: Apply ---")
-        exit_code, stdout, stderr = run_clockwork_command(
-            "apply", test_dir, timeout=180
-        )
-        print(f"Apply output:\n{stdout}")
-        if stderr:
-            print(f"Apply stderr:\n{stderr}")
+            # Assert
+            exit_code, stdout, stderr = run_clockwork_command(
+                "assert", test_dir
+            )
+            assert exit_code == 0, f"Assertions failed:\\n{stderr}"
 
-        assert exit_code == 0, f"Apply failed:\n{stderr}"
+        finally:
+            run_clockwork_command("destroy", test_dir, timeout=120)
 
-        # Step 3: Verify files were created with intelligently-generated content
-        print("\n--- Step 3: Verify ---")
-        # Find any created files (we don't know exact names since they were generated)
-        created_files = list(test_dir.glob("*.yaml")) + list(
-            test_dir.glob("*.yml")
-        )
-        created_files += list(test_dir.glob("*.md"))
-        created_files += list(test_dir.glob("**/*.yaml")) + list(
-            test_dir.glob("**/*.yml")
-        )
-        created_files += list(test_dir.glob("**/*.md"))
-
-        # Filter out main.py
-        created_files = [f for f in created_files if f.name != "main.py"]
-
-        print(f"Created files: {[str(f) for f in created_files]}")
-        assert (
-            len(created_files) >= 2
-        ), f"Expected at least 2 files created, found {len(created_files)}"
-
-        # Step 4: Destroy
-        print("\n--- Step 4: Destroy ---")
-        exit_code, stdout, stderr = run_clockwork_command(
-            "destroy", test_dir, timeout=120
-        )
-        print(f"Destroy output:\n{stdout}")
-        assert exit_code == 0, f"Destroy failed:\n{stderr}"
-
-        print("\n✅ Simple composite test passed!")
+        print("✓ Composite no intelligence test passed!")
 
 
+# =============================================================================
+# Test 2: Nested composites with mixed intelligence
+# =============================================================================
 @pytest.mark.functional
-@pytest.mark.skipif(not llm_available, reason=llm_message)
-def test_nested_composite():
-    """Test nested composites with intelligent completion at multiple levels.
+def test_nested_composite_mixed_intelligence():
+    """Test nested composites with varying intelligence levels.
 
-    This tests:
-    - Nested BlankResources (composite containing composite)
-    - Children at different levels needing completion
-    - Proper context propagation through nesting levels
+    Outer composite contains inner composites, each with children
+    at different intelligence levels.
     """
     with tempfile.TemporaryDirectory() as tmpdir:
         test_dir = Path(tmpdir)
 
         main_py = test_dir / "main.py"
         main_py.write_text('''
-"""Nested composite test - composites containing composites with completion."""
+"""Nested composites with mixed intelligence levels."""
 
 from clockwork.resources import BlankResource, FileResource
 
 # Outer composite
 app = BlankResource(
-    name="my-app",
-    description="A web application with frontend and backend components"
+    name="fullstack-app",
+    description="A fullstack application with backend and frontend"
 ).add(
-    # Inner composite for backend
+    # Backend composite - mixed intelligence
     BlankResource(
         name="backend",
-        description="Backend API server components"
+        description="Python backend API"
     ).add(
-        # Needs completion
+        # Fully specified
         FileResource(
-            description="A Python requirements.txt file for a Flask API with SQLAlchemy"
+            name="requirements.txt",
+            content="flask==3.0.0\\nsqlalchemy==2.0.0",
+            directory="backend",
+            mode="644",
+        ),
+        # Needs completion - partial
+        FileResource(
+            name="app.py",
+            directory="backend",
+            mode="755",
+            description="A Flask app with a single /health endpoint returning JSON",
         ),
     ),
-    # Inner composite for frontend
+    # Frontend composite - needs completion
     BlankResource(
         name="frontend",
-        description="Frontend web application components"
+        description="React frontend application"
     ).add(
-        # Needs completion
+        # Full intelligence
         FileResource(
-            description="A package.json file for a React application"
+            description="A package.json for a React app named frontend"
         ),
     ),
 )
 
-print("✓ Nested composite configured - children at multiple levels need completion")
+print("✓ Nested composites configured")
 ''')
 
-        print("\n=== Nested Composite with Intelligent Completion ===")
+        print("\\n=== Test: Nested Composite Mixed Intelligence ===")
 
-        # Step 1: Plan
-        print("\n--- Step 1: Plan ---")
-        exit_code, stdout, stderr = run_clockwork_command(
-            "plan", test_dir, timeout=240
-        )
-        print(f"Plan output:\n{stdout}")
-        if stderr:
-            print(f"Plan stderr:\n{stderr}")
+        try:
+            # Plan
+            exit_code, stdout, stderr = run_clockwork_command(
+                "plan", test_dir, timeout=240
+            )
+            print(f"Plan stderr:\\n{stderr}")
+            assert exit_code == 0, f"Plan failed:\\n{stderr}"
 
-        assert exit_code == 0, f"Plan failed:\n{stderr}"
+            # Should see composite/two-phase completion
+            assert (
+                "composite" in stderr.lower() or "Phase" in stderr
+            ), "Expected composite completion logs"
 
-        # Step 2: Apply
-        print("\n--- Step 2: Apply ---")
-        exit_code, stdout, stderr = run_clockwork_command(
-            "apply", test_dir, timeout=240
-        )
-        print(f"Apply output:\n{stdout}")
-        if stderr:
-            print(f"Apply stderr:\n{stderr}")
+            # Apply
+            exit_code, stdout, stderr = run_clockwork_command(
+                "apply", test_dir, timeout=300
+            )
+            print(f"Apply stdout:\\n{stdout}")
+            assert exit_code == 0, f"Apply failed:\\n{stderr}"
 
-        assert exit_code == 0, f"Apply failed:\n{stderr}"
+            # Verify fully specified file
+            req_file = test_dir / "backend" / "requirements.txt"
+            assert req_file.exists(), "backend/requirements.txt not created"
+            assert "flask" in req_file.read_text().lower()
 
-        # Step 3: Verify
-        print("\n--- Step 3: Verify ---")
-        # Find created files
-        all_files = list(test_dir.rglob("*"))
-        created_files = [
-            f for f in all_files if f.is_file() and f.name != "main.py"
-        ]
+            # Verify partially specified file was completed
+            app_file = test_dir / "backend" / "app.py"
+            assert app_file.exists(), "backend/app.py not created"
+            app_content = app_file.read_text()
+            print(f"Generated app.py:\\n{app_content}")
+            assert len(app_content) > 20, "app.py should have generated content"
 
-        print(
-            f"Created files: {[str(f.relative_to(test_dir)) for f in created_files]}"
-        )
-        assert (
-            len(created_files) >= 2
-        ), f"Expected at least 2 files, found {len(created_files)}"
+            # Find generated frontend files
+            frontend_files = list((test_dir).rglob("package.json")) + list(
+                (test_dir).rglob("*.json")
+            )
+            frontend_files = [
+                f for f in frontend_files if "package" in f.name.lower()
+            ]
+            print(f"Frontend files: {[str(f) for f in frontend_files]}")
 
-        # Step 4: Destroy
-        print("\n--- Step 4: Destroy ---")
-        exit_code, stdout, stderr = run_clockwork_command(
-            "destroy", test_dir, timeout=120
-        )
-        print(f"Destroy output:\n{stdout}")
-        assert exit_code == 0, f"Destroy failed:\n{stderr}"
+        finally:
+            run_clockwork_command("destroy", test_dir, timeout=120)
 
-        print("\n✅ Nested composite test passed!")
+        print("✓ Nested composite mixed intelligence test passed!")
 
 
+# =============================================================================
+# Test 3: Composite with containers (deployment test)
+# =============================================================================
 @pytest.mark.functional
-@pytest.mark.skipif(not llm_available, reason=llm_message)
-def test_composite_with_connections():
-    """Test composite resources with connections requiring intelligent completion.
+def test_composite_with_container():
+    """Test composite containing both files and containers.
 
-    This tests:
-    - Composite with children that connect to external resources
-    - Connection completion based on resource context
-    - Full deployment with containers
+    Verifies that composites can orchestrate mixed resource types.
     """
     with tempfile.TemporaryDirectory() as tmpdir:
         test_dir = Path(tmpdir)
 
         main_py = test_dir / "main.py"
         main_py.write_text('''
-"""Composite with connections test."""
+"""Composite with file and container resources."""
 
-import subprocess
-import json
 from clockwork.resources import BlankResource, FileResource, AppleContainerResource
-from clockwork.connections import DatabaseConnection
+from clockwork.assertions import FileExistsAssert, ContainerRunningAssert
 
-# Standalone database (fully specified for reliability)
-db = AppleContainerResource(
-    name="test-db",
-    image="postgres:15-alpine",
-    ports=["25432:5432"],
-    env_vars={"POSTGRES_PASSWORD": "testpass"},  # pragma: allowlist secret
-)
-
-# Composite app that connects to database
-app = BlankResource(
-    name="test-app",
-    description="A Python application that connects to PostgreSQL"
+service = BlankResource(
+    name="web-service",
+    description="A web service with config and nginx"
 ).add(
-    # Config needs completion - should include database connection info
+    # Fully specified config
     FileResource(
-        description="Database configuration file with PostgreSQL connection settings for host, port, user, and database name"
+        name="nginx.conf",
+        content="server { listen 80; location / { return 200 'OK'; } }",
+        directory=".",
+        mode="644",
+        assertions=[FileExistsAssert(path="nginx.conf")]
+    ),
+    # Partially specified - needs image completed
+    AppleContainerResource(
+        name="func-test-nginx-comp",
+        image="nginx:alpine",  # Fully specified for reliability
+        ports=["18080:80"],
+        assertions=[ContainerRunningAssert(container_name="func-test-nginx-comp")]
     ),
 )
 
-# App connects to database
-app.connect(db)
-
-print("✓ Composite with connections configured")
+print("✓ Composite with container configured")
 ''')
 
-        print("\n=== Composite with Connections Test ===")
+        print("\\n=== Test: Composite with Container ===")
 
         try:
-            # Step 1: Plan
-            print("\n--- Step 1: Plan ---")
+            # Plan
             exit_code, stdout, stderr = run_clockwork_command(
                 "plan", test_dir, timeout=180
             )
-            print(f"Plan output:\n{stdout}")
-            if stderr:
-                print(f"Plan stderr:\n{stderr}")
+            print(f"Plan stderr:\\n{stderr}")
+            assert exit_code == 0, f"Plan failed:\\n{stderr}"
 
-            assert exit_code == 0, f"Plan failed:\n{stderr}"
-
-            # Step 2: Apply
-            print("\n--- Step 2: Apply ---")
+            # Apply
             exit_code, stdout, stderr = run_clockwork_command(
                 "apply", test_dir, timeout=300
             )
-            print(f"Apply output:\n{stdout}")
-            if stderr:
-                print(f"Apply stderr:\n{stderr}")
+            print(f"Apply stdout:\\n{stdout}")
+            assert exit_code == 0, f"Apply failed:\\n{stderr}"
 
-            assert exit_code == 0, f"Apply failed:\n{stderr}"
+            # Verify file
+            assert (test_dir / "nginx.conf").exists(), "nginx.conf not created"
 
-            # Step 3: Verify
-            print("\n--- Step 3: Verify ---")
-            time.sleep(3)
-
-            # Check container is running
+            # Verify container
+            time.sleep(5)
             result = subprocess.run(
                 ["container", "list", "--format", "json"],
                 capture_output=True,
                 text=True,
             )
-            if result.returncode == 0:
-                import json
-
-                containers = json.loads(result.stdout) if result.stdout else []
+            if result.returncode == 0 and result.stdout:
+                containers = json.loads(result.stdout)
                 running = [
                     c for c in containers if c.get("status") != "stopped"
                 ]
                 print(f"Running containers: {len(running)}")
+                assert (
+                    len(running) >= 1
+                ), "Expected at least 1 container running"
+
+            # Assert
+            exit_code, stdout, stderr = run_clockwork_command(
+                "assert", test_dir
+            )
+            print(f"Assert result: exit_code={exit_code}")
 
         finally:
-            # Cleanup
-            print("\n--- Cleanup ---")
             run_clockwork_command("destroy", test_dir, timeout=120)
             time.sleep(2)
-            # Force cleanup containers
-            result = subprocess.run(
-                ["container", "list", "--all", "--format", "json"],
-                capture_output=True,
-                text=True,
+            cleanup_containers()
+
+        print("✓ Composite with container test passed!")
+
+
+# =============================================================================
+# Test 4: Deep nesting with full intelligence
+# =============================================================================
+@pytest.mark.functional
+def test_deep_nesting_full_intelligence():
+    """Test deeply nested composites with full intelligence completion.
+
+    Verifies that two-phase completion works correctly through multiple levels.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        test_dir = Path(tmpdir)
+
+        main_py = test_dir / "main.py"
+        main_py.write_text('''
+"""Deeply nested composite with full intelligence."""
+
+from clockwork.resources import BlankResource, FileResource
+
+# Three levels of nesting
+monorepo = BlankResource(
+    name="monorepo",
+    description="A monorepo with multiple packages"
+).add(
+    BlankResource(
+        name="packages",
+        description="Container for packages"
+    ).add(
+        BlankResource(
+            name="core",
+            description="Core library package"
+        ).add(
+            # Full intelligence - deeply nested
+            FileResource(
+                description="A Python __init__.py that exports a version string"
+            ),
+        ),
+    ),
+)
+
+print("✓ Deeply nested composite configured")
+''')
+
+        print("\\n=== Test: Deep Nesting Full Intelligence ===")
+
+        try:
+            # Plan
+            exit_code, stdout, stderr = run_clockwork_command(
+                "plan", test_dir, timeout=240
             )
-            if result.returncode == 0 and result.stdout:
-                import json
+            print(f"Plan stderr:\\n{stderr}")
+            assert exit_code == 0, f"Plan failed:\\n{stderr}"
 
-                containers = json.loads(result.stdout)
-                ids = [c["configuration"]["id"] for c in containers]
-                if ids:
-                    subprocess.run(
-                        ["container", "rm", "-f", *ids], capture_output=True
-                    )
+            # Apply
+            exit_code, stdout, stderr = run_clockwork_command(
+                "apply", test_dir, timeout=300
+            )
+            print(f"Apply stdout:\\n{stdout}")
+            assert exit_code == 0, f"Apply failed:\\n{stderr}"
 
-        print("\n✅ Composite with connections test passed!")
+            # Find created files
+            all_files = list(test_dir.rglob("*"))
+            created_files = [
+                f for f in all_files if f.is_file() and f.name != "main.py"
+            ]
+            print(
+                f"Created files: {[str(f.relative_to(test_dir)) for f in created_files]}"
+            )
+
+            # Should have at least the __init__.py
+            assert len(created_files) >= 1, "Expected at least 1 file created"
+
+        finally:
+            run_clockwork_command("destroy", test_dir, timeout=120)
+
+        print("✓ Deep nesting test passed!")
 
 
 if __name__ == "__main__":

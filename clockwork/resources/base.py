@@ -418,7 +418,9 @@ class Resource(BaseModel):
             descendants.extend(child.get_all_descendants())
         return descendants
 
-    def _build_dependency_options(self) -> pulumi.ResourceOptions | None:
+    def _build_dependency_options(
+        self, exclude_parent: bool = False
+    ) -> pulumi.ResourceOptions | None:
         """Build Pulumi ResourceOptions from connections.
 
         Creates ResourceOptions with depends_on set to:
@@ -426,6 +428,11 @@ class Resource(BaseModel):
         2. The connection's setup Pulumi resources (if any)
 
         This ensures proper deployment ordering.
+
+        Args:
+            exclude_parent: If True, excludes the parent resource from depends_on.
+                Used when compiling children as part of a composite, since the
+                Pulumi parent relationship already implies dependency.
 
         Returns:
             pulumi.ResourceOptions with depends_on set if connections exist,
@@ -443,8 +450,20 @@ class Resource(BaseModel):
         if not self._connections:
             return None
 
+        # Get parent reference (if any) for filtering
+        parent = self._parent if hasattr(self, "_parent") else None
+
         depends_on = []
         for conn in self._connections:
+            # Skip parent connection if exclude_parent is True
+            # (parent relationship already implies dependency in Pulumi)
+            if (
+                exclude_parent
+                and parent is not None
+                and conn.to_resource is parent
+            ):
+                continue
+
             # Add dependency on to_resource
             if (
                 hasattr(conn.to_resource, "_pulumi_resource")
@@ -486,8 +505,9 @@ class Resource(BaseModel):
             child_opts = pulumi.ResourceOptions(parent=parent_component)
             child._compile_with_opts(child_opts)
         """
-        # Build dependency options from connections
-        dep_opts = self._build_dependency_options()
+        # Build dependency options from connections, excluding parent
+        # (parent relationship already implies dependency in Pulumi)
+        dep_opts = self._build_dependency_options(exclude_parent=True)
 
         # Merge parent opts with dependency opts
         merged_opts = self._merge_resource_options(opts, dep_opts)
