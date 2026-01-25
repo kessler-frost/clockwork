@@ -54,4 +54,4 @@ jobs:
           tag_name: ${{ inputs.tag || github.ref_name }}
           files: dist/*
           generate_release_notes: true
-          prerelease: ${{ startsWith(inputs.tag || github.ref_name, '20') }}
+          prerelease: false

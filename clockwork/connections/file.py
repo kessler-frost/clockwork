@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pulumi
@@ -152,8 +153,6 @@ class FileConnection(Connection):
             if self.to_resource.path:
                 mount_source = self.to_resource.path
             elif self.to_resource.name and self.to_resource.directory:
-                from pathlib import Path
-
                 mount_source = str(
                     Path(self.to_resource.directory) / self.to_resource.name
                 )

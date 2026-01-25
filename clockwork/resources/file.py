@@ -1,5 +1,6 @@
 """File resource for creating files with optional intelligently generated content."""
 
+from pathlib import Path
 from typing import Any
 
 from pydantic import Field
@@ -74,8 +75,6 @@ class FileResource(Resource):
                 - file_path: Absolute path to the file
                 - directory: Absolute path to directory (if specified), None otherwise
         """
-        from pathlib import Path
-
         # Ensure we have a name (should be set after intelligent completion)
         if not self.name:
             raise ValueError(
@@ -162,8 +161,6 @@ class FileResource(Resource):
             context["path"] = self.path
         elif self.name and self.directory:
             # Can construct a relative path if both are available
-            from pathlib import Path
-
             context["path"] = str(Path(self.directory) / self.name)
 
         # Add directory if specified

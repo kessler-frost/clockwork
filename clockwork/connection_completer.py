@@ -131,7 +131,7 @@ class ConnectionCompleter:
         """
         Complete a single connection using PydanticAI Agent.
 
-        Builds context from both from_resource and to_resource for AI completion.
+        Builds context from both from_resource and to_resource for intelligent completion.
 
         Args:
             connection: Partial Connection object needing completion

@@ -91,6 +91,32 @@ def _initialize_core(
     return ClockworkCore(api_key=api_key, model=model)
 
 
+def _format_timings(result: dict) -> str | None:
+    """Format timing information from result dict.
+
+    Args:
+        result: Result dict that may contain 'timings' key
+
+    Returns:
+        Formatted timing string or None if no timings
+    """
+    if not result.get("timings"):
+        return None
+
+    timings = result["timings"]
+    timing_parts = []
+    if "load" in timings:
+        timing_parts.append(f"Load: {timings['load']:.1f}s")
+    if "complete" in timings:
+        timing_parts.append(f"Complete: {timings['complete']:.1f}s")
+    if "deploy" in timings:
+        timing_parts.append(f"Deploy: {timings['deploy']:.1f}s")
+    if "total" in timings:
+        timing_parts.append(f"Total: {timings['total']:.1f}s")
+
+    return " | ".join(timing_parts) if timing_parts else None
+
+
 def _handle_command_error(e: Exception, command_type: str) -> None:
     """Handle command errors with appropriate formatting.
 
@@ -172,19 +198,9 @@ def apply(
             console.print("\n[bold green]✓ Deployment successful![/bold green]")
 
             # Show timing summary
-            if result.get("timings"):
-                timings = result["timings"]
-                timing_parts = []
-                if "load" in timings:
-                    timing_parts.append(f"Load: {timings['load']:.1f}s")
-                if "complete" in timings:
-                    timing_parts.append(f"Complete: {timings['complete']:.1f}s")
-                if "deploy" in timings:
-                    timing_parts.append(f"Deploy: {timings['deploy']:.1f}s")
-                if "total" in timings:
-                    timing_parts.append(f"Total: {timings['total']:.1f}s")
-                if timing_parts:
-                    console.print(f"[dim]  {' | '.join(timing_parts)}[/dim]")
+            timing_str = _format_timings(result)
+            if timing_str:
+                console.print(f"[dim]  {timing_str}[/dim]")
 
             # Show Pulumi summary
             if result.get("summary"):
@@ -239,19 +255,9 @@ def plan(
         console.print(f"  Completed resources: {result['completed_resources']}")
 
         # Show timing summary
-        if result.get("timings"):
-            timings = result["timings"]
-            timing_parts = []
-            if "load" in timings:
-                timing_parts.append(f"Load: {timings['load']:.1f}s")
-            if "complete" in timings:
-                timing_parts.append(f"Complete: {timings['complete']:.1f}s")
-            if "deploy" in timings:
-                timing_parts.append(f"Deploy: {timings['deploy']:.1f}s")
-            if "total" in timings:
-                timing_parts.append(f"Total: {timings['total']:.1f}s")
-            if timing_parts:
-                console.print(f"[dim]  {' | '.join(timing_parts)}[/dim]")
+        timing_str = _format_timings(result)
+        if timing_str:
+            console.print(f"[dim]  {timing_str}[/dim]")
 
         # Show preview details
         preview = result.get("preview", {})
