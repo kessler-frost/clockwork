@@ -164,5 +164,5 @@ After understanding this example, check out:
 
 ## Related Examples
 
-- `examples/connected-services/`: Real-world service connections
-- `examples/showcase/`: Complete feature showcase
+- `examples/composite-resources/nested-composites/`: Hierarchical structures
+- `examples/composite-resources/mixed-pattern/`: Combining `.add()` and `.connect()`

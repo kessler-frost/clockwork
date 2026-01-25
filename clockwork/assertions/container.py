@@ -36,18 +36,13 @@ class ContainerRunningAssert(BaseAssertion):
         Returns:
             True if container is running, False otherwise
         """
+        import json
+
         try:
             container_name = resolve_container_name(self, resource)
 
-            # Use Apple Container CLI
-            cmd = [
-                "container",
-                "ps",
-                "--filter",
-                f"name={container_name}",
-                "--format",
-                "{{.Status}}",
-            ]
+            # Use Apple Container CLI (list --format json)
+            cmd = ["container", "list", "--format", "json"]
 
             result = subprocess.run(
                 cmd,
@@ -55,6 +50,19 @@ class ContainerRunningAssert(BaseAssertion):
                 text=True,
                 timeout=self.timeout_seconds,
             )
-            return "up" in result.stdout.lower()
+
+            if result.returncode != 0:
+                return False
+
+            containers = json.loads(result.stdout) if result.stdout else []
+
+            # Check if any container matches the name and is running
+            for container in containers:
+                # Check labels for clockwork.name
+                labels = container.get("configuration", {}).get("labels", {})
+                if labels.get("clockwork.name") == container_name:
+                    return container.get("status") == "running"
+
+            return False
         except Exception:
             return False

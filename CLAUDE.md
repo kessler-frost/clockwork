@@ -141,7 +141,7 @@ api.connect(db_conn).connect(cache_conn).connect(network_conn)
 
 **Features**: Auto-configuration (connection strings, env vars), setup resources (networks, volumes), validation, intelligent completion, type-safe Pydantic
 
-See `examples/connections-showcase/` and `examples/connected-services/`
+See `examples/composite-resources/` for connection patterns within composites.
 
 ## Composites: `.add()` vs `.connect()`
 

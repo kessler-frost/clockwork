@@ -131,7 +131,7 @@ api.connect(primary)
 - Review each example in order (simple → advanced)
 - Check the README.md in each example directory
 - Experiment by modifying the examples
-- See `examples/connected-services/` for real-world patterns
+- See `mixed-pattern/` for combining `.add()` and `.connect()` patterns
 
 ## Questions?
 

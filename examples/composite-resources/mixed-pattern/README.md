@@ -309,5 +309,5 @@ After understanding this example, check out:
 
 ## Related Examples
 
-- `examples/connected-services/`: Real-world service connections
-- `examples/showcase/`: Complete feature showcase
+- `examples/composite-resources/simple-webapp/`: Basic two-level composite
+- `examples/composite-resources/nested-composites/`: Hierarchical structures

@@ -372,7 +372,7 @@ api = AppleContainerResource(
 4. **Cycle Detection**: Prevents circular dependencies before deployment
 5. **Independent Lifecycles**: Each resource can be updated/destroyed separately
 
-See `examples/connected-services/` for complete examples.
+See `examples/composite-resources/` for examples showing resource connections within composites.
 
 ## Composite Resources
 
@@ -477,29 +477,27 @@ uv run clockwork apply --model "anthropic/claude-haiku-4.5"
 Make sure you're in the clockwork directory, then explore these examples:
 
 ```bash
-# Comprehensive showcase - Demonstrates all Clockwork features
-# Includes: FileResource, AppleContainerResource, GitRepoResource, assertions, connections
-cd examples/showcase
-uv run clockwork apply
-uv run clockwork assert
-uv run clockwork destroy
-
-# Connected services - Multi-service architecture with dependencies
-# Shows: Resource connections, intelligent auto-configuration, deployment ordering
-cd examples/connected-services
-uv run clockwork apply
-uv run clockwork assert
-uv run clockwork destroy
-
 # Composite resources - Grouping and hierarchical structures
 # Demonstrates: BlankResource, .add() composition, nested composites
 cd examples/composite-resources/simple-webapp
 uv run clockwork apply
 uv run clockwork assert
 uv run clockwork destroy
+
+# Nested composites - Hierarchical resource structures
+cd examples/composite-resources/nested-composites
+uv run clockwork plan
+
+# Mixed patterns - Combining .add() and .connect()
+cd examples/composite-resources/mixed-pattern
+uv run clockwork plan
+
+# File connections - Demonstrates FileConnection patterns
+cd examples
+uv run python file-connection-example.py
 ```
 
-See `examples/` directory for more details.
+See `examples/composite-resources/` directory for more patterns and documentation.
 
 ## Development
 

@@ -224,4 +224,4 @@ After understanding this example, check out:
 ## Related Examples
 
 - `examples/composite-resources/simple-webapp/`: Basic two-level composite
-- `examples/connected-services/`: Real-world service patterns
+- `examples/composite-resources/mixed-pattern/`: Combining `.add()` and `.connect()`
