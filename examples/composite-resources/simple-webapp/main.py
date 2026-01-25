@@ -64,7 +64,7 @@ webapp.add(
     AppleContainerResource(
         name="api-server",
         description="Node.js API server connected to database and cache",
-        # Let AI choose appropriate Node.js API image based on connections
+        # Let intelligence choose appropriate Node.js API image based on connections
         ports=["3000:3000"],
         env_vars={
             # Database connection string

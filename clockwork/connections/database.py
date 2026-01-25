@@ -115,13 +115,13 @@ class DatabaseConnection(Connection):
     )
 
     def needs_completion(self) -> bool:
-        """Check if this connection needs AI completion.
+        """Check if this connection needs intelligent completion.
 
         Returns True if description is provided but connection_string_template
         or env_var_name are missing.
 
         Returns:
-            True if needs AI completion, False otherwise
+            True if needs intelligent completion, False otherwise
         """
         return (
             self.description is not None
@@ -292,9 +292,9 @@ class DatabaseConnection(Connection):
         return resources if resources else None
 
     def get_connection_context(self) -> dict[str, Any]:
-        """Get connection context for AI completion.
+        """Get connection context for intelligent completion.
 
-        Returns shareable fields that AI can use when completing resources.
+        Returns shareable fields that intelligence can use when completing resources.
 
         Returns:
             Dict with connection info including database name, username, etc.

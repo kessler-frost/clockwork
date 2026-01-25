@@ -157,7 +157,9 @@ def _run_command(
 @app.command()
 def apply(
     api_key: str = typer.Option(
-        None, "--api-key", help="API key for AI service (overrides .env)"
+        None,
+        "--api-key",
+        help="API key for completion service (overrides .env)",
     ),
     model: str = typer.Option(
         None, "--model", help="Model name (overrides .env)"
@@ -168,6 +170,21 @@ def apply(
     def _handle_success(result):
         if result.get("success"):
             console.print("\n[bold green]✓ Deployment successful![/bold green]")
+
+            # Show timing summary
+            if result.get("timings"):
+                timings = result["timings"]
+                timing_parts = []
+                if "load" in timings:
+                    timing_parts.append(f"Load: {timings['load']:.1f}s")
+                if "complete" in timings:
+                    timing_parts.append(f"Complete: {timings['complete']:.1f}s")
+                if "deploy" in timings:
+                    timing_parts.append(f"Deploy: {timings['deploy']:.1f}s")
+                if "total" in timings:
+                    timing_parts.append(f"Total: {timings['total']:.1f}s")
+                if timing_parts:
+                    console.print(f"[dim]  {' | '.join(timing_parts)}[/dim]")
 
             # Show Pulumi summary
             if result.get("summary"):
@@ -180,11 +197,6 @@ def apply(
                 if changes:
                     console.print(
                         f"[dim]Resources: +{changes.get('create', 0)} ~{changes.get('update', 0)} -{changes.get('delete', 0)}[/dim]"
-                    )
-
-                if summary.get("duration"):
-                    console.print(
-                        f"[dim]Duration: {summary['duration']}s[/dim]"
                     )
 
             # Show outputs if any
@@ -211,7 +223,9 @@ def apply(
 @app.command()
 def plan(
     api_key: str = typer.Option(
-        None, "--api-key", help="API key for AI service (overrides .env)"
+        None,
+        "--api-key",
+        help="API key for completion service (overrides .env)",
     ),
     model: str = typer.Option(
         None, "--model", help="Model name (overrides .env)"
@@ -223,6 +237,21 @@ def plan(
         console.print("\n[bold]Plan Summary:[/bold]")
         console.print(f"  Resources: {result['resources']}")
         console.print(f"  Completed resources: {result['completed_resources']}")
+
+        # Show timing summary
+        if result.get("timings"):
+            timings = result["timings"]
+            timing_parts = []
+            if "load" in timings:
+                timing_parts.append(f"Load: {timings['load']:.1f}s")
+            if "complete" in timings:
+                timing_parts.append(f"Complete: {timings['complete']:.1f}s")
+            if "deploy" in timings:
+                timing_parts.append(f"Deploy: {timings['deploy']:.1f}s")
+            if "total" in timings:
+                timing_parts.append(f"Total: {timings['total']:.1f}s")
+            if timing_parts:
+                console.print(f"[dim]  {' | '.join(timing_parts)}[/dim]")
 
         # Show preview details
         preview = result.get("preview", {})
@@ -258,7 +287,9 @@ def plan(
 @app.command()
 def destroy(
     api_key: str = typer.Option(
-        None, "--api-key", help="API key for AI service (overrides .env)"
+        None,
+        "--api-key",
+        help="API key for completion service (overrides .env)",
     ),
     model: str = typer.Option(
         None, "--model", help="Model name (overrides .env)"
@@ -314,7 +345,9 @@ def destroy(
 @app.command(name="assert")
 def assert_cmd(
     api_key: str = typer.Option(
-        None, "--api-key", help="API key for AI service (overrides .env)"
+        None,
+        "--api-key",
+        help="API key for completion service (overrides .env)",
     ),
     model: str = typer.Option(
         None, "--model", help="Model name (overrides .env)"

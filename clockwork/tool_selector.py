@@ -2,7 +2,7 @@
 
 This module provides the ToolSelector class which intelligently selects
 PydanticAI tools and MCP servers based on resource type and completion context.
-It enables AI-powered resource completion with access to external tools like
+It enables intelligence-powered resource completion with access to external tools like
 web search, filesystem access, and other integrations.
 """
 
@@ -14,12 +14,12 @@ logger = logging.getLogger(__name__)
 
 
 class ToolSelector:
-    """Intelligent tool selector for AI-powered resource completion.
+    """Intelligent tool selector for intelligence-powered resource completion.
 
     ToolSelector analyzes resources and their completion context to determine
     which tools (PydanticAI tools or MCP servers) should be available during
-    AI completion. This enables the AI to access real-time information, interact
-    with external systems, and make better completion decisions.
+    intelligent completion. This enables the completer to access real-time information,
+    interact with external systems, and make better completion decisions.
 
     Tool Types:
         - PydanticAI Common Tools: Universal tools (e.g., duckduckgo_search_tool)
@@ -32,8 +32,8 @@ class ToolSelector:
     Example:
         >>> selector = ToolSelector()
         >>> tools = selector.select_tools_for_resource(
-        ...     resource=FileResource(description="Latest AI news"),
-        ...     context="Generate content about recent AI developments"
+        ...     resource=FileResource(description="Latest tech news"),
+        ...     context="Generate content about recent developments"
         ... )
         >>> # Returns: [duckduckgo_search_tool()]
     """
@@ -60,7 +60,7 @@ class ToolSelector:
         """Select appropriate tools for a resource based on type and context.
 
         Main entry point for tool selection. Combines resource-specific tools
-        with context-aware tools to provide the AI with relevant capabilities.
+        with context-aware tools to provide the completer with relevant capabilities.
 
         Args:
             resource: Resource object that needs completion

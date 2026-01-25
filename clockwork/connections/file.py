@@ -26,18 +26,18 @@ class FileConnection(Connection):
     - Create and mount Apple Container volumes
     - Share FileResource outputs to containers
 
-    The connection can be AI-completed to determine mount paths and volume names.
+    The connection can be intelligently completed to determine mount paths and volume names.
 
     Attributes:
         mount_path: Where to mount in from_resource (required for completion)
         source_path: Path in to_resource (if FileResource) or host path for bind mount
-        volume_name: Apple Container volume name (can be AI-generated)
+        volume_name: Apple Container volume name (can be intelligently generated)
         read_only: Mount as read-only (default: False)
         create_volume: Auto-create Apple Container volume if it doesn't exist (default: True)
         volume_size: Volume size with optional K, M, G, T, or P suffix (default: "1G")
 
     Examples:
-        # Share a volume between containers (AI completes mount_path and volume_name)
+        # Share a volume between containers (intelligence completes mount_path and volume_name)
         storage = AppleContainerResource(name="storage", description="storage container")
         app = AppleContainerResource(name="app", description="app container")
         connection = FileConnection(
@@ -81,7 +81,7 @@ class FileConnection(Connection):
     )
     volume_name: str | None = Field(
         default=None,
-        description="Apple Container volume name - AI can generate based on context",
+        description="Apple Container volume name - can be intelligently generated based on context",
         examples=["app-data", "postgres-data", "shared-config"],
     )
     read_only: bool = Field(
@@ -99,15 +99,15 @@ class FileConnection(Connection):
     )
 
     def needs_completion(self) -> bool:
-        """Check if this connection needs AI completion.
+        """Check if this connection needs intelligent completion.
 
         Returns True if description is provided but mount_path is missing,
         or if we need to create a volume but volume_name is missing.
 
         Returns:
-            bool: True if AI completion is needed, False otherwise
+            bool: True if intelligent completion is needed, False otherwise
         """
-        # If no description, no AI completion needed
+        # If no description, no intelligent completion needed
         if not self.description:
             return False
 
@@ -230,10 +230,10 @@ class FileConnection(Connection):
         return resources if resources else None
 
     def get_connection_context(self) -> dict[str, Any]:
-        """Get connection context for AI completion.
+        """Get connection context for intelligent completion.
 
         Provides information about the file connection including mount paths,
-        volume names, and mount type for AI to use when completing missing fields.
+        volume names, and mount type for intelligence to use when completing missing fields.
 
         Returns:
             Dict with connection details

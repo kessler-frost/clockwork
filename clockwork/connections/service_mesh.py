@@ -26,7 +26,7 @@ class ServiceMeshConnection(Connection):
 
     Attributes:
         protocol: Protocol (http, https, grpc, tcp)
-        port: Service port (AI can discover from to_resource)
+        port: Service port (can be discovered from to_resource)
         tls_enabled: Enable TLS for service communication
         cert_path: Path to TLS certificate file
         key_path: Path to TLS private key file
@@ -96,12 +96,12 @@ class ServiceMeshConnection(Connection):
     )
 
     def needs_completion(self) -> bool:
-        """Check if this connection needs AI completion.
+        """Check if this connection needs intelligent completion.
 
         Returns True if description is provided but port or service_name are missing.
 
         Returns:
-            True if needs AI completion, False otherwise
+            True if needs intelligent completion, False otherwise
         """
         return self.description is not None and (
             self.port is None or self.service_name is None
@@ -274,9 +274,9 @@ class ServiceMeshConnection(Connection):
         return pulumi_resources if pulumi_resources else None
 
     def get_connection_context(self) -> dict[str, Any]:
-        """Get context for AI completion.
+        """Get context for intelligent completion.
 
-        Returns connection details that can be used by AI when completing
+        Returns connection details that can be used by intelligence when completing
         resources or other connections.
 
         Returns:

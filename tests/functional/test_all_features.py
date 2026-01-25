@@ -5,7 +5,7 @@ This single test exercises all major features in one deployment:
 - All connection types (Dependency, Database, Network, File, ServiceMesh)
 - Composite resources
 - Assertions
-- AI completion
+- Intelligent completion
 
 Designed to be fast and focused on feature coverage rather than examples.
 """

@@ -43,7 +43,7 @@ class BlankResource(Resource):
         >>> frontend = BlankResource(name="frontend").add(nginx, cdn)
         >>> full_stack = BlankResource(name="app").add(backend, frontend)
 
-        # With AI completion:
+        # With intelligent completion:
         >>> services = BlankResource(
         ...     name="microservices",
         ...     description="Microservices architecture with database and cache"
@@ -108,7 +108,7 @@ class BlankResource(Resource):
         return self
 
     def needs_completion(self) -> bool:
-        """Check if this resource or any children need AI completion.
+        """Check if this resource or any children need intelligent completion.
 
         A BlankResource itself doesn't have fields that need completion (name is
         required). However, it should trigger completion if any of its children
@@ -132,7 +132,7 @@ class BlankResource(Resource):
 
         When other resources connect to a BlankResource, they can access
         information about all the children in the composition. This enables
-        AI to understand the full context of grouped resources.
+        intelligence to understand the full context of grouped resources.
 
         Returns:
             Dict with resource information and children contexts

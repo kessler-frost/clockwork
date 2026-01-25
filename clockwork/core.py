@@ -1,15 +1,16 @@
 """
 Clockwork Core - Intelligent, Composable Primitives for Infrastructure.
 
-Apply Pipeline: Load primitives → Complete primitives (AI) → Deploy with Pulumi
+Apply Pipeline: Load primitives → Intelligent completion → Deploy with Pulumi
 Destroy Pipeline: Destroy infrastructure using Pulumi
-Assert Pipeline: Load primitives → Complete primitives (AI) → Run assertions directly
-Plan Pipeline: Load primitives → Complete primitives (AI) → Preview with Pulumi
+Assert Pipeline: Load primitives → Intelligent completion → Run assertions directly
+Plan Pipeline: Load primitives → Intelligent completion → Preview with Pulumi
 """
 
 import importlib.util
 import logging
 import shutil
+import time
 import traceback
 from pathlib import Path
 from typing import Any
@@ -35,7 +36,7 @@ class ClockworkCore:
         Initialize ClockworkCore.
 
         Args:
-            api_key: API key for AI service (overrides settings/.env)
+            api_key: API key for completion service (overrides settings/.env)
             model: Model to use for resource completion (overrides settings/.env)
             base_url: Base URL for API endpoint (overrides settings/.env)
         """
@@ -68,20 +69,26 @@ class ClockworkCore:
             dry_run: If True, only preview without executing
 
         Returns:
-            Dict with execution results
+            Dict with execution results including timings
         """
         logger.info(f"Starting Clockwork pipeline for: {main_file}")
+        timings: dict[str, float] = {}
+        pipeline_start = time.perf_counter()
 
         # 1. Load resources from main.py
+        start = time.perf_counter()
         resources = self._load_resources(main_file)
+        timings["load"] = time.perf_counter() - start
         logger.info(f"Loaded {len(resources)} resources")
 
         # 2. Resolve dependency order (checks for cycles and sorts topologically)
         resources = self._resolve_dependency_order(resources)
         logger.info("Resolved resource dependencies in deployment order")
 
-        # 3. Complete resources (AI stage)
+        # 3. Complete resources (intelligent completion stage)
+        start = time.perf_counter()
         completed_resources = await self._complete_resources_safe(resources)
+        timings["complete"] = time.perf_counter() - start
 
         # 4. Extract and complete connections
         connections = self._extract_connections(completed_resources)
@@ -100,24 +107,30 @@ class ClockworkCore:
         project_name = main_file.parent.name
 
         # 6. Execute Pulumi deploy (or preview if dry run)
+        start = time.perf_counter()
         if dry_run:
             logger.info("Dry run - running preview only")
             result = await self.pulumi_compiler.preview(
                 completed_resources, project_name
             )
+            timings["deploy"] = time.perf_counter() - start
+            timings["total"] = time.perf_counter() - pipeline_start
             return {
                 "dry_run": True,
                 "resources": len(resources),
                 "completed_resources": len(completed_resources),
                 "preview": result,
+                "timings": timings,
             }
 
         result = await self.pulumi_compiler.apply(
             completed_resources, project_name
         )
+        timings["deploy"] = time.perf_counter() - start
+        timings["total"] = time.perf_counter() - pipeline_start
         logger.info("Clockwork pipeline complete")
 
-        return result
+        return {**result, "timings": timings}
 
     async def plan(self, main_file: Path) -> dict[str, Any]:
         """
@@ -604,7 +617,7 @@ class ClockworkCore:
         resources = self._resolve_dependency_order(resources)
         logger.info("Resolved resource dependencies in deployment order")
 
-        # 3. Complete resources if needed (AI stage)
+        # 3. Complete resources if needed (intelligent completion stage)
         completed_resources = await self._complete_resources_safe(resources)
 
         # 4. Run assertions directly (no file generation)

@@ -162,8 +162,8 @@ readme = FileResource(
     assert "preview" in result
 
 
-def test_generate_mode_with_ai_generation(tmp_path):
-    """Test generate mode with resources needing AI generation."""
+def test_generate_mode_with_intelligent_generation(tmp_path):
+    """Test generate mode with resources needing intelligent completion."""
     main_file = tmp_path / "main.py"
     main_file.write_text("""
 from clockwork.resources import FileResource
@@ -181,7 +181,7 @@ readme = FileResource(
     ):
         mock_instance = Mock()
 
-        # Mock complete to simulate AI completing fields
+        # Mock complete to simulate intelligent completion of fields
         async def mock_complete(resources):
             for r in resources:
                 if hasattr(r, "content") and r.content is None:
@@ -279,10 +279,10 @@ ai_file = FileResource(
 
         # Mock complete to return resources with completed fields
         async def mock_complete(resources):
-            # Simulate AI completing missing fields
+            # Simulate intelligent completion of missing fields
             for r in resources:
                 if hasattr(r, "content") and r.content is None:
-                    r.content = "AI-generated content"
+                    r.content = "Intelligently generated content"
                 if hasattr(r, "name") and r.name is None:
                     r.name = "ai-generated-name.md"
                 if hasattr(r, "directory") and r.directory is None:
@@ -332,7 +332,7 @@ def test_artifact_generator_initialization():
 
 
 def test_resources_with_mixed_content(tmp_path):
-    """Test pipeline with mix of user-provided and AI-generated content."""
+    """Test pipeline with mix of user-provided and intelligently generated content."""
     main_file = tmp_path / "main.py"
     main_file.write_text("""
 from clockwork.resources import FileResource
@@ -344,7 +344,7 @@ static_file = FileResource(
     content="I wrote this myself"
 )
 
-# AI-generated content
+# Intelligently generated content
 dynamic_file = FileResource(
     name="dynamic.md",
     description="Generate documentation about Containers",
@@ -358,7 +358,7 @@ dynamic_file = FileResource(
     ):
         mock_instance = Mock()
 
-        # Mock complete to simulate AI filling content
+        # Mock complete to simulate intelligent content filling
         async def mock_complete(resources):
             for r in resources:
                 if hasattr(r, "content") and r.content is None:
@@ -492,7 +492,7 @@ static_file = FileResource(
     content="Static content"
 )
 
-# AI-generated content
+# Intelligently generated content
 dynamic_file = FileResource(
     name="dynamic.md",
     description="Generate documentation"
@@ -509,10 +509,10 @@ dynamic_file = FileResource(
 
         # Mock complete to return resources with completed fields
         async def mock_complete(resources):
-            # Simulate AI completing missing fields
+            # Simulate intelligent completion of missing fields
             for r in resources:
                 if hasattr(r, "content") and r.content is None:
-                    r.content = "AI-generated content"
+                    r.content = "Intelligently generated content"
                 if hasattr(r, "name") and r.name is None:
                     r.name = "ai-generated-name.md"
                 if hasattr(r, "directory") and r.directory is None:

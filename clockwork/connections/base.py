@@ -20,20 +20,20 @@ class Connection(BaseModel):
     Connections are first-class components that establish relationships between resources.
     Unlike simple dependencies, connections can:
     - Have their own setup resources (e.g., network bridges, config files)
-    - Be AI-completed based on context from both endpoints
+    - Be intelligently completed based on context from both endpoints
     - Run their own assertions to validate the connection
 
     Connection Flow:
     1. User creates connection with some fields set to None
     2. needs_completion() checks if any completable fields are None
-    3. AI fills in missing fields using context from from_resource and to_resource
+    3. Intelligence fills in missing fields using context from from_resource and to_resource
     4. to_pulumi() deploys any setup resources needed for the connection
     5. Assertions validate the connection is working
 
     Attributes:
         from_resource: Source resource (set by Resource.connect())
         to_resource: Target resource
-        description: Optional description for AI completion context
+        description: Optional description for intelligent completion context
         setup_resources: Resources created by this connection (e.g., config files, network bridges)
         assertions: Validation checks for the connection
         _pulumi_resources: Private list of deployed Pulumi resources
@@ -48,7 +48,7 @@ class Connection(BaseModel):
     )
     description: str | None = Field(
         default=None,
-        description="Human-readable description for AI completion context",
+        description="Human-readable description for intelligent completion context",
     )
     setup_resources: list[Any] = Field(
         default_factory=list,
@@ -61,9 +61,9 @@ class Connection(BaseModel):
     _pulumi_resources: list[pulumi.Resource] = PrivateAttr(default_factory=list)
 
     def needs_completion(self) -> bool:
-        """Check if this connection needs AI completion for any fields.
+        """Check if this connection needs intelligent completion for any fields.
 
-        Override this method in subclasses to define which fields can be AI-completed.
+        Override this method in subclasses to define which fields can be intelligently completed.
         The default implementation checks if description is set but no setup resources exist.
 
         Returns:
@@ -80,9 +80,9 @@ class Connection(BaseModel):
         return self.description is not None and len(self.setup_resources) == 0
 
     def get_connection_context(self) -> dict[str, Any]:
-        """Get shareable context from this connection for AI completion.
+        """Get shareable context from this connection for intelligent completion.
 
-        Returns context that can be used by AI when completing resources or other connections.
+        Returns context that can be used by intelligence when completing resources or other connections.
 
         Returns:
             Dict with shareable fields from this connection
@@ -118,7 +118,7 @@ class Connection(BaseModel):
     def to_pulumi(self) -> list[pulumi.Resource] | None:
         """Create Pulumi resources for this connection's setup.
 
-        This method is called after AI completion, so all required fields should
+        This method is called after intelligent completion, so all required fields should
         be populated. It should create and return Pulumi resources needed to
         establish the connection (e.g., config files, network bridges).
 

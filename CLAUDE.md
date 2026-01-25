@@ -34,20 +34,76 @@ container rm <id>          # Remove a container
 
 ## Architecture
 
-**Flow**: Declare (Pydantic) → Resolve (deps) → Complete (AI) → Compile (Pulumi) → Deploy (Automation API)
+**Flow**: Declare (Pydantic) → Resolve (deps) → Complete (Intelligence) → Compile (Pulumi) → Deploy (Automation API)
 
-## AI Control Levels
+## Architecture Deep Dive
 
-Choose per resource how much AI handles:
+### Pipeline Stages
+
+1. **Load**: Execute `main.py`, collect `Resource` instances
+2. **Resolve Dependencies**: Flatten composites, detect cycles, topological sort
+3. **Complete**: Fill missing fields via PydanticAI structured outputs
+4. **Compile**: Convert resources to Pulumi program function
+5. **Deploy**: Execute via Pulumi Automation API (`stack.up()`)
+
+### Key File Locations
+
+| Component | Location |
+|-----------|----------|
+| Core Orchestrator | `clockwork/core.py` |
+| Resource Completer | `clockwork/resource_completer.py` |
+| Pulumi Compiler | `clockwork/pulumi_compiler.py` |
+| Resource Base Class | `clockwork/resources/base.py` |
+| Connection Types | `clockwork/connections/` |
+| Assertions | `clockwork/assertions/` |
+| Settings | `clockwork/settings.py` |
+| CLI | `clockwork/cli.py` |
+
+### Two-Phase Composite Completion
+
+Composite resources use two-phase completion for system-level reasoning:
+
+**Phase 1: Parent with Children Context**
+- Intelligence sees composite description + all child descriptions
+- Plans overall architecture and relationships
+- Determines compatibility requirements
+
+**Phase 2: Children with Parent Context**
+- Each child receives completion with parent context
+- Intelligence knows about siblings through parent's context
+- Makes coordinated decisions (compatible versions, shared networks)
+
+### Connection Patterns
+
+**Dual-Storage Pattern** (in `Resource` base class):
+- `connections: list[dict]` - Serializable context for intelligence
+- `_connection_resources: list[Resource]` - Object references for graph traversal
+
+**Connection Context Flow**:
+1. Resource A connects to Resource B
+2. B's `get_connection_context()` extracts serializable data
+3. Context stored in A's `connections` list
+4. B stored in A's `_connection_resources` for dependency resolution
+
+### Dependency Resolution Flow
+
+1. **Composite Flattening**: Recursively extract children
+2. **Implicit Dependencies**: Parent→child dependencies added
+3. **Cycle Detection**: DFS-based detection with clear error messages
+4. **Topological Sort**: Order resources so dependencies deploy first
+
+## Intelligence Control Levels
+
+Choose per resource how much intelligence handles:
 
 ```python
-# Full control - no AI
+# Full control - no intelligence
 AppleContainerResource(name="nginx", image="nginx:1.25", ports=["8080:80"])
 
-# Hybrid - AI fills gaps
+# Hybrid - intelligence fills gaps
 AppleContainerResource(description="web server", ports=["8080:80"])
 
-# Fast - AI handles everything
+# Fast - intelligence handles everything
 AppleContainerResource(description="web server", assertions=[HealthcheckAssert(...)])
 ```
 
@@ -55,7 +111,7 @@ AppleContainerResource(description="web server", assertions=[HealthcheckAssert(.
 
 **Containers**: AppleContainerResource | **Files**: FileResource | **Other**: GitRepoResource, BlankResource (composition)
 
-All support AI completion via `description`.
+All support intelligent completion via `description`.
 
 ## Connections
 
@@ -63,7 +119,7 @@ First-class components for resource relationships. Handle complex setup beyond s
 
 **Types**: DependencyConnection, DatabaseConnection, NetworkConnection, FileConnection, ServiceMeshConnection
 
-All support AI completion via `description`.
+All support intelligent completion via `description`.
 
 ```python
 # Simple dependency (auto-creates DependencyConnection)
@@ -83,7 +139,7 @@ api.connect(DatabaseConnection(
 api.connect(db_conn).connect(cache_conn).connect(network_conn)
 ```
 
-**Features**: Auto-configuration (connection strings, env vars), setup resources (networks, volumes), validation, AI completion, type-safe Pydantic
+**Features**: Auto-configuration (connection strings, env vars), setup resources (networks, volumes), validation, intelligent completion, type-safe Pydantic
 
 See `examples/connections-showcase/` and `examples/connected-services/`
 
@@ -104,7 +160,7 @@ db = AppleContainerResource(name="db", description="postgres")
 api = AppleContainerResource(name="api", description="API").connect(db)
 ```
 
-**Two-Phase AI**: Composites complete in 2 phases: (1) parent planning with full context, (2) child completion with parent/sibling awareness
+**Two-Phase Completion**: Composites complete in 2 phases: (1) parent planning with full context, (2) child completion with parent/sibling awareness
 
 **Child Access**: Use `resource.children["name"]` for post-creation modifications (dict-style API)
 

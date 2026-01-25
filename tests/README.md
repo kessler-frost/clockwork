@@ -27,7 +27,7 @@ uv run pytest tests/ --cov=clockwork --cov-report=html
 ## Testing Best Practices
 
 - Test individual functions and classes in isolation
-- Use mocks for external dependencies (AI calls)
+- Use mocks for external dependencies (LLM calls)
 - Focus on edge cases and error conditions
 - Verify data flow between modules
 - Test complete user workflows

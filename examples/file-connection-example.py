@@ -12,7 +12,7 @@ from clockwork.resources import (
 )
 
 # Example 1: Share a volume between two containers
-# AI can complete mount_path and volume_name based on description
+# Intelligence can complete mount_path and volume_name based on description
 storage = AppleContainerResource(
     name="storage", description="data storage container"
 )
@@ -99,7 +99,7 @@ db_volume = FileConnection(
 db.connect(db_volume)
 
 print("FileConnection examples created successfully!")
-print("\nExample 1: Shared volume (AI completion)")
+print("\nExample 1: Shared volume (intelligent completion)")
 print(f"  - Storage: {storage.name}")
 print(f"  - App: {app.name}")
 print(f"  - Connection: {connection.description}")

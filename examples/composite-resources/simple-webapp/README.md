@@ -128,7 +128,7 @@ api.connect(database)
 
 - Establishes a dependency relationship
 - Ensures `database` deploys before `api`
-- Provides AI context about connected resources
+- Provides context about connected resources for intelligent completion
 - Prevents circular dependencies
 
 ## Customization Ideas
@@ -137,7 +137,7 @@ Try modifying this example to:
 
 1. **Add nginx**: Include a reverse proxy in front of the API
 2. **Add monitoring**: Include a Prometheus container
-3. **Use AI completion**: Remove `image` field from API and let AI choose
+3. **Use intelligent completion**: Remove `image` field from API and let intelligence choose
 4. **Add volumes**: Persist database data across restarts
 5. **Create network**: Put all containers on a custom container network
 

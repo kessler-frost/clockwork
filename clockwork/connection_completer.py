@@ -1,5 +1,5 @@
 """
-Connection Completer - AI-powered connection completion using PydanticAI structured outputs.
+Connection Completer - Intelligence-powered connection completion using PydanticAI structured outputs.
 
 Similar to ResourceCompleter but for Connection objects.
 """
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 class ConnectionCompleter:
-    """Completes partial connections using AI via PydanticAI structured outputs."""
+    """Completes partial connections using intelligent completion via PydanticAI structured outputs."""
 
     def __init__(
         self,
@@ -39,7 +39,7 @@ class ConnectionCompleter:
         Initialize the connection completer.
 
         Args:
-            api_key: API key for AI service (overrides settings/.env)
+            api_key: API key for completion service (overrides settings/.env)
             model: Model name to use (overrides settings/.env)
             base_url: Base URL for API endpoint (overrides settings/.env)
             tool_selector: Optional ToolSelector instance for intelligent tool selection
@@ -91,7 +91,7 @@ class ConnectionCompleter:
         self, connections: list[Any], resources: list[Any]
     ) -> list[Any]:
         """
-        Complete partial connections using AI (async version).
+        Complete partial connections using intelligent completion (async version).
 
         Args:
             connections: List of Connection objects (some may be partial)
@@ -185,7 +185,7 @@ class ConnectionCompleter:
             """Validate that all required fields defined by needs_completion() are filled."""
             if output.needs_completion():
                 logger.warning(
-                    f"AI failed to complete required fields for {output.__class__.__name__}"
+                    f"Completion failed to fill required fields for {output.__class__.__name__}"
                 )
                 raise ModelRetry(
                     "The connection still has incomplete required fields. "
@@ -250,45 +250,45 @@ class ConnectionCompleter:
         # Run agent with description and context
         result = await agent.run(user_message)
 
-        # Merge user-provided values with AI suggestions
+        # Merge user-provided values with intelligent suggestions
         final_connection = self._merge_connections(connection, result.output)
 
         return final_connection
 
     def _merge_connections(
-        self, user_connection: Any, ai_connection: Any
+        self, user_connection: Any, completed_connection: Any
     ) -> Any:
         """
-        Merge user-provided connection with AI-completed connection.
+        Merge user-provided connection with intelligently completed connection.
 
-        User-provided values take precedence over AI suggestions.
+        User-provided values take precedence over intelligent suggestions.
 
         Args:
             user_connection: Original partial connection from user
-            ai_connection: AI-completed connection with all fields
+            completed_connection: Intelligently completed connection with all fields
 
         Returns:
             Merged connection with user overrides applied
         """
         # Get all field values from user connection
         user_data = user_connection.model_dump(exclude_unset=False)
-        ai_data = ai_connection.model_dump(exclude_unset=False)
+        completed_data = completed_connection.model_dump(exclude_unset=False)
 
-        # Merge: user values override AI values
+        # Merge: user values override completed values
         merged_data = {}
         for field_name in user_data:
             user_value = user_data[field_name]
-            ai_value = ai_data.get(field_name)
+            completed_value = completed_data.get(field_name)
 
-            # Priority: user value > AI value
+            # Priority: user value > completed value
             if user_value is not None:
                 merged_data[field_name] = user_value
-            elif ai_value is not None:
-                merged_data[field_name] = ai_value
+            elif completed_value is not None:
+                merged_data[field_name] = completed_value
             else:
                 merged_data[field_name] = None
 
-        # Preserve assertions from user connection (not part of AI completion)
+        # Preserve assertions from user connection (not part of completion)
         if (
             hasattr(user_connection, "assertions")
             and user_connection.assertions

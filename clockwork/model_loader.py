@@ -1,7 +1,7 @@
 """
 Model Loader - Automatic model loading for LM Studio.
 
-This module provides automatic model loading when using LM Studio as the AI backend.
+This module provides automatic model loading when using LM Studio as the completion backend.
 When a localhost:1234 endpoint is detected, the specified model is loaded automatically.
 """
 

@@ -110,12 +110,12 @@ def test_to_pulumi_with_complete_fields():
 
 
 def test_to_pulumi_with_completed_fields():
-    """Test to_pulumi() with AI-completed fields."""
+    """Test to_pulumi() with intelligently completed fields."""
     container = AppleContainerResource(
         name="nginx-ai", description="Web server for static content"
     )
 
-    # Simulate AI completion
+    # Simulate intelligent completion
     container.image = "nginx:latest"
     container.ports = []
 

@@ -258,7 +258,7 @@ Try modifying this example to:
 2. **Add Grafana**: Add standalone Grafana that depends on prometheus
 3. **Add Redis**: Add standalone Redis shared by multiple apps
 4. **Add app-specific monitoring**: Add per-app metrics collectors within composites
-5. **Use AI completion**: Remove image fields and let AI choose
+5. **Use intelligent completion**: Remove image fields and let intelligence choose
 
 ## Benefits of Mixed Pattern
 

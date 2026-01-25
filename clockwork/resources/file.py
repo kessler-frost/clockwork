@@ -1,4 +1,4 @@
-"""File resource for creating files with optional AI-generated content."""
+"""File resource for creating files with optional intelligently generated content."""
 
 from typing import Any
 
@@ -8,9 +8,9 @@ from .base import Resource
 
 
 class FileResource(Resource):
-    """File resource - creates a file with AI-generated or user-provided content.
+    """File resource - creates a file with intelligently generated or user-provided content.
 
-    Minimal usage (AI completes everything):
+    Minimal usage (intelligence completes everything):
         FileResource(description="Comprehensive article about Conway's Game of Life")
 
     Advanced usage (override specific fields):
@@ -47,7 +47,7 @@ class FileResource(Resource):
     )
 
     def needs_completion(self) -> bool:
-        """Returns True if any field needs AI completion."""
+        """Returns True if any field needs intelligent completion."""
         # If user provides explicit content, no completion needed
         if self.content is not None:
             return False
@@ -76,7 +76,7 @@ class FileResource(Resource):
         """
         from pathlib import Path
 
-        # Ensure we have a name (should be set after AI completion)
+        # Ensure we have a name (should be set after intelligent completion)
         if not self.name:
             raise ValueError(
                 "FileResource.name must be set before resolving path"
@@ -113,10 +113,10 @@ class FileResource(Resource):
         # Resolve file path and directory
         file_path, _directory = self._resolve_file_path()
 
-        # Use content directly (should be set after AI completion)
+        # Use content directly (should be set after intelligent completion)
         content = self.content or ""
 
-        # Ensure mode is set (should be set after AI completion)
+        # Ensure mode is set (should be set after intelligent completion)
         mode = self.mode or "644"
 
         # Check if we have temporary compile options (from _compile_with_opts)
