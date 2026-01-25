@@ -1,4 +1,4 @@
-"""Apple Container resource for running containers with optional AI-suggested images."""
+"""Apple Container resource for running containers with optional intelligently suggested images."""
 
 from typing import Any
 
@@ -8,35 +8,35 @@ from .base import Resource
 
 
 class AppleContainerResource(Resource):
-    """Apple Container resource - runs containers with AI completing all fields.
+    """Apple Container resource - runs containers with intelligence completing all fields.
 
     This resource allows you to define Apple Containers with just a description.
-    The AI will intelligently complete all missing fields including name, image,
+    Intelligence will complete all missing fields including name, image,
     ports, volumes, environment variables, and networks.
 
     Attributes:
-        description: What the service does - AI uses this to complete all fields (required)
-        name: Container name (optional - AI generates if not provided)
-        image: Container image to use (optional - AI suggests if not provided)
-        ports: Port mappings as list of strings (optional - AI determines if not provided)
-        volumes: Volume mounts as list of strings (optional - AI determines if not provided)
-        env_vars: Environment variables as key-value pairs (optional - AI suggests if not provided)
-        networks: Container networks to attach (optional - AI determines if not provided)
+        description: What the service does - intelligence uses this to complete all fields (required)
+        name: Container name (optional - intelligently generated if not provided)
+        image: Container image to use (optional - intelligently suggested if not provided)
+        ports: Port mappings as list of strings (optional - intelligently determined if not provided)
+        volumes: Volume mounts as list of strings (optional - intelligently determined if not provided)
+        env_vars: Environment variables as key-value pairs (optional - intelligently suggested if not provided)
+        networks: Container networks to attach (optional - intelligently determined if not provided)
         must_run: Whether the container must be running (True) or can be stopped (False)
 
     Examples:
-        # Minimal - AI completes everything:
+        # Minimal - intelligence completes everything:
         >>> web = AppleContainerResource(
         ...     description="lightweight nginx web server for testing"
         ... )
-        # AI generates: name="nginx-server", image="nginx:alpine", ports=["80:80"]
+        # Intelligence generates: name="nginx-server", image="nginx:alpine", ports=["80:80"]
 
         # Advanced - override specific fields:
         >>> api = AppleContainerResource(
         ...     description="lightweight web server for testing",
         ...     ports=["8090:80"]  # Override port
         ... )
-        # AI generates: name="nginx-server", image="nginx:alpine", volumes, env_vars
+        # Intelligence generates: name="nginx-server", image="nginx:alpine", volumes, env_vars
     """
 
     description: str | None = None
@@ -79,9 +79,9 @@ class AppleContainerResource(Resource):
     )
 
     def needs_completion(self) -> bool:
-        """Returns True if any critical field needs AI completion.
+        """Returns True if any critical field needs intelligent completion.
 
-        Only critical fields (name, image, ports) trigger AI completion.
+        Only critical fields (name, image, ports) trigger intelligent completion.
         Optional fields (volumes, env_vars, networks) default to empty.
 
         Returns:
@@ -94,7 +94,7 @@ class AppleContainerResource(Resource):
 
         Uses the AppleContainer dynamic provider to manage the container
         using the Apple Containers CLI. All fields should be populated by
-        AI completion before this is called.
+        intelligent completion before this is called.
 
         Returns:
             AppleContainer: Pulumi dynamic resource instance
@@ -103,7 +103,7 @@ class AppleContainerResource(Resource):
             ValueError: If required fields are not completed
 
         Example:
-            # After AI completion
+            # After intelligent completion
             >>> resource.to_pulumi()
             <AppleContainer resource with container_id output>
         """
@@ -112,7 +112,7 @@ class AppleContainerResource(Resource):
             AppleContainerInputs,
         )
 
-        # All fields should be populated by AI completion
+        # All fields should be populated by intelligent completion
         if self.name is None or self.image is None:
             raise ValueError(
                 f"Resource fields not completed. name={self.name}, image={self.image}"

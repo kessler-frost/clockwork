@@ -38,7 +38,7 @@ class DependencyConnection(Connection):
     """
 
     def needs_completion(self) -> bool:
-        """DependencyConnection never needs AI completion.
+        """DependencyConnection never needs intelligent completion.
 
         Returns:
             Always False - this connection type is always complete

@@ -123,20 +123,20 @@ class Resource(BaseModel):
     """Base resource class - all resources inherit from this.
 
     The new completion-based architecture allows resources to have optional fields
-    that can be filled in by AI during the completion stage. Instead of generating
-    separate "artifacts", the AI directly populates missing fields on the resource
+    that can be filled in during the completion stage. Instead of generating
+    separate "artifacts", intelligence directly populates missing fields on the resource
     objects themselves.
 
     Completion Flow:
     1. User creates resource with some fields set to None (e.g., name=None, image=None)
     2. needs_completion() checks if any completable fields are None
-    3. AI fills in the missing fields by creating a new completed resource instance
+    3. Intelligence fills in the missing fields by creating a new completed resource instance
     4. to_pulumi() method converts completed resource to Pulumi resources
 
     Resource Connections:
     Resources can declare dependencies on other resources via the .connect() method.
     This enables:
-    - AI-powered completion with context from connected resources
+    - Intelligence-powered completion with context from connected resources
     - Automatic dependency ordering for deployment
     - Cross-resource configuration sharing
     - First-class Connection objects with their own setup resources
@@ -150,11 +150,11 @@ class Resource(BaseModel):
     - Access parent via .parent property
 
     Attributes:
-        name: Optional unique identifier (can be AI-completed if None)
-        description: Optional human-readable description (used as context for AI)
+        name: Optional unique identifier (can be intelligently completed if None)
+        description: Optional human-readable description (used as context for completion)
         assertions: Optional list of type-safe assertion objects for validation
         tools: Optional list of PydanticAI tools (duckduckgo_search_tool(), MCPServerStdio, etc.)
-               for AI-powered completion operations
+               for intelligence-powered completion operations
         _connections: Private list of Connection objects (for dependency graphs)
         _children: Private list of child resources (for composite resources)
         _parent: Private reference to parent resource (for hierarchy traversal)
@@ -168,15 +168,15 @@ class Resource(BaseModel):
     _children: list["Resource"] = PrivateAttr(default_factory=list)
     _parent: Optional["Resource"] = PrivateAttr(default=None)
 
-    # AI and integration capabilities
+    # Intelligence and integration capabilities
     tools: list[Any] | None = (
         None  # PydanticAI tools (duckduckgo_search_tool(), MCPServerStdio, etc.)
     )
 
     def needs_completion(self) -> bool:
-        """Check if this resource needs AI completion for any fields.
+        """Check if this resource needs intelligent completion for any fields.
 
-        Override this method in subclasses to define which fields can be AI-completed.
+        Override this method in subclasses to define which fields can be intelligently completed.
         The default implementation only checks if name is None.
 
         Returns:
@@ -195,8 +195,8 @@ class Resource(BaseModel):
         """Get shareable context from this resource for connected resources.
 
         This method returns a dictionary of fields that can be shared with other
-        resources during AI completion. When a resource declares connections,
-        the AI can access context from connected resources to make intelligent
+        resources during intelligent completion. When a resource declares connections,
+        intelligence can access context from connected resources to make smart
         decisions about configuration.
 
         Subclasses should override this method to expose resource-specific fields.
@@ -225,7 +225,7 @@ class Resource(BaseModel):
             app = AppResource(
                 name="webapp",
                 description="Connect to the database",
-                connections=[db]  # AI can access db.get_connection_context()
+                connections=[db]  # Intelligence can access db.get_connection_context()
             )
         """
         return {
@@ -418,7 +418,9 @@ class Resource(BaseModel):
             descendants.extend(child.get_all_descendants())
         return descendants
 
-    def _build_dependency_options(self) -> pulumi.ResourceOptions | None:
+    def _build_dependency_options(
+        self, exclude_parent: bool = False
+    ) -> pulumi.ResourceOptions | None:
         """Build Pulumi ResourceOptions from connections.
 
         Creates ResourceOptions with depends_on set to:
@@ -426,6 +428,11 @@ class Resource(BaseModel):
         2. The connection's setup Pulumi resources (if any)
 
         This ensures proper deployment ordering.
+
+        Args:
+            exclude_parent: If True, excludes the parent resource from depends_on.
+                Used when compiling children as part of a composite, since the
+                Pulumi parent relationship already implies dependency.
 
         Returns:
             pulumi.ResourceOptions with depends_on set if connections exist,
@@ -443,8 +450,20 @@ class Resource(BaseModel):
         if not self._connections:
             return None
 
+        # Get parent reference (if any) for filtering
+        parent = self._parent if hasattr(self, "_parent") else None
+
         depends_on = []
         for conn in self._connections:
+            # Skip parent connection if exclude_parent is True
+            # (parent relationship already implies dependency in Pulumi)
+            if (
+                exclude_parent
+                and parent is not None
+                and conn.to_resource is parent
+            ):
+                continue
+
             # Add dependency on to_resource
             if (
                 hasattr(conn.to_resource, "_pulumi_resource")
@@ -486,8 +505,9 @@ class Resource(BaseModel):
             child_opts = pulumi.ResourceOptions(parent=parent_component)
             child._compile_with_opts(child_opts)
         """
-        # Build dependency options from connections
-        dep_opts = self._build_dependency_options()
+        # Build dependency options from connections, excluding parent
+        # (parent relationship already implies dependency in Pulumi)
+        dep_opts = self._build_dependency_options(exclude_parent=True)
 
         # Merge parent opts with dependency opts
         merged_opts = self._merge_resource_options(opts, dep_opts)
@@ -564,7 +584,7 @@ class Resource(BaseModel):
     def to_pulumi(self):
         """Create Pulumi resource(s) for this Clockwork resource.
 
-        This method is called after AI completion, so all required fields should
+        This method is called after intelligent completion, so all required fields should
         be populated. It should create and return one or more Pulumi resources
         using the Pulumi SDK.
 

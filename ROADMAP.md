@@ -14,7 +14,7 @@ Integrate additional PydanticAI built-in tools and enhance tool capabilities.
 
 **Web & Content:**
 - `WebSearchTool` - Enhanced web search with configurable max results and search context
-- `UrlContextTool` - Extract and process content from URLs for AI analysis
+- `UrlContextTool` - Extract and process content from URLs for intelligent analysis
 - `BrowserTool` (future) - Full browser automation for dynamic content
 
 **Memory & State:**
@@ -76,7 +76,7 @@ api_docs = FileResource(
 
 ---
 
-### 2. Enhanced Reconciliation Service with AI Remediation
+### 2. Enhanced Reconciliation Service with Intelligent Remediation
 
 **Current State**: Basic service exists but doesn't actively monitor or remediate.
 
@@ -87,10 +87,10 @@ api_docs = FileResource(
 - Configurable check intervals per primitive or project
 - Multi-project monitoring support
 
-**AI-Powered Intelligent Remediation:**
+**Intelligence-Powered Remediation:**
 - **Diagnostic Collection**: Gather logs, errors, resource state when assertions fail
-- **Root Cause Analysis**: Use AI to analyze diagnostic data and identify issues
-- **Remediation Strategy Generation**: AI proposes fixes based on:
+- **Root Cause Analysis**: Use intelligence to analyze diagnostic data and identify issues
+- **Remediation Strategy Generation**: Intelligence proposes fixes based on:
   - Primitive description and intended behavior
   - Connection context and dependencies
   - Historical failure patterns
@@ -113,11 +113,11 @@ nginx = AppleContainerResource(
     check_interval=60,                 # Check every 60 seconds
     max_duration="2h",                 # Auto-destroy after 2 hours
     on_drift="auto_correct",           # Re-apply when drift detected
-    on_failure="remediate_ai",         # Use AI for complex failures
-    remediation_context={              # Additional context for AI
+    on_failure="remediate_intelligent", # Use intelligence for complex failures
+    remediation_context={              # Additional context for intelligence
         "critical": True,
         "max_downtime": "30s",
-        "fallback_strategy": "rollback"
+        "fallback_strategy": "rollback",
     },
     alert_on=["drift", "failure", "remediation_attempt"]
 )
@@ -126,8 +126,8 @@ nginx = AppleContainerResource(
 **Remediation Flow:**
 ```
 1. Assertion fails → Collect diagnostics
-2. AI analyzes → Identifies root cause
-3. AI generates → Remediation strategy
+2. Intelligence analyzes → Identifies root cause
+3. Intelligence generates → Remediation strategy
 4. Execute fix → Validate with assertions
 5. If still failing → Alert + escalate
 6. Record outcome → Improve future remediation
@@ -328,12 +328,12 @@ Expand beyond current primitives:
   - `clockwork assert` - Validate deployed primitives
   - `clockwork version` - Show version
 
-### AI Completion & Flexibility
+### Intelligent Completion & Flexibility
 
 - **Adjustable Intelligence**: Choose per-primitive control level
-  - Full control (specify everything, no AI)
-  - Hybrid mode (specify key details, AI fills gaps)
-  - Fast mode (describe requirements, AI handles implementation)
+  - Full control (specify everything, no intelligence)
+  - Hybrid mode (specify key details, intelligence fills gaps)
+  - Fast mode (describe requirements, intelligence handles implementation)
 - **PydanticAI Integration**: Structured outputs with Pydantic validation
 - **Tool Support**:
   - DuckDuckGo web search
@@ -347,11 +347,11 @@ Expand beyond current primitives:
 - **Dependency Declarations**: Connect primitives to express dependencies
 - **Topological Sorting**: Automatic deployment ordering (O(V+E))
 - **Cycle Detection**: Prevents circular dependencies
-- **AI Context Sharing**: Connected primitives share configuration data for intelligent completion
+- **Intelligence Context Sharing**: Connected primitives share configuration data for intelligent completion
 
 ### Type-Safe Assertions
 
-Built-in assertion classes for validating deployed resources (no AI required, Pydantic-based):
+Built-in assertion classes for validating deployed resources (no completion required, Pydantic-based):
 
 **HTTP/Network:**
 - `HealthcheckAssert(url, expected_status, timeout_seconds)` - HTTP health checks

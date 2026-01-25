@@ -31,14 +31,15 @@ class ClockworkSettings(BaseSettings):
         env_prefix="CW_",  # All Clockwork env vars must start with CW_
     )
 
-    # AI Configuration (OpenAI-compatible API)
+    # Completion Configuration (OpenAI-compatible API)
     api_key: str | None = Field(
-        default=None, description="API key for AI service (env: CW_API_KEY)"
+        default=None,
+        description="API key for completion service (env: CW_API_KEY)",
     )
 
     model: str = Field(
         default="meta-llama/llama-4-scout:free",
-        description="Model name for AI resource completion (env: CW_MODEL)",
+        description="Model name for intelligent resource completion (env: CW_MODEL)",
     )
 
     base_url: str = Field(
@@ -62,7 +63,7 @@ class ClockworkSettings(BaseSettings):
     # Resource Completion Configuration
     completion_max_retries: int = Field(
         default=3,
-        description="Maximum retry attempts for AI resource completion (env: CW_COMPLETION_MAX_RETRIES)",
+        description="Maximum retry attempts for intelligent resource completion (env: CW_COMPLETION_MAX_RETRIES)",
     )
 
 

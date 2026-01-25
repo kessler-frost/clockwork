@@ -2,7 +2,7 @@
 
 **Intelligent, Composable Primitives for Infrastructure.**
 
-Build infrastructure using composable primitives in Python - AI handles the parts you find tedious, you control what matters.
+Build infrastructure using composable primitives in Python - intelligence handles the parts you find tedious, you control what matters.
 
 [![Version](https://img.shields.io/badge/version-0.3.0-blue)](./pyproject.toml)
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue)](./pyproject.toml)
@@ -21,17 +21,25 @@ Clockwork provides intelligent primitives that adapt to how you want to work.
 
 **Your choice:**
 
-- **Specify everything** → Full control, zero AI
-- **Specify key details** → AI fills gaps
-- **Describe what you need** → AI handles implementation
+- **Specify everything** → Full control, zero intelligence
+- **Specify key details** → Intelligence fills gaps
+- **Describe what you need** → Intelligence handles implementation
 
 Clockwork gives you flexibility to work how you prefer, on what you prefer.
 
 ## How It Works
 
+```mermaid
+flowchart LR
+    A[main.py<br/>Pydantic Models] --> B[Load]
+    B --> C[Complete<br/>Intelligence]
+    C --> D[Pulumi Compile]
+    D --> E[Deploy]
+```
+
 Same primitive, different levels of control - you choose per resource:
 
-**Full control** (No AI):
+**Full control** (No intelligence):
 
 ```python
 nginx = AppleContainerResource(
@@ -41,37 +49,37 @@ nginx = AppleContainerResource(
     ports=["8080:80"],
     volumes=["/configs:/etc/nginx"]
 )
-# You specified everything - AI does nothing
+# You specified everything - intelligence does nothing
 ```
 
-**Hybrid** (AI assists):
+**Hybrid** (Intelligence assists):
 
 ```python
 nginx = AppleContainerResource(
     description="web server with caching enabled",
     ports=["8080:80"]  # You care about the port
-    # AI picks image, generates config with caching
+    # Intelligence picks image, generates config with caching
 )
 ```
 
-**Fast** (AI handles implementation):
+**Fast** (Intelligence handles implementation):
 
 ```python
 nginx = AppleContainerResource(
     description="web server for static files",
     assertions=[HealthcheckAssert(url="http://localhost:8080")]
 )
-# AI handles everything, assertions verify behavior
+# Intelligence handles everything, assertions verify behavior
 ```
 
-No custom DSL. No YAML files. Just Python with adjustable AI assistance.
+No custom DSL. No YAML files. Just Python with adjustable intelligent assistance.
 
 ## Why Clockwork?
 
 - **Pure Python**: No custom DSL or YAML, just Pydantic models
 - **Composable**: Mix and match primitives like building blocks
-- **Flexible**: You choose how much AI handles vs how much you specify
-- **Intelligent**: AI-powered completion adapts to your needs
+- **Flexible**: You choose how much intelligence handles vs how much you specify
+- **Intelligent**: Intelligence-powered completion adapts to your needs
 - **Functionally Deterministic**: Assertions validate behavior, ensuring reliable outcomes
 - **Type-safe**: Full IDE support with Pydantic validation
 - **Composite Resources**: Build higher-level abstractions by composing basic resources into reusable groups
@@ -141,7 +149,7 @@ uv run clockwork apply
 from clockwork.resources import FileResource, AppleContainerResource
 from clockwork.assertions import HealthcheckAssert
 
-# AI-generated content
+# Intelligently-generated content
 article = FileResource(
     name="game_of_life.md",
     description="Write about Conway's Game of Life",
@@ -185,14 +193,14 @@ Currently available:
 
 ### FileResource
 
-Creates files with optional AI-generated content.
+Creates files with optional intelligently-generated content.
 
 ```python
 FileResource(
     name="article.md",
-    description="About...",      # what AI should write
+    description="About...",      # what intelligence should write
     directory="path/to/dir",     # where to create
-    content=None,                # if set, skips AI
+    content=None,                # if set, skips completion
     mode="644"                   # file permissions
 )
 ```
@@ -205,7 +213,7 @@ Clockwork provides container resources for macOS:
 |----------|----------|---------|
 | `AppleContainerResource` | macOS only | Apple Containers CLI (native runtime) |
 
-Supports AI-powered image suggestion when `image` is not specified (e.g., nginx:alpine, redis:alpine).
+Supports intelligence-powered image suggestion when `image` is not specified (e.g., nginx:alpine, redis:alpine).
 
 **Example Usage**:
 
@@ -219,7 +227,7 @@ resource = AppleContainerResource(
 
 ### GitRepoResource
 
-Clones and manages Git repositories with optional AI-suggested repository URLs. Automatically clones repositories and keeps them updated.
+Clones and manages Git repositories with optional intelligently-suggested repository URLs. Automatically clones repositories and keeps them updated.
 
 ```python
 GitRepoResource(
@@ -229,8 +237,8 @@ GitRepoResource(
 )
 ```
 
-**AI-Powered**: When `repo_url` is not specified, AI suggests appropriate repository URLs (e.g., official GitHub repositories).
-**Smart Defaults**: AI picks sensible values for branch (main/master) and destination directory if not specified.
+**Intelligence-Powered**: When `repo_url` is not specified, intelligence suggests appropriate repository URLs (e.g., official GitHub repositories).
+**Smart Defaults**: Intelligence picks sensible values for branch (main/master) and destination directory if not specified.
 
 **Key Properties**:
 - `repo_url`: Git repository URL (e.g., `https://github.com/tiangolo/fastapi.git`)
@@ -278,7 +286,7 @@ uv run clockwork assert
 - **Container**: `ContainerRunningAssert`
 - **File**: `FileExistsAssert`, `FileContentMatchesAssert`
 
-All assertions are type-safe, Pydantic-based validators with no AI costs.
+All assertions are type-safe, Pydantic-based validators with no completion costs.
 
 ## CLI
 
@@ -323,7 +331,7 @@ uv run clockwork version
 
 ## Resource Connections
 
-Declare dependencies between resources for proper deployment ordering and AI-powered auto-configuration.
+Declare dependencies between resources for proper deployment ordering and intelligence-powered auto-configuration.
 
 **How it works:**
 
@@ -353,14 +361,14 @@ api = AppleContainerResource(
 ).connect(postgres, redis)
 
 # Result: postgres → redis → api (deployment order)
-# AI auto-generates DATABASE_URL and REDIS_URL environment variables
+# Intelligence auto-generates DATABASE_URL and REDIS_URL environment variables
 ```
 
 **Benefits:**
 
 1. **Automatic Deployment Ordering**: Resources deploy in dependency order (topological sort)
-2. **AI Context Awareness**: Connected resources share context (name, image, ports, env vars)
-3. **Auto-Configuration**: AI generates connection strings, URLs, and configuration
+2. **Intelligence Context Awareness**: Connected resources share context (name, image, ports, env vars)
+3. **Auto-Configuration**: Intelligence generates connection strings, URLs, and configuration
 4. **Cycle Detection**: Prevents circular dependencies before deployment
 5. **Independent Lifecycles**: Each resource can be updated/destroyed separately
 
@@ -399,7 +407,7 @@ webapp.children["api"].connect(webapp.children["db"], webapp.children["cache"])
 
 **`.connect()` - Dependencies** (independent lifecycle):
 - Resources deploy in dependency order
-- AI receives context for auto-configuration
+- Intelligence receives context for auto-configuration
 - See **Resource Connections** section above for details
 
 **Accessing Children**:
@@ -435,9 +443,9 @@ For a minimal setup, see the Quick Start section above. For all available option
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `CW_API_KEY` | None | API key (required for cloud models) |
-| `CW_MODEL` | `meta-llama/llama-4-scout:free` | Model for AI completion (default, free). Recommended upgrade: `anthropic/claude-haiku-4.5` for better quality |
+| `CW_MODEL` | `meta-llama/llama-4-scout:free` | Model for intelligent completion (default, free). Recommended upgrade: `anthropic/claude-haiku-4.5` for better quality |
 | `CW_BASE_URL` | `https://openrouter.ai/api/v1` | API endpoint (OpenRouter, LM Studio, etc.) |
-| `CW_COMPLETION_MAX_RETRIES` | `3` | Maximum retry attempts for AI resource completion |
+| `CW_COMPLETION_MAX_RETRIES` | `3` | Maximum retry attempts for intelligent resource completion |
 | `CW_PULUMI_CONFIG_PASSPHRASE` | `clockwork` | Pulumi passphrase for state encryption (also accepts `PULUMI_CONFIG_PASSPHRASE`) |
 | `CW_LOG_LEVEL` | `INFO` | Logging level |
 
@@ -451,7 +459,7 @@ uv run clockwork apply --model "anthropic/claude-haiku-4.5"
 
 **State Management**: Pulumi stores state in `~/.pulumi/` directory (user's home directory) when using the Automation API. This state tracks all deployed resources and their configurations.
 
-**Model Requirements**: AI models must support tool calling (function calling). Most modern models from OpenRouter, OpenAI, Anthropic, and local models served via LM Studio support this feature.
+**Model Requirements**: Models must support tool calling (function calling). Most modern models from OpenRouter, OpenAI, Anthropic, and local models served via LM Studio support this feature.
 
 **Local Model Recommendation**: For local inference via LM Studio, `qwen/qwen3-coder-30b` provides excellent results. When using LM Studio (`http://localhost:1234`), Clockwork automatically loads your specified model - no manual loading required.
 
@@ -462,7 +470,6 @@ uv run clockwork apply --model "anthropic/claude-haiku-4.5"
 
 - **Questions & Discussions**: [GitHub Discussions](https://github.com/kessler-frost/clockwork/discussions) - Ask questions, share ideas, and discuss best practices
 - **Bug Reports & Feature Requests**: [GitHub Issues](https://github.com/kessler-frost/clockwork/issues) - Report bugs or request new features
-- **Technical Deep Dive**: [ARCHITECTURE.md](./ARCHITECTURE.md) - Implementation details and design decisions
 - **Contributing**: See Development section below for setup instructions
 
 ## Examples
@@ -478,7 +485,7 @@ uv run clockwork assert
 uv run clockwork destroy
 
 # Connected services - Multi-service architecture with dependencies
-# Shows: Resource connections, AI auto-configuration, deployment ordering
+# Shows: Resource connections, intelligent auto-configuration, deployment ordering
 cd examples/connected-services
 uv run clockwork apply
 uv run clockwork assert
@@ -493,12 +500,6 @@ uv run clockwork destroy
 ```
 
 See `examples/` directory for more details.
-
-## Architecture
-
-For a comprehensive technical deep dive into Clockwork's implementation, design decisions, and internal architecture, see [ARCHITECTURE.md](./ARCHITECTURE.md).
-
-This document covers the complete flow: Declare (Pydantic) → Resolve (dependencies) → Complete (AI) → Compile (Pulumi) → Deploy (Automation API).
 
 ## Development
 

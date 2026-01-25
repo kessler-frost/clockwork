@@ -75,7 +75,7 @@ class TestDependencyConnection:
         assert conn.description is None
 
     def test_needs_completion_always_false(self):
-        """Test DependencyConnection never needs AI completion."""
+        """Test DependencyConnection never needs intelligent completion."""
         db = AppleContainerResource(
             description="database", name="db", image="postgres:15"
         )

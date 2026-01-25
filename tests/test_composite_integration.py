@@ -2,7 +2,7 @@
 
 This module tests complete workflows including:
 - Creating composites → adding children → resolving dependencies → compiling to Pulumi
-- AI completion for composites (two-phase completion)
+- Intelligent completion for composites (two-phase completion)
 - Composites with assertions
 - Mixed composite and primitive resources in same deployment
 - Post-creation field overrides on children
@@ -150,8 +150,8 @@ class TestEndToEndWorkflow:
         assert idx_db < idx_api
 
 
-class TestAICompletion:
-    """Tests for AI completion with composite resources."""
+class TestIntelligentCompletion:
+    """Tests for intelligent completion with composite resources."""
 
     @pytest.mark.asyncio
     async def test_composite_needs_completion(self):
@@ -169,7 +169,7 @@ class TestAICompletion:
 
     @pytest.mark.asyncio
     async def test_composite_two_phase_completion(self):
-        """Test two-phase completion: composite children, then primitives."""
+        """Test two-phase intelligent completion: composite children, then primitives."""
         # Create composite with incomplete children
         backend = BlankResource(name="backend", description="Backend services")
         backend.add(
@@ -217,7 +217,7 @@ class TestAICompletion:
 
     @pytest.mark.asyncio
     async def test_composite_completion_preserves_hierarchy(self):
-        """Test that AI completion preserves parent-child relationships."""
+        """Test that intelligent completion preserves parent-child relationships."""
         # Create composite with children (name is needed for children collection)
         db = AppleContainerResource(
             name="db",
@@ -233,7 +233,7 @@ class TestAICompletion:
         assert "db" in backend.children
         assert backend.children["db"] == db
 
-        # Note: We skip actual AI completion testing since it requires an LLM
+        # Note: We skip actual intelligent completion testing since it requires an LLM
         # The important thing is that the hierarchy is established correctly
 
 

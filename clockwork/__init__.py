@@ -2,12 +2,12 @@
 Clockwork - Intelligent, Composable Primitives for Infrastructure.
 
 Build infrastructure using composable primitives in Python. Clockwork provides
-atomic building blocks (containers, files, services) with adjustable AI assistance.
+atomic building blocks (containers, files, services) with adjustable intelligent assistance.
 
-You choose how much AI handles per primitive:
-- Specify everything → Full control, zero AI
-- Specify key details → AI fills gaps
-- Describe requirements → AI handles implementation
+You choose how much intelligence handles per primitive:
+- Specify everything → Full control, zero intelligence
+- Specify key details → Intelligence fills gaps
+- Describe requirements → Intelligence handles implementation
 
 Pure Python primitives with flexible, intelligent completion and Pulumi deployment.
 """

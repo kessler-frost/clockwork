@@ -187,7 +187,7 @@ Try modifying this example to:
 2. **Add load balancer**: Put nginx in front of api-service and web-frontend
 3. **Add monitoring**: Create a monitoring composite with Prometheus and Grafana
 4. **Scale replicas**: Add more database replicas
-5. **Use AI completion**: Remove image specifications and let AI choose
+5. **Use intelligent completion**: Remove image specifications and let intelligence choose
 
 ## Comparison with Flat Structure
 

@@ -16,7 +16,7 @@ class NetworkConnection(Connection):
     """Network connection that creates Apple Container networks for container communication.
 
     This connection automatically creates Apple Container networks and connects containers,
-    enabling service discovery and isolation. The AI can generate network names
+    enabling service discovery and isolation. Intelligence can generate network names
     if not provided.
 
     Note: Apple Container networking (v0.1.0) supports network names for basic
@@ -24,10 +24,10 @@ class NetworkConnection(Connection):
     currently available in this version.
 
     Attributes:
-        network_name: Apple Container network name (AI generates if None and description provided)
+        network_name: Apple Container network name (intelligently generated if None and description provided)
 
     Examples:
-        # AI generates network name
+        # Intelligence generates network name
         >>> db = AppleContainerResource(name="postgres", image="postgres:15")
         >>> api = AppleContainerResource(name="api", image="node:20")
         >>> connection = NetworkConnection(
@@ -35,7 +35,7 @@ class NetworkConnection(Connection):
         ...     to_resource=db
         ... )
         >>> api.connect(connection)
-        # AI generates: network_name="backend-network"
+        # Intelligence generates: network_name="backend-network"
 
         # Manual network configuration
         >>> db = AppleContainerResource(name="postgres", image="postgres:15")
@@ -49,12 +49,12 @@ class NetworkConnection(Connection):
 
     network_name: str | None = Field(
         None,
-        description="Apple Container network name - AI generates if not provided",
+        description="Apple Container network name - intelligently generated if not provided",
         examples=["backend-network", "frontend-network", "app-network"],
     )
 
     def needs_completion(self) -> bool:
-        """Check if this connection needs AI completion.
+        """Check if this connection needs intelligent completion.
 
         Returns True if description is provided but network_name is None.
 
@@ -161,10 +161,10 @@ class NetworkConnection(Connection):
         return resource.__class__.__name__ == "AppleContainerResource"
 
     def get_connection_context(self) -> dict[str, Any]:
-        """Get connection context for AI completion.
+        """Get connection context for intelligent completion.
 
         Returns context including network configuration that can be used
-        by AI when completing this connection or other resources.
+        by intelligence when completing this connection or other resources.
 
         Returns:
             dict: Context with network information

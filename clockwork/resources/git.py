@@ -1,4 +1,4 @@
-"""Git repository resource for cloning and managing repositories with optional AI-suggested URLs."""
+"""Git repository resource for cloning and managing repositories with optional intelligently suggested URLs."""
 
 from typing import Any
 
@@ -11,11 +11,11 @@ from .base import Resource
 
 
 class GitRepoResource(Resource):
-    """Git repository resource - clones and manages Git repositories with AI completion.
+    """Git repository resource - clones and manages Git repositories with intelligent completion.
 
-    Minimal usage (AI completes everything):
+    Minimal usage (intelligence completes everything):
         GitRepoResource(description="FastAPI Python web framework repository")
-        # AI generates: name="fastapi", repo_url="https://github.com/tiangolo/fastapi.git",
+        # Intelligence generates: name="fastapi", repo_url="https://github.com/tiangolo/fastapi.git",
         #               dest="./fastapi", branch="master"
 
     Advanced usage (override specific fields):
@@ -23,15 +23,15 @@ class GitRepoResource(Resource):
             description="Django web framework",
             dest="/opt/django"  # Override destination
         )
-        # AI generates: name="django", repo_url="https://github.com/django/django.git",
+        # Intelligence generates: name="django", repo_url="https://github.com/django/django.git",
         #               branch="main"
 
     Attributes:
-        description: Repository description - used by AI for completion (required)
-        name: Repository identifier (optional - AI generates if not provided)
-        repo_url: Git repository URL (optional - AI suggests if not provided)
-        dest: Destination directory for cloning (optional - AI picks if not provided)
-        branch: Git branch to checkout (optional - AI picks main/master if not provided)
+        description: Repository description - used for intelligent completion (required)
+        name: Repository identifier (optional - intelligently generated if not provided)
+        repo_url: Git repository URL (optional - intelligently suggested if not provided)
+        dest: Destination directory for cloning (optional - intelligently picked if not provided)
+        branch: Git branch to checkout (optional - intelligently picks main/master if not provided)
         pull: Update repository if it already exists (default: True)
         present: Whether repository should exist (default: True)
     """
@@ -67,9 +67,9 @@ class GitRepoResource(Resource):
     _pulumi_resource: pulumi.Resource | None = None
 
     def needs_completion(self) -> bool:
-        """Returns True if any field needs AI completion.
+        """Returns True if any field needs intelligent completion.
 
-        When any of name, repo_url, dest, or branch are None, the AI will analyze
+        When any of name, repo_url, dest, or branch are None, intelligence will analyze
         the description and suggest appropriate values.
 
         Returns:
@@ -86,7 +86,7 @@ class GitRepoResource(Resource):
         """Convert to Pulumi GitRepo resource for git operations.
 
         Uses custom dynamic provider to execute git clone/pull operations.
-        All required fields should be populated by AI completion before this is called.
+        All required fields should be populated by intelligent completion before this is called.
 
         Returns:
             pulumi.Resource: Pulumi GitRepo resource
