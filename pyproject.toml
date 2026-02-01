@@ -25,6 +25,15 @@ dependencies = [
     "lmstudio>=0.1.0",
 ]
 
+[project.optional-dependencies]
+aws = [
+    "pulumi-aws>=6.0.0",
+    "boto3>=1.34.0",
+]
+docker = [
+    "docker>=7.0.0",
+]
+
 [project.scripts]
 clockwork = "clockwork.cli:app"
 

@@ -9,16 +9,25 @@ import asyncio
 import logging
 from typing import Any
 
+from pydantic import ValidationError
 from pydantic_ai import (
     Agent,
     InlineDefsJsonSchemaTransformer,
     ModelRetry,
     RunContext,
 )
+from pydantic_ai.exceptions import UnexpectedModelBehavior
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.profiles.openai import OpenAIModelProfile
 from pydantic_ai.providers.openai import OpenAIProvider
 
+from .completion import CompletionCache
+from .exceptions import (
+    CompletionError,
+    CompletionRetryExhaustedError,
+    CompletionTimeoutError,
+    CompletionValidationError,
+)
 from .model_loader import LMStudioModelLoader
 from .settings import get_settings
 from .tool_selector import ToolSelector
@@ -36,6 +45,7 @@ class ResourceCompleter:
         base_url: str | None = None,
         tool_selector: ToolSelector | None = None,
         enable_tool_selection: bool = True,
+        debug: bool = False,
     ):
         """
         Initialize the resource completer.
@@ -46,6 +56,7 @@ class ResourceCompleter:
             base_url: Base URL for API endpoint (overrides settings/.env)
             tool_selector: Optional ToolSelector instance for intelligent tool selection
             enable_tool_selection: Whether to enable automatic tool selection (default: True)
+            debug: Whether to enable debug mode for detailed error info (default: False)
         """
         settings = get_settings()
 
@@ -57,6 +68,8 @@ class ResourceCompleter:
 
         self.model = model or settings.model
         self.base_url = base_url or settings.base_url
+        self.debug = debug
+        self.timeout = settings.completion_timeout
 
         # Tool selection setup
         self.enable_tool_selection = enable_tool_selection
@@ -72,9 +85,22 @@ class ResourceCompleter:
                 f"LM Studio endpoint detected, will auto-load model: {self.model}"
             )
 
+        # Completion cache setup
+        self.cache: CompletionCache | None = None
+        if settings.cache_enabled:
+            self.cache = CompletionCache(
+                cache_dir=settings.cache_dir,
+                ttl_days=settings.cache_ttl_days,
+            )
+            logger.info(
+                f"Completion cache enabled at {settings.cache_dir} "
+                f"(TTL: {settings.cache_ttl_days} days)"
+            )
+
         logger.info(
             f"Initialized ResourceCompleter with model: {self.model} at {self.base_url} "
-            f"(tool selection: {enable_tool_selection})"
+            f"(tool selection: {enable_tool_selection}, cache: {settings.cache_enabled}, "
+            f"debug: {debug}, timeout: {self.timeout}s)"
         )
 
     async def _ensure_model_loaded(self) -> None:
@@ -173,7 +199,7 @@ class ResourceCompleter:
 
     async def _run_completion(self, resource: Any, user_message: str) -> Any:
         """
-        Core completion logic - creates agent and runs completion.
+        Core completion logic - creates agent and runs completion with error handling.
 
         Args:
             resource: Partial Resource object needing completion
@@ -181,38 +207,209 @@ class ResourceCompleter:
 
         Returns:
             Completed Resource object with all fields filled
-        """
-        tools = self._get_tools_for_resource(resource)
-        await self._ensure_model_loaded()
-        model = self._create_model()
-        agent = self._create_agent(model, tools, resource.__class__)
-        result = await agent.run(user_message)
-        return self._merge_resources(resource, result.output)
 
-    async def _complete_single(self, resource: Any) -> Any:
+        Raises:
+            CompletionTimeoutError: If completion times out
+            CompletionValidationError: If model returns invalid response
+            CompletionRetryExhaustedError: If all retries are exhausted
+            CompletionError: For other completion failures
+        """
+        resource_name = (
+            getattr(resource, "name", None) or resource.__class__.__name__
+        )
+        settings = get_settings()
+        raw_response: str | None = None
+        debug_info: dict[str, Any] = {}
+
+        if self.debug:
+            debug_info["model"] = self.model
+            debug_info["base_url"] = self.base_url
+            debug_info["user_message"] = user_message
+            debug_info["resource_type"] = resource.__class__.__name__
+
+        try:
+            tools = self._get_tools_for_resource(resource)
+            await self._ensure_model_loaded()
+            model = self._create_model()
+            agent = self._create_agent(model, tools, resource.__class__)
+
+            # Run with timeout
+            try:
+                result = await asyncio.wait_for(
+                    agent.run(user_message),
+                    timeout=self.timeout,
+                )
+            except TimeoutError as e:
+                raise CompletionTimeoutError(
+                    f"Completion timed out after {self.timeout} seconds",
+                    resource_name=resource_name,
+                    timeout_seconds=self.timeout,
+                    debug_info=debug_info if self.debug else None,
+                ) from e
+
+            if self.debug:
+                debug_info["result"] = str(result)
+
+            return self._merge_resources(resource, result.output)
+
+        except CompletionTimeoutError:
+            # Re-raise timeout errors as-is
+            raise
+
+        except ValidationError as e:
+            # Pydantic validation error - model returned invalid data
+            error_details = e.errors()
+            field_name = None
+            field_value = None
+            expected_format = None
+
+            if error_details:
+                first_error = error_details[0]
+                field_name = ".".join(
+                    str(loc) for loc in first_error.get("loc", [])
+                )
+                field_value = first_error.get("input")
+                expected_format = first_error.get("msg")
+
+            raise CompletionValidationError(
+                f"Model returned invalid data: {e}",
+                resource_name=resource_name,
+                field_name=field_name,
+                field_value=field_value,
+                expected_format=expected_format,
+                raw_response=raw_response,
+                debug_info=debug_info if self.debug else None,
+            ) from e
+
+        except UnexpectedModelBehavior as e:
+            # PydanticAI's retry exhausted error
+            error_msg = str(e)
+            if (
+                "Exceeded maximum retries" in error_msg
+                or "retry" in error_msg.lower()
+            ):
+                raise CompletionRetryExhaustedError(
+                    f"Failed to complete resource after {settings.completion_max_retries} attempts: {e}",
+                    resource_name=resource_name,
+                    retry_count=settings.completion_max_retries,
+                    last_error=e,
+                    raw_response=raw_response,
+                    debug_info=debug_info if self.debug else None,
+                ) from e
+
+            # Other unexpected model behavior
+            raise CompletionError(
+                f"Unexpected model behavior: {e}",
+                resource_name=resource_name,
+                raw_response=raw_response,
+                suggestions=[
+                    "Try a more capable model: --model anthropic/claude-haiku-4.5",
+                    "Simplify the resource description",
+                    "Add more explicit field values",
+                ],
+                debug_info=debug_info if self.debug else None,
+            ) from e
+
+        except CompletionError:
+            # Re-raise our custom errors
+            raise
+
+        except Exception as e:
+            # Catch-all for other errors
+            error_type = type(e).__name__
+            raise CompletionError(
+                f"Completion failed ({error_type}): {e}",
+                resource_name=resource_name,
+                raw_response=raw_response,
+                suggestions=[
+                    "Check your API key and endpoint configuration",
+                    "Ensure the model is available and responding",
+                    "Try a different model: --model anthropic/claude-haiku-4.5",
+                ],
+                debug_info=debug_info if self.debug else None,
+            ) from e
+
+    async def _complete_single(
+        self, resource: Any, use_cache: bool = True
+    ) -> Any:
         """
         Complete a single resource (internal helper for batch completion).
 
+        Checks cache first if caching is enabled.
+
         Args:
             resource: Partial Resource object needing completion
+            use_cache: Whether to use cache for this completion
 
         Returns:
             Completed Resource object
         """
+        # Check cache first (only for non-composite resources)
+        if use_cache and self.cache and not self._is_composite(resource):
+            cache_key = self.cache.compute_cache_key(resource, self.model)
+            cached_data = self.cache.get(cache_key)
+            if cached_data is not None:
+                logger.info(
+                    f"Cache hit for resource: {resource.name} (key: {cache_key})"
+                )
+                # Reconstruct resource from cached data
+                try:
+                    completed_resource = resource.__class__(**cached_data)
+                    completed_resource._ai_completed_fields = set(
+                        cached_data.get("_ai_completed_fields", [])
+                    )
+                    return completed_resource
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to reconstruct resource from cache: {e}. "
+                        "Falling back to AI completion."
+                    )
+            else:
+                logger.info(
+                    f"Cache miss for resource: {resource.name} (key: {cache_key})"
+                )
+
+        # Perform actual completion
         if self._is_composite(resource):
             logger.info(f"Detected composite resource: {resource.name}")
-            return await self._complete_composite(resource)
-        return await self._complete_resource(resource)
+            completed = await self._complete_composite(resource)
+        else:
+            completed = await self._complete_resource(resource)
 
-    async def complete(self, resources: list[Any]) -> list[Any]:
+        # Store in cache (only for non-composite resources)
+        if use_cache and self.cache and not self._is_composite(resource):
+            cache_key = self.cache.compute_cache_key(resource, self.model)
+            # Store the completed data
+            cache_data = completed.model_dump(
+                exclude={"tools", "assertions", "connections"}
+            )
+            # Also store the AI-completed fields for reconstruction
+            if hasattr(completed, "_ai_completed_fields"):
+                cache_data["_ai_completed_fields"] = list(
+                    completed._ai_completed_fields
+                )
+            self.cache.set(cache_key, cache_data, resource.__class__.__name__)
+            logger.info(
+                f"Cached completion for resource: {resource.name} (key: {cache_key})"
+            )
+
+        return completed
+
+    async def complete(
+        self, resources: list[Any], use_cache: bool = True
+    ) -> list[Any]:
         """
         Complete partial resources - batch independent ones in parallel.
 
         Args:
             resources: List of Resource objects (some may be partial)
+            use_cache: Whether to use cache for completions (default: True)
 
         Returns:
             List of completed Resource objects with all fields filled
+
+        Raises:
+            CompletionError: If any resource fails to complete
         """
         # Separate resources that need completion from those that don't
         to_complete = [r for r in resources if r.needs_completion()]
@@ -229,7 +426,7 @@ class ResourceCompleter:
         if to_complete:
             completed = list(
                 await asyncio.gather(
-                    *[self._complete_single(r) for r in to_complete]
+                    *[self._complete_single(r, use_cache) for r in to_complete]
                 )
             )
             for r in completed:
@@ -274,17 +471,22 @@ class ResourceCompleter:
         Merge user-provided resource with intelligently completed resource.
 
         User-provided values take precedence over intelligent suggestions.
+        Tracks which fields were AI-completed by storing them in
+        `_ai_completed_fields` attribute on the returned resource.
 
         Args:
             user_resource: Original partial resource from user
             completed_resource: Intelligently completed resource with all fields
 
         Returns:
-            Merged resource with user overrides applied
+            Merged resource with user overrides applied and _ai_completed_fields set
         """
         # Get all field values from user resource
         user_data = user_resource.model_dump(exclude_unset=False)
         completed_data = completed_resource.model_dump(exclude_unset=False)
+
+        # Track which fields were AI-completed
+        ai_completed_fields: set[str] = set()
 
         # Merge: user values override completed values
         # For each field, use user value if not None, otherwise use completed value
@@ -299,6 +501,8 @@ class ResourceCompleter:
                 merged_data[field_name] = user_value
             elif completed_value is not None:
                 merged_data[field_name] = completed_value
+                # Track this field as AI-completed
+                ai_completed_fields.add(field_name)
             else:
                 merged_data[field_name] = None
 
@@ -313,7 +517,12 @@ class ResourceCompleter:
             merged_data["assertions"] = user_resource.assertions
 
         # Create new resource instance with merged data
-        return user_resource.__class__(**merged_data)
+        merged_resource = user_resource.__class__(**merged_data)
+
+        # Store AI-completed fields on the resource for later inspection
+        merged_resource._ai_completed_fields = ai_completed_fields
+
+        return merged_resource
 
     def _is_composite(self, resource: Any) -> bool:
         """

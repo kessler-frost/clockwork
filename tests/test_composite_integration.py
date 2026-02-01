@@ -182,7 +182,7 @@ class TestIntelligentCompletion:
             mock_completer = Mock()
 
             # Mock complete method to fill in missing fields
-            async def mock_complete(resources):
+            async def mock_complete(resources, use_cache=True):
                 completed = []
                 for r in resources:
                     if isinstance(r, AppleContainerResource):

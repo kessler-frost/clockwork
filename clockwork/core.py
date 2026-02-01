@@ -5,20 +5,26 @@ Apply Pipeline: Load primitives → Intelligent completion → Deploy with Pulum
 Destroy Pipeline: Destroy infrastructure using Pulumi
 Assert Pipeline: Load primitives → Intelligent completion → Run assertions directly
 Plan Pipeline: Load primitives → Intelligent completion → Preview with Pulumi
+Status Pipeline: Query Pulumi state and actual system state
 """
 
 import importlib.util
 import logging
+import os
 import shutil
 import time
 import traceback
 from pathlib import Path
 from typing import Any
 
+from pulumi import automation as auto
+
 from .connection_completer import ConnectionCompleter
+from .exceptions import CompletionError
 from .pulumi_compiler import PulumiCompiler
 from .resource_completer import ResourceCompleter
 from .settings import get_settings
+from .state_checkers import check_all_resources_state
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +37,7 @@ class ClockworkCore:
         api_key: str | None = None,
         model: str | None = None,
         base_url: str | None = None,
+        debug: bool = False,
     ):
         """
         Initialize ClockworkCore.
@@ -39,6 +46,7 @@ class ClockworkCore:
             api_key: API key for completion service (overrides settings/.env)
             model: Model to use for resource completion (overrides settings/.env)
             base_url: Base URL for API endpoint (overrides settings/.env)
+            debug: Whether to enable debug mode for detailed error info
         """
         # Load settings
         settings = get_settings()
@@ -49,7 +57,7 @@ class ClockworkCore:
         base_url = base_url or settings.base_url
 
         self.resource_completer = ResourceCompleter(
-            api_key=api_key, model=model, base_url=base_url
+            api_key=api_key, model=model, base_url=base_url, debug=debug
         )
         self.connection_completer = ConnectionCompleter(
             api_key=api_key, model=model, base_url=base_url
@@ -59,7 +67,7 @@ class ClockworkCore:
         logger.info("ClockworkCore initialized")
 
     async def apply(
-        self, main_file: Path, dry_run: bool = False
+        self, main_file: Path, dry_run: bool = False, use_cache: bool = True
     ) -> dict[str, Any]:
         """
         Full pipeline: load → complete → deploy with Pulumi.
@@ -67,6 +75,7 @@ class ClockworkCore:
         Args:
             main_file: Path to main.py file with resource definitions
             dry_run: If True, only preview without executing
+            use_cache: Whether to use completion cache (default: True)
 
         Returns:
             Dict with execution results including timings
@@ -87,7 +96,9 @@ class ClockworkCore:
 
         # 3. Complete resources (intelligent completion stage)
         start = time.perf_counter()
-        completed_resources = await self._complete_resources_safe(resources)
+        completed_resources = await self._complete_resources_safe(
+            resources, use_cache=use_cache
+        )
         timings["complete"] = time.perf_counter() - start
 
         # 4. Extract and complete connections
@@ -132,17 +143,140 @@ class ClockworkCore:
 
         return {**result, "timings": timings}
 
-    async def plan(self, main_file: Path) -> dict[str, Any]:
+    async def plan(
+        self, main_file: Path, use_cache: bool = True
+    ) -> dict[str, Any]:
         """
         Plan mode: complete resources and preview Pulumi changes without deploying.
 
         Args:
             main_file: Path to main.py file
+            use_cache: Whether to use completion cache (default: True)
 
         Returns:
             Dict with planning information
         """
-        return await self.apply(main_file, dry_run=True)
+        return await self.apply(main_file, dry_run=True, use_cache=use_cache)
+
+    async def show(
+        self,
+        main_file: Path,
+        resource_name: str | None = None,
+        use_cache: bool = True,
+    ) -> dict[str, Any]:
+        """
+        Show completed resources BEFORE deployment.
+
+        This method runs the completion pipeline (load -> resolve -> complete)
+        but stops before Pulumi deployment. It shows users exactly what the AI
+        decided for each resource field.
+
+        Args:
+            main_file: Path to main.py file with resource definitions
+            resource_name: Optional name of specific resource to show
+            use_cache: Whether to use completion cache (default: True)
+
+        Returns:
+            Dict with:
+                - resources: List of completed resource dicts with AI field tracking
+                - resource_count: Total number of resources
+                - ai_completed_count: Number of resources that had AI completion
+        """
+        logger.info(f"Starting Clockwork show pipeline for: {main_file}")
+
+        # 1. Load resources from main.py
+        resources = self._load_resources(main_file)
+        logger.info(f"Loaded {len(resources)} resources")
+
+        # 2. Resolve dependency order (checks for cycles and sorts topologically)
+        resources = self._resolve_dependency_order(resources)
+        logger.info("Resolved resource dependencies in deployment order")
+
+        # 3. Complete resources (intelligent completion stage)
+        completed_resources = await self._complete_resources_safe(
+            resources, use_cache=use_cache
+        )
+
+        # 4. Format resources for output
+        result_resources = []
+        ai_completed_count = 0
+
+        for resource in completed_resources:
+            resource_data = self._format_resource_for_show(resource)
+
+            # Filter by name if specified
+            if (
+                resource_name is not None
+                and resource_data["name"] != resource_name
+            ):
+                continue
+
+            result_resources.append(resource_data)
+
+            if resource_data.get("ai_completed_fields"):
+                ai_completed_count += 1
+
+        logger.info("Clockwork show pipeline complete")
+
+        return {
+            "resources": result_resources,
+            "resource_count": len(result_resources),
+            "ai_completed_count": ai_completed_count,
+        }
+
+    def _format_resource_for_show(self, resource: Any) -> dict[str, Any]:
+        """
+        Format a resource for show output.
+
+        Extracts resource data including which fields were AI-completed.
+
+        Args:
+            resource: Completed Resource object
+
+        Returns:
+            Dict with resource data and AI completion metadata
+        """
+        # Get resource data, excluding internal fields
+        resource_data = resource.model_dump(
+            exclude={"tools", "assertions", "connections"}
+        )
+
+        # Get AI-completed fields if available
+        ai_completed_fields = set()
+        if hasattr(resource, "_ai_completed_fields"):
+            ai_completed_fields = resource._ai_completed_fields
+
+        # Build formatted output
+        formatted = {
+            "name": resource.name or resource.__class__.__name__,
+            "type": resource.__class__.__name__,
+            "fields": {},
+            "ai_completed_fields": list(ai_completed_fields),
+            "children": [],
+        }
+
+        # Add each field with AI completion status
+        for field_name, value in resource_data.items():
+            if field_name in ("name", "description"):
+                continue  # Already handled separately
+
+            formatted["fields"][field_name] = {
+                "value": value,
+                "ai_completed": field_name in ai_completed_fields,
+            }
+
+        # Add description if present
+        if resource.description:
+            formatted["description"] = resource.description
+
+        # Handle children for composite resources
+        if hasattr(resource, "_children") and resource._children:
+            for child in resource._children:
+                formatted["children"].append(
+                    self._format_resource_for_show(child)
+                )
+
+        return formatted
 
     def _load_resources(self, main_file: Path) -> list[Any]:
         """
@@ -204,24 +338,31 @@ class ClockworkCore:
 
         return connections
 
-    async def _complete_resources_safe(self, resources: list[Any]) -> list[Any]:
+    async def _complete_resources_safe(
+        self, resources: list[Any], use_cache: bool = True
+    ) -> list[Any]:
         """Complete resources with error handling and logging.
 
         Args:
             resources: List of partial Resource objects
+            use_cache: Whether to use completion cache (default: True)
 
         Returns:
             List of completed Resource objects
 
         Raises:
-            RuntimeError: If resource completion fails
+            CompletionError: If resource completion fails with a completion error
+            RuntimeError: If resource completion fails with other errors
         """
         try:
             completed_resources = await self.resource_completer.complete(
-                resources
+                resources, use_cache=use_cache
             )
             logger.info(f"Completed {len(completed_resources)} resources")
             return completed_resources
+        except CompletionError:
+            # Re-raise CompletionError as-is for proper error display
+            raise
         except Exception as e:
             logger.error(f"Failed to complete resources: {e}")
             logger.error(f"Traceback: {traceback.format_exc()}")
@@ -702,3 +843,143 @@ class ClockworkCore:
             "total": results["total"],
             "details": results,
         }
+
+    async def status(self, main_file: Path) -> dict[str, Any]:
+        """
+        Status pipeline: Query Pulumi state and actual system state.
+
+        This method:
+        1. Loads Pulumi stack state for the project
+        2. Loads resources from main.py
+        3. Queries actual system state for each resource
+        4. Returns combined state information
+
+        Args:
+            main_file: Path to main.py file with resource definitions
+
+        Returns:
+            Dict with:
+                - success: Whether status check succeeded
+                - pulumi_state: Pulumi stack state information
+                - resources: List of resource states with actual system status
+                - error: Error message if status check failed
+        """
+        logger.info(f"Starting Clockwork status pipeline for: {main_file}")
+
+        # Get project name from directory
+        project_name = main_file.parent.name
+
+        result: dict[str, Any] = {
+            "success": True,
+            "project_name": project_name,
+            "pulumi_state": None,
+            "resources": [],
+            "error": None,
+        }
+
+        # 1. Try to load Pulumi state
+        try:
+            pulumi_state = self._get_pulumi_state(project_name)
+            result["pulumi_state"] = pulumi_state
+            logger.info(f"Loaded Pulumi state for project: {project_name}")
+        except Exception as e:
+            logger.warning(f"Could not load Pulumi state: {e}")
+            result["pulumi_state"] = {
+                "available": False,
+                "error": str(e),
+            }
+
+        # 2. Load resources from main.py
+        try:
+            resources = self._load_resources(main_file)
+            logger.info(f"Loaded {len(resources)} resources")
+
+            # Resolve dependency order (flattens composites)
+            resources = self._resolve_dependency_order(resources)
+            logger.info(f"Flattened to {len(resources)} total resources")
+        except Exception as e:
+            logger.error(f"Failed to load resources: {e}")
+            result["success"] = False
+            result["error"] = f"Failed to load resources: {e}"
+            return result
+
+        # 3. Query actual system state for each resource
+        try:
+            resource_states = await check_all_resources_state(resources)
+            result["resources"] = [state.to_dict() for state in resource_states]
+            logger.info(f"Checked state for {len(resource_states)} resources")
+        except Exception as e:
+            logger.error(f"Failed to check resource states: {e}")
+            result["success"] = False
+            result["error"] = f"Failed to check resource states: {e}"
+
+        logger.info("Clockwork status pipeline complete")
+        return result
+
+    def _get_pulumi_state(self, project_name: str) -> dict[str, Any]:
+        """Get Pulumi stack state for the project.
+
+        Args:
+            project_name: Name of the Pulumi project
+
+        Returns:
+            Dict with Pulumi state information:
+                - available: Whether stack exists and is accessible
+                - stack_name: Name of the stack
+                - resource_count: Number of resources in stack
+                - outputs: Stack outputs
+                - last_update: Last update time (if available)
+
+        Raises:
+            Exception: If stack cannot be accessed
+        """
+        settings = get_settings()
+
+        # Set Pulumi passphrase from settings
+        os.environ["PULUMI_CONFIG_PASSPHRASE"] = (
+            settings.pulumi_config_passphrase
+        )
+
+        stack_name = "dev"
+
+        # Create minimal program for selecting stack
+        def empty_program():
+            """Empty Pulumi program for status operations."""
+            pass
+
+        try:
+            # Try to select existing stack
+            stack = auto.select_stack(
+                stack_name=stack_name,
+                project_name=project_name,
+                program=empty_program,
+            )
+
+            # Get stack info
+            info = stack.info()
+            outputs = stack.outputs()
+
+            state: dict[str, Any] = {
+                "available": True,
+                "stack_name": stack_name,
+                "outputs": {k: v.value for k, v in outputs.items()},
+            }
+
+            # Add resource count from info if available
+            if info:
+                state["resource_count"] = info.resource_count
+                if info.last_update:
+                    state["last_update"] = info.last_update.isoformat()
+
+            return state
+
+        except auto.errors.StackNotFoundError:
+            return {
+                "available": False,
+                "error": f"Stack '{stack_name}' not found for project '{project_name}'",
+            }
+        except Exception as e:
+            return {
+                "available": False,
+                "error": str(e),
+            }

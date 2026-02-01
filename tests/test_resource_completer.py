@@ -55,8 +55,11 @@ class TestBatchCompletion:
         )
 
         # Should have called _complete_single only for incomplete resource
+        # Note: use_cache=True is passed as second argument by default
         assert completer._complete_single.call_count == 1
-        completer._complete_single.assert_called_once_with(incomplete_resource)
+        completer._complete_single.assert_called_once_with(
+            incomplete_resource, True
+        )
 
         # Result should contain both resources
         assert len(result) == 2
@@ -94,7 +97,7 @@ class TestBatchCompletion:
         call_times = []
         call_order = []
 
-        async def mock_complete(resource):
+        async def mock_complete(resource, use_cache=True):
             call_order.append(resource.name)
             call_times.append(asyncio.get_event_loop().time())
             # Simulate some async work
