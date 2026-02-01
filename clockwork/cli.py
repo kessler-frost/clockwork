@@ -5,6 +5,7 @@ Clockwork CLI - Intelligent Infrastructure Orchestration in Python.
 import asyncio
 import json
 import logging
+import traceback
 from pathlib import Path
 
 import typer
@@ -12,8 +13,11 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from . import __version__
+from .completion import CompletionCache
 from .core import ClockworkCore
 from .exceptions import CompletionError, format_completion_error
+from .formatters import format_resource_json, format_resource_tree
 from .settings import get_settings
 
 # Setup
@@ -152,6 +156,13 @@ def _handle_command_error(
         error_msg = str(e)
         console.print("\n[bold red]Assertion(s) failed[/bold red]")
         console.print(f"[dim]{error_msg}[/dim]")
+    elif not isinstance(e, CompletionError | typer.Exit):
+        console.print(
+            f"\n[bold red]{command_type.capitalize()} failed:[/bold red] {e}"
+        )
+        if debug:
+            console.print("\n[dim]Stack trace:[/dim]")
+            console.print(f"[dim]{traceback.format_exc()}[/dim]")
     else:
         console.print(
             f"\n[bold red]{command_type.capitalize()} failed:[/bold red] {e}"
@@ -377,8 +388,6 @@ def show(
     fields with [AI]. Use --diff to only see AI-completed fields, or --json
     for machine-readable output.
     """
-    from .formatters import format_resource_json, format_resource_tree
-
     main_file = _get_main_file()
     console.print(_create_command_panel("Clockwork Show", "magenta"))
 
@@ -683,8 +692,6 @@ def _format_details(details: dict) -> str:
 @app.command()
 def version():
     """Show Clockwork version."""
-    from . import __version__
-
     console.print(f"Clockwork version: [bold]{__version__}[/bold]")
 
 
@@ -700,8 +707,6 @@ app.add_typer(cache_app, name="cache")
 @cache_app.command(name="clear")
 def cache_clear():
     """Clear all cached completions."""
-    from .completion import CompletionCache
-
     settings = get_settings()
 
     if not settings.cache_enabled:
@@ -723,8 +728,6 @@ def cache_clear():
 @cache_app.command(name="stats")
 def cache_stats():
     """Show cache statistics."""
-    from .completion import CompletionCache
-
     settings = get_settings()
 
     if not settings.cache_enabled:

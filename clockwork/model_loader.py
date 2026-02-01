@@ -8,6 +8,16 @@ When a localhost:1234 endpoint is detected, the specified model is loaded automa
 import logging
 from urllib.parse import urlparse
 
+import httpx
+
+try:
+    import lmstudio as lms
+
+    HAS_LMSTUDIO = True
+except ImportError:
+    HAS_LMSTUDIO = False
+    lms = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -28,8 +38,6 @@ class LMStudioModelLoader:
         Returns:
             True if model is available in the /v1/models endpoint
         """
-        import httpx
-
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 response = await client.get("http://localhost:1234/v1/models")
@@ -41,7 +49,13 @@ class LMStudioModelLoader:
                     ]
                     return model_identifier.lower() in loaded_models
         except Exception as e:
-            logger.debug(f"Could not check loaded models via API: {e}")
+            if (
+                "Connection refused" in str(e)
+                or "ConnectError" in type(e).__name__
+            ):
+                logger.info(f"LM Studio not running, skipping API check: {e}")
+            else:
+                logger.warning(f"Unexpected error checking loaded models: {e}")
         return False
 
     @staticmethod
@@ -94,16 +108,14 @@ class LMStudioModelLoader:
             self._loaded_model = model_identifier
             return
 
-        try:
-            import lmstudio as lms
-        except ImportError as e:
+        if not HAS_LMSTUDIO:
             logger.error(
                 "lmstudio package not installed. Install with: uv add lmstudio"
             )
             raise ImportError(
                 "lmstudio package required for automatic model loading. "
                 "Install with: uv add lmstudio"
-            ) from e
+            )
 
         logger.info(f"Loading model in LM Studio: {model_identifier}")
 

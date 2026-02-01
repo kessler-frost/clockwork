@@ -9,6 +9,7 @@ import asyncio
 import logging
 from typing import Any
 
+import httpx
 from pydantic import ValidationError
 from pydantic_ai import (
     Agent,
@@ -314,6 +315,29 @@ class ResourceCompleter:
             # Re-raise our custom errors
             raise
 
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 401:
+                raise CompletionError(
+                    "Authentication failed - check your API key",
+                    resource_name=resource_name,
+                    suggestions=[
+                        "Verify CW_API_KEY is set correctly",
+                        "Check API key hasn't expired",
+                    ],
+                    debug_info=debug_info if self.debug else None,
+                ) from e
+            elif e.response.status_code == 429:
+                raise CompletionError(
+                    "Rate limited - too many requests",
+                    resource_name=resource_name,
+                    suggestions=[
+                        "Wait a moment and try again",
+                        "Reduce concurrent completions",
+                    ],
+                    debug_info=debug_info if self.debug else None,
+                ) from e
+            raise
+
         except Exception as e:
             # Catch-all for other errors
             error_type = type(e).__name__
@@ -359,10 +383,10 @@ class ResourceCompleter:
                         cached_data.get("_ai_completed_fields", [])
                     )
                     return completed_resource
-                except Exception as e:
-                    logger.warning(
-                        f"Failed to reconstruct resource from cache: {e}. "
-                        "Falling back to AI completion."
+                except (ValidationError, KeyError, TypeError) as e:
+                    logger.error(
+                        f"Cache entry {cache_key} is corrupted or incompatible: {e}. "
+                        "Run 'clockwork cache clear' to fix. Falling back to AI completion."
                     )
             else:
                 logger.info(

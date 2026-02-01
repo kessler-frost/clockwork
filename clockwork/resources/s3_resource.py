@@ -4,6 +4,14 @@ from typing import Any
 
 from pydantic import Field
 
+try:
+    import pulumi_aws as aws
+
+    HAS_PULUMI_AWS = True
+except ImportError:
+    HAS_PULUMI_AWS = False
+    aws = None
+
 from .base import Resource
 
 
@@ -113,9 +121,7 @@ class S3BucketResource(Resource):
             ImportError: If pulumi-aws is not installed
             ValueError: If required fields are not completed
         """
-        try:
-            import pulumi_aws as aws
-        except ImportError:
+        if not HAS_PULUMI_AWS:
             raise ImportError(
                 "pulumi-aws is required for S3BucketResource. "
                 "Install with: pip install clockwork[aws]"

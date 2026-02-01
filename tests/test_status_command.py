@@ -144,7 +144,7 @@ class TestContainerStateChecker:
         container_output = json.dumps(
             [
                 {
-                    "id": "abc123def456",
+                    "id": "abc123def456",  # pragma: allowlist secret
                     "status": "running",
                     "configuration": {
                         "image": "nginx:latest",
@@ -201,6 +201,38 @@ class TestContainerStateChecker:
 
         assert state.status == "error"
         assert "not found" in state.error
+
+    @pytest.mark.asyncio
+    async def test_check_container_timeout(self):
+        """Test handling when container list times out."""
+        checker = ContainerStateChecker()
+        mock_resource = MagicMock()
+        mock_resource.__class__.__name__ = "AppleContainerResource"
+        mock_resource.name = "test"
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = subprocess.TimeoutExpired("container", 10)
+            state = await checker.check(mock_resource)
+
+        assert state.status == "error"
+        assert "timed out" in state.error.lower()
+
+    @pytest.mark.asyncio
+    async def test_check_container_json_error(self):
+        """Test handling when container list returns invalid JSON."""
+        checker = ContainerStateChecker()
+        mock_resource = MagicMock()
+        mock_resource.__class__.__name__ = "AppleContainerResource"
+        mock_resource.name = "test"
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout="not valid json {{{", stderr=""
+            )
+            state = await checker.check(mock_resource)
+
+        assert state.status == "error"
+        assert "parse" in state.error.lower() or "json" in state.error.lower()
 
 
 class TestFileStateChecker:
@@ -395,6 +427,48 @@ class TestGitRepoStateChecker:
             assert "dirty" in state.details
             assert state.details["dirty"] is False
 
+    @pytest.mark.asyncio
+    async def test_check_git_repo_timeout(self):
+        """Test handling when git command times out."""
+        checker = GitRepoStateChecker()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create a .git directory to simulate a repo
+            (Path(tmpdir) / ".git").mkdir()
+
+            mock_resource = MagicMock()
+            mock_resource.__class__.__name__ = "GitRepoResource"
+            mock_resource.name = "test-repo"
+            mock_resource.dest = tmpdir
+
+            with patch("subprocess.run") as mock_run:
+                mock_run.side_effect = subprocess.TimeoutExpired("git", 5)
+                state = await checker.check(mock_resource)
+
+        assert state.status == "error"
+        assert "timed out" in state.error.lower()
+
+    @pytest.mark.asyncio
+    async def test_check_git_repo_not_found(self):
+        """Test handling when git is not installed."""
+        checker = GitRepoStateChecker()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create a .git directory to simulate a repo
+            (Path(tmpdir) / ".git").mkdir()
+
+            mock_resource = MagicMock()
+            mock_resource.__class__.__name__ = "GitRepoResource"
+            mock_resource.name = "test-repo"
+            mock_resource.dest = tmpdir
+
+            with patch("subprocess.run") as mock_run:
+                mock_run.side_effect = FileNotFoundError("git not found")
+                state = await checker.check(mock_resource)
+
+        assert state.status == "error"
+        assert "not found" in state.error.lower()
+
 
 class TestBlankStateChecker:
     """Tests for BlankStateChecker."""
@@ -568,7 +642,7 @@ config = FileResource(
 
         # Mock settings to provide API key
         mock_settings = MagicMock()
-        mock_settings.api_key = "test-api-key"
+        mock_settings.api_key = "test-api-key"  # pragma: allowlist secret
         mock_settings.model = "test-model"
         mock_settings.base_url = "http://test"
         mock_settings.pulumi_config_passphrase = "test"
@@ -624,7 +698,7 @@ config = FileResource(
 
         # Mock settings to provide API key
         mock_settings = MagicMock()
-        mock_settings.api_key = "test-api-key"
+        mock_settings.api_key = "test-api-key"  # pragma: allowlist secret
         mock_settings.model = "test-model"
         mock_settings.base_url = "http://test"
         mock_settings.pulumi_config_passphrase = "test"

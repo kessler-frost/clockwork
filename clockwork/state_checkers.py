@@ -80,6 +80,38 @@ class BaseStateChecker(ABC):
         """
         raise NotImplementedError
 
+    def _handle_check_error(
+        self, e: Exception, resource_name: str, resource_type: str
+    ) -> ResourceState:
+        """Create error ResourceState with appropriate context.
+
+        Args:
+            e: The exception that occurred
+            resource_name: Name of the resource being checked
+            resource_type: Type of the resource being checked
+
+        Returns:
+            ResourceState with error status and descriptive error message
+        """
+        if isinstance(e, PermissionError):
+            error_msg = (
+                f"Permission denied: {e}. Try running with elevated privileges."
+            )
+        elif isinstance(e, subprocess.TimeoutExpired):
+            error_msg = f"Command timed out after {e.timeout}s"
+        elif isinstance(e, json.JSONDecodeError):
+            error_msg = f"Failed to parse output: {e.msg}"
+        else:
+            error_msg = f"{type(e).__name__}: {e}"
+
+        return ResourceState(
+            name=resource_name,
+            resource_type=resource_type,
+            status="error",
+            details={},
+            error=error_msg,
+        )
+
 
 class ContainerStateChecker(BaseStateChecker):
     """State checker for Apple Container resources.
@@ -164,22 +196,10 @@ class ContainerStateChecker(BaseStateChecker):
                 details={},
             )
 
-        except subprocess.TimeoutExpired:
-            return ResourceState(
-                name=resource_name,
-                resource_type=resource_type,
-                status="error",
-                details={},
-                error="container list timed out",
-            )
+        except subprocess.TimeoutExpired as e:
+            return self._handle_check_error(e, resource_name, resource_type)
         except json.JSONDecodeError as e:
-            return ResourceState(
-                name=resource_name,
-                resource_type=resource_type,
-                status="error",
-                details={},
-                error=f"Failed to parse container list output: {e}",
-            )
+            return self._handle_check_error(e, resource_name, resource_type)
         except FileNotFoundError:
             return ResourceState(
                 name=resource_name,
@@ -188,14 +208,10 @@ class ContainerStateChecker(BaseStateChecker):
                 details={},
                 error="container CLI not found",
             )
+        except PermissionError as e:
+            return self._handle_check_error(e, resource_name, resource_type)
         except Exception as e:
-            return ResourceState(
-                name=resource_name,
-                resource_type=resource_type,
-                status="error",
-                details={},
-                error=str(e),
-            )
+            return self._handle_check_error(e, resource_name, resource_type)
 
 
 class FileStateChecker(BaseStateChecker):
@@ -262,14 +278,10 @@ class FileStateChecker(BaseStateChecker):
                 details=details,
             )
 
+        except PermissionError as e:
+            return self._handle_check_error(e, resource_name, resource_type)
         except Exception as e:
-            return ResourceState(
-                name=resource_name,
-                resource_type=resource_type,
-                status="error",
-                details={},
-                error=str(e),
-            )
+            return self._handle_check_error(e, resource_name, resource_type)
 
     def _resolve_path(self, resource: "Resource") -> str | None:
         """Resolve file path from resource.
@@ -423,14 +435,8 @@ class GitRepoStateChecker(BaseStateChecker):
                 details=details,
             )
 
-        except subprocess.TimeoutExpired:
-            return ResourceState(
-                name=resource_name,
-                resource_type=resource_type,
-                status="error",
-                details={},
-                error="git command timed out",
-            )
+        except subprocess.TimeoutExpired as e:
+            return self._handle_check_error(e, resource_name, resource_type)
         except FileNotFoundError:
             return ResourceState(
                 name=resource_name,
@@ -439,14 +445,10 @@ class GitRepoStateChecker(BaseStateChecker):
                 details={},
                 error="git CLI not found",
             )
+        except PermissionError as e:
+            return self._handle_check_error(e, resource_name, resource_type)
         except Exception as e:
-            return ResourceState(
-                name=resource_name,
-                resource_type=resource_type,
-                status="error",
-                details={},
-                error=str(e),
-            )
+            return self._handle_check_error(e, resource_name, resource_type)
 
 
 class BlankStateChecker(BaseStateChecker):

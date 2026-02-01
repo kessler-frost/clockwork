@@ -403,9 +403,13 @@ class ClockworkCore:
         Args:
             connections: List of completed Connection objects
 
+        Raises:
+            RuntimeError: If any connection setup fails
+
         Side Effects:
             Stores Pulumi resources in connection._pulumi_resources
         """
+        failed_connections: list[tuple[str, str]] = []
         for connection in connections:
             try:
                 pulumi_resources = connection.to_pulumi()
@@ -415,9 +419,20 @@ class ClockworkCore:
                         f"{connection.__class__.__name__}"
                     )
             except Exception as e:
-                logger.warning(
+                logger.error(
                     f"Failed to deploy setup for {connection.__class__.__name__}: {e}"
                 )
+                failed_connections.append(
+                    (connection.__class__.__name__, str(e))
+                )
+
+        if failed_connections:
+            raise RuntimeError(
+                f"Failed to deploy {len(failed_connections)} connection setup(s): "
+                + ", ".join(
+                    f"{name}: {err}" for name, err in failed_connections
+                )
+            )
 
     def _flatten_resources(self, resources: list[Any]) -> list[Any]:
         """Flatten resource hierarchy by recursively extracting all children.

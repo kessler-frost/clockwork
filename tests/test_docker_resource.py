@@ -256,7 +256,9 @@ class TestDockerResourceConnectionContext:
             description="PostgreSQL database",
             image="postgres:15",
             ports=["5432:5432"],
-            env_vars={"POSTGRES_PASSWORD": "testpass"},
+            env_vars={
+                "POSTGRES_PASSWORD": "testpass"  # pragma: allowlist secret
+            },
         )
 
         context = container.get_connection_context()
@@ -265,7 +267,9 @@ class TestDockerResourceConnectionContext:
         assert context["type"] == "DockerResource"
         assert context["image"] == "postgres:15"
         assert context["ports"] == ["5432:5432"]
-        assert context["env_vars"] == {"POSTGRES_PASSWORD": "testpass"}
+        assert context["env_vars"] == {
+            "POSTGRES_PASSWORD": "testpass"
+        }  # pragma: allowlist secret
 
     def test_get_connection_context_minimal(self):
         """Test get_connection_context with minimal fields."""
@@ -524,8 +528,16 @@ class TestDockerContainerProvider:
 
 
 # Integration tests - skip if Docker is not available
+@pytest.mark.skip(
+    reason="Integration tests require Docker and are not implemented yet"
+)
 class TestDockerResourceIntegration:
-    """Integration tests for DockerResource (require Docker)."""
+    """Integration tests for DockerResource (require Docker).
+
+    These tests are skipped by default as they require Docker to be
+    installed and running. They are intended for CI environments
+    with Docker available.
+    """
 
     @pytest.fixture
     def skip_if_no_docker(self):
@@ -539,4 +551,4 @@ class TestDockerResourceIntegration:
         """Test full container lifecycle with Docker."""
         # This test would actually create/destroy containers
         # Only run in CI environments with Docker available
-        pass  # Placeholder for actual integration test
+        pytest.skip("Integration test not implemented")

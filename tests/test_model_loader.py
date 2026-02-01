@@ -3,6 +3,7 @@
 import asyncio
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 
 from clockwork.model_loader import LMStudioModelLoader
@@ -250,3 +251,25 @@ async def test_load_different_models():
         await loader.load_model("meta-llama/llama-3.2-1b")
         assert mock_lmstudio.llm.call_count == 2
         assert loader._loaded_model == "meta-llama/llama-3.2-1b"
+
+
+@pytest.mark.asyncio
+async def test_is_model_loaded_via_api_network_error():
+    """Test that API check handles network errors gracefully."""
+
+    loader = LMStudioModelLoader()
+
+    with patch("httpx.AsyncClient") as mock_client_class:
+        # Set up mock to raise ConnectError
+        mock_client = MagicMock()
+        mock_client.__aenter__ = MagicMock(return_value=mock_client)
+        mock_client.__aexit__ = MagicMock(return_value=None)
+        mock_client.get = MagicMock(
+            side_effect=httpx.ConnectError("Connection refused")
+        )
+        mock_client_class.return_value = mock_client
+
+        # Should return False (not raise) when network error occurs
+        result = await loader._is_model_loaded_via_api("qwen/qwen3-4b-2507")
+
+        assert result is False

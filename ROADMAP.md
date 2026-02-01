@@ -386,6 +386,109 @@ clockwork assert  # Validates all deployed primitives
 
 ---
 
+### 8. Intelligent Testing Framework
+
+Create a testing framework that uses AI to intelligently test Clockwork's building blocks.
+
+**Purpose:**
+- Validate that primitives behave correctly under various conditions
+- Generate edge-case test scenarios automatically
+- Test intelligent completion consistency and quality
+- Reduce manual test authoring while improving coverage
+
+**Core Concepts:**
+
+**Property-Based Testing with Intelligence:**
+```python
+@intelligent_test(resource_type=AppleContainerResource)
+def test_container_completion_consistency():
+    """
+    Intelligence generates diverse descriptions and validates:
+    - Completion produces valid configurations
+    - Same description yields deterministic results (with caching)
+    - Edge cases are handled gracefully
+    """
+    pass
+```
+
+**Automatic Test Generation:**
+- Given a resource type, generate test cases covering:
+  - Minimal valid configurations
+  - Maximal configurations with all fields
+  - Edge cases (empty strings, special characters, long values)
+  - Connection scenarios (multiple dependencies, cycles)
+  - Assertion combinations
+
+**Completion Quality Metrics:**
+- **Consistency**: Same input produces same output across runs
+- **Validity**: Generated configurations pass Pydantic validation
+- **Completeness**: All required fields are populated
+- **Reasonableness**: Values make sense for the description
+
+**Test Modes:**
+
+1. **Smoke Tests** - Quick validation that completion works
+   ```bash
+   clockwork test --mode smoke
+   ```
+
+2. **Consistency Tests** - Run completion N times, verify determinism
+   ```bash
+   clockwork test --mode consistency --runs 5
+   ```
+
+3. **Stress Tests** - Test with unusual inputs and high concurrency
+   ```bash
+   clockwork test --mode stress --parallel 10
+   ```
+
+4. **Regression Tests** - Compare against known-good baselines
+   ```bash
+   clockwork test --mode regression --baseline v1.0
+   ```
+
+**Example Test Suite:**
+```python
+class TestContainerCompletion(IntelligentTestSuite):
+    resource_type = AppleContainerResource
+
+    # AI generates variations of these base descriptions
+    seed_descriptions = [
+        "web server",
+        "database",
+        "cache service",
+        "message queue",
+    ]
+
+    # Properties that must hold for all generated tests
+    invariants = [
+        "image is not empty",
+        "name follows naming convention",
+        "ports are valid port numbers",
+    ]
+
+    # AI-generated edge cases to include
+    edge_case_categories = [
+        "unicode descriptions",
+        "very long descriptions",
+        "ambiguous requirements",
+        "conflicting requirements",
+    ]
+```
+
+**Integration with CI/CD:**
+- Run intelligent tests on PR to catch regressions
+- Track completion quality metrics over time
+- Alert on significant degradation
+
+**Benefits:**
+- Higher test coverage with less manual effort
+- Catches edge cases humans wouldn't think of
+- Validates AI completion reliability
+- Enables confident model upgrades
+
+---
+
 ## Notes
 
 - This roadmap is speculative and priorities may change

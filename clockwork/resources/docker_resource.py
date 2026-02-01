@@ -8,6 +8,11 @@ from typing import Any
 
 from pydantic import Field
 
+from clockwork.pulumi_providers.docker_container import (
+    DockerContainer,
+    DockerContainerInputs,
+)
+
 from .base import Resource
 
 
@@ -122,11 +127,6 @@ class DockerResource(Resource):
             >>> resource.to_pulumi()
             <DockerContainer resource with container_id output>
         """
-        from clockwork.pulumi_providers.docker_container import (
-            DockerContainer,
-            DockerContainerInputs,
-        )
-
         # All fields should be populated by intelligent completion
         if self.name is None or self.image is None:
             raise ValueError(
@@ -188,7 +188,7 @@ class DockerResource(Resource):
             ...     name="postgres",
             ...     image="postgres:15",
             ...     ports=["5432:5432"],
-            ...     env_vars={"POSTGRES_PASSWORD": "testpass"}
+            ...     env_vars={"POSTGRES_PASSWORD": "testpass"}  # pragma: allowlist secret
             ... )
             >>> container.get_connection_context()
             {
@@ -196,7 +196,7 @@ class DockerResource(Resource):
                 'type': 'DockerResource',
                 'image': 'postgres:15',
                 'ports': ['5432:5432'],
-                'env_vars': {'POSTGRES_PASSWORD': 'testpass'}
+                'env_vars': {'POSTGRES_PASSWORD': 'testpass'}  # pragma: allowlist secret
             }
         """
         context = {

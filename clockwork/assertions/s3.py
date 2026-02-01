@@ -2,6 +2,16 @@
 
 from typing import TYPE_CHECKING
 
+try:
+    import boto3
+    from botocore.exceptions import ClientError
+
+    HAS_BOTO3 = True
+except ImportError:
+    HAS_BOTO3 = False
+    boto3 = None
+    ClientError = None
+
 from .base import BaseAssertion
 
 if TYPE_CHECKING:
@@ -35,10 +45,7 @@ class BucketExistsAssert(BaseAssertion):
         Returns:
             True if bucket exists, False otherwise
         """
-        try:
-            import boto3
-            from botocore.exceptions import ClientError
-        except ImportError:
+        if not HAS_BOTO3:
             raise ImportError(
                 "boto3 is required for S3 assertions. "
                 "Install with: pip install clockwork[aws]"
@@ -61,11 +68,8 @@ class BucketExistsAssert(BaseAssertion):
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code", "")
             # 404 means bucket doesn't exist
-            # 403 means bucket exists but we don't have access
-            if error_code == "403":
-                # Bucket exists but access denied - still counts as exists
-                return True
-            return False
+            # 403 means bucket exists but we don't have access (still counts as exists)
+            return error_code == "403"
         except Exception:
             return False
 
@@ -97,10 +101,7 @@ class BucketAccessibleAssert(BaseAssertion):
         Returns:
             True if bucket is accessible and can list objects, False otherwise
         """
-        try:
-            import boto3
-            from botocore.exceptions import ClientError
-        except ImportError:
+        if not HAS_BOTO3:
             raise ImportError(
                 "boto3 is required for S3 assertions. "
                 "Install with: pip install clockwork[aws]"
@@ -116,8 +117,8 @@ class BucketAccessibleAssert(BaseAssertion):
         # Get region from resource
         region = getattr(resource, "region", "us-east-1")
 
+        s3 = boto3.client("s3", region_name=region)
         try:
-            s3 = boto3.client("s3", region_name=region)
             # Try to list objects (with max 1 to minimize data transfer)
             s3.list_objects_v2(Bucket=bucket, MaxKeys=1)
             return True
@@ -153,10 +154,7 @@ class BucketVersioningEnabledAssert(BaseAssertion):
         Returns:
             True if versioning is enabled, False otherwise
         """
-        try:
-            import boto3
-            from botocore.exceptions import ClientError
-        except ImportError:
+        if not HAS_BOTO3:
             raise ImportError(
                 "boto3 is required for S3 assertions. "
                 "Install with: pip install clockwork[aws]"
@@ -172,8 +170,8 @@ class BucketVersioningEnabledAssert(BaseAssertion):
         # Get region from resource
         region = getattr(resource, "region", "us-east-1")
 
+        s3 = boto3.client("s3", region_name=region)
         try:
-            s3 = boto3.client("s3", region_name=region)
             response = s3.get_bucket_versioning(Bucket=bucket)
             return response.get("Status") == "Enabled"
         except ClientError:
