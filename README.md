@@ -1,8 +1,8 @@
 # Clockwork
 
-**Intelligent, Composable Primitives for Infrastructure.**
+**Intelligent, Composable Primitives for Infrastructure in Python.**
 
-Build infrastructure using composable primitives in Python - intelligence handles the parts you find tedious, you control what matters.
+Define resources with Pydantic models. Specify what matters, leave the rest to intelligent completion. Deploy with Pulumi.
 
 [![GitHub Release](https://img.shields.io/github/v/release/kessler-frost/clockwork?label=release)](https://github.com/kessler-frost/clockwork/releases/latest)
 [![Python](https://img.shields.io/badge/python-3.12+-blue)](https://www.python.org/downloads/)

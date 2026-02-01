@@ -257,7 +257,9 @@ class CompletionCache:
                 FROM completions
                 GROUP BY resource_type
             """)
-            resource_types = {row["resource_type"]: row["count"] for row in cursor}
+            resource_types = {
+                row["resource_type"]: row["count"] for row in cursor
+            }
 
         # Database file size
         db_size = self.db_path.stat().st_size if self.db_path.exists() else 0

@@ -1,6 +1,6 @@
 # Clockwork Development Guide
 
-**Intelligent, Composable Primitives for Infrastructure.**
+**Intelligent, Composable Primitives for Infrastructure in Python.**
 
 ## Quick Start
 

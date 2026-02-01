@@ -126,9 +126,10 @@ def test_to_pulumi_with_complete_fields(s3_bucket_resource):
     )
 
     # Mock pulumi_aws.s3.Bucket to avoid actual Pulumi initialization
-    with patch("pulumi_aws.s3.Bucket") as mock_bucket, patch(
-        "pulumi_aws.s3.BucketVersioningArgs"
-    ) as mock_versioning:
+    with (
+        patch("pulumi_aws.s3.Bucket") as mock_bucket,
+        patch("pulumi_aws.s3.BucketVersioningArgs") as mock_versioning,
+    ):
         mock_instance = Mock()
         mock_bucket.return_value = mock_instance
         mock_versioning.return_value = Mock()
@@ -152,11 +153,11 @@ def test_to_pulumi_with_website_config(s3_bucket_resource):
         },
     )
 
-    with patch("pulumi_aws.s3.Bucket") as mock_bucket, patch(
-        "pulumi_aws.s3.BucketVersioningArgs"
-    ) as mock_versioning, patch(
-        "pulumi_aws.s3.BucketWebsiteArgs"
-    ) as mock_website:
+    with (
+        patch("pulumi_aws.s3.Bucket") as mock_bucket,
+        patch("pulumi_aws.s3.BucketVersioningArgs") as mock_versioning,
+        patch("pulumi_aws.s3.BucketWebsiteArgs") as mock_website,
+    ):
         mock_instance = Mock()
         mock_bucket.return_value = mock_instance
         mock_versioning.return_value = Mock()

@@ -199,7 +199,11 @@ def _generate_validation_suggestions(
 
     # Port-specific suggestions
     if field_name and "port" in field_name.lower():
-        if field_value and isinstance(field_value, str) and ":" not in field_value:
+        if (
+            field_value
+            and isinstance(field_value, str)
+            and ":" not in field_value
+        ):
             suggestions.append(
                 f'Add explicit port mapping: ports=["{field_value}:{field_value}"]'
             )
@@ -208,15 +212,21 @@ def _generate_validation_suggestions(
 
     # Image-specific suggestions
     elif field_name and "image" in field_name.lower():
-        suggestions.append("Check that the image exists on Docker Hub or your registry")
-        suggestions.append("Use a specific tag: 'nginx:1.25' instead of 'nginx'")
+        suggestions.append(
+            "Check that the image exists on Docker Hub or your registry"
+        )
+        suggestions.append(
+            "Use a specific tag: 'nginx:1.25' instead of 'nginx'"
+        )
         suggestions.append("For local images, ensure they're built first")
 
     # Empty/None field suggestions
     elif field_value is None or field_value == "":
         suggestions.append(f"Add explicit value for '{field_name}' field")
         suggestions.append("Provide more detail in the description")
-        suggestions.append("Try a more capable model: --model anthropic/claude-haiku-4.5")
+        suggestions.append(
+            "Try a more capable model: --model anthropic/claude-haiku-4.5"
+        )
 
     # Generic suggestions with expected format
     elif expected_format:
@@ -225,14 +235,18 @@ def _generate_validation_suggestions(
 
     # Fallback suggestions
     if not suggestions:
-        suggestions.append("Try a more capable model: --model anthropic/claude-haiku-4.5")
+        suggestions.append(
+            "Try a more capable model: --model anthropic/claude-haiku-4.5"
+        )
         suggestions.append("Add explicit field values to reduce ambiguity")
         suggestions.append("Provide more detail in the description")
 
     return suggestions
 
 
-def format_completion_error(error: CompletionError, show_debug: bool = False) -> str:
+def format_completion_error(
+    error: CompletionError, show_debug: bool = False
+) -> str:
     """Format a CompletionError for display.
 
     Args:
@@ -253,7 +267,7 @@ def format_completion_error(error: CompletionError, show_debug: bool = False) ->
     lines.append("")
 
     # Error message
-    lines.append(f"Error: {str(error)}")
+    lines.append(f"Error: {error!s}")
 
     # Field-specific info for validation errors
     if isinstance(error, CompletionValidationError):

@@ -1,5 +1,5 @@
 """
-Clockwork CLI - Intelligent Infrastructure Orchestration in Python.
+Clockwork CLI - Intelligent, Composable Primitives for Infrastructure in Python.
 """
 
 import asyncio
@@ -23,7 +23,7 @@ from .settings import get_settings
 # Setup
 app = typer.Typer(
     name="clockwork",
-    help="Intelligent Infrastructure Orchestration in Python",
+    help="Intelligent, Composable Primitives for Infrastructure in Python",
     add_completion=False,
 )
 console = Console()

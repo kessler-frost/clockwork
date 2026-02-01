@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "clockwork"
 dynamic = ["version"]
-description = "Intelligent, Composable Primitives for Infrastructure"
+description = "Intelligent, Composable Primitives for Infrastructure in Python"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

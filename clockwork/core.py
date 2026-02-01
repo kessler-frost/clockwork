@@ -1,11 +1,12 @@
 """
-Clockwork Core - Intelligent, Composable Primitives for Infrastructure.
+Clockwork Core - Intelligent, Composable Primitives for Infrastructure in Python.
 
-Apply Pipeline: Load primitives → Intelligent completion → Deploy with Pulumi
-Destroy Pipeline: Destroy infrastructure using Pulumi
-Assert Pipeline: Load primitives → Intelligent completion → Run assertions directly
-Plan Pipeline: Load primitives → Intelligent completion → Preview with Pulumi
-Status Pipeline: Query Pulumi state and actual system state
+Pipelines:
+  apply:   Load → Complete → Deploy (Pulumi)
+  destroy: Destroy infrastructure (Pulumi)
+  assert:  Load → Complete → Run assertions
+  plan:    Load → Complete → Preview (Pulumi)
+  status:  Query Pulumi + system state
 """
 
 import importlib.util

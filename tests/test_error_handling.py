@@ -125,7 +125,10 @@ class TestCompletionTimeoutError:
         """CompletionTimeoutError has default suggestions."""
         error = CompletionTimeoutError("timeout")
         assert len(error.suggestions) > 0
-        assert any("timeout" in s.lower() or "model" in s.lower() for s in error.suggestions)
+        assert any(
+            "timeout" in s.lower() or "model" in s.lower()
+            for s in error.suggestions
+        )
 
     def test_with_resource_name(self):
         """CompletionTimeoutError can include resource name."""
