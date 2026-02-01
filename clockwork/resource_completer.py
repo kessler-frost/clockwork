@@ -17,7 +17,6 @@ from pydantic_ai import (
     ModelRetry,
     RunContext,
 )
-from pydantic_ai._json_schema import JsonSchema
 from pydantic_ai.exceptions import UnexpectedModelBehavior
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.profiles.openai import OpenAIModelProfile
@@ -35,27 +34,6 @@ from .settings import get_settings
 from .tool_selector import ToolSelector
 
 logger = logging.getLogger(__name__)
-
-
-class NullSafeJsonSchemaTransformer(InlineDefsJsonSchemaTransformer):
-    """JSON schema transformer that removes null defaults for LM Studio compatibility.
-
-    Some models (like Nemotron) have jinja templates that fail when trying to
-    apply `| string` filter to null values in the schema. This transformer
-    removes `default: null` entries to avoid these template errors.
-    """
-
-    def transform(self, schema: JsonSchema) -> JsonSchema:
-        """Remove null defaults from schema to avoid jinja template errors."""
-        # Remove default if it's None
-        if schema.get("default") is None and "default" in schema:
-            del schema["default"]
-
-        # Also clean up empty items dicts that can cause issues
-        if schema.get("items") == {}:
-            del schema["items"]
-
-        return schema
 
 
 class ResourceCompleter:
@@ -175,7 +153,7 @@ class ResourceCompleter:
                 base_url=self.base_url, api_key=self.api_key
             ),
             profile=OpenAIModelProfile(
-                json_schema_transformer=NullSafeJsonSchemaTransformer,
+                json_schema_transformer=InlineDefsJsonSchemaTransformer,
                 openai_supports_strict_tool_definition=False,
             ),
         )
