@@ -8,15 +8,31 @@ import json
 import logging
 import subprocess
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 if TYPE_CHECKING:
     from clockwork.resources.base import Resource
 
 logger = logging.getLogger(__name__)
+
+
+class ResourceStatus(Enum):
+    """Enumeration of possible resource states."""
+
+    RUNNING = "running"
+    STOPPED = "stopped"
+    EXISTS = "exists"
+    MISSING = "missing"
+    ERROR = "error"
+    UNKNOWN = "unknown"
+    CLONED = "cloned"
+    NOT_A_REPO = "not_a_repo"
+    COMPOSITE = "composite"
 
 
 @dataclass
@@ -80,6 +96,13 @@ class BaseStateChecker(ABC):
         """
         raise NotImplementedError
 
+    # Error message formatters for different exception types
+    _ERROR_FORMATTERS: ClassVar[dict[type, Callable[[Exception], str]]] = {
+        PermissionError: lambda e: f"Permission denied: {e}. Try running with elevated privileges.",
+        subprocess.TimeoutExpired: lambda e: f"Command timed out after {e.timeout}s",
+        json.JSONDecodeError: lambda e: f"Failed to parse output: {e.msg}",
+    }
+
     def _handle_check_error(
         self, e: Exception, resource_name: str, resource_type: str
     ) -> ResourceState:
@@ -93,21 +116,21 @@ class BaseStateChecker(ABC):
         Returns:
             ResourceState with error status and descriptive error message
         """
-        if isinstance(e, PermissionError):
-            error_msg = (
-                f"Permission denied: {e}. Try running with elevated privileges."
-            )
-        elif isinstance(e, subprocess.TimeoutExpired):
-            error_msg = f"Command timed out after {e.timeout}s"
-        elif isinstance(e, json.JSONDecodeError):
-            error_msg = f"Failed to parse output: {e.msg}"
-        else:
-            error_msg = f"{type(e).__name__}: {e}"
+        # Get formatter for this exception type, or use default
+        formatter = self._ERROR_FORMATTERS.get(
+            type(e), lambda e: f"{type(e).__name__}: {e}"
+        )
+        error_msg = formatter(e)
+
+        # Log the error for debugging
+        logger.error(
+            f"State check failed for {resource_name} ({resource_type}): {error_msg}"
+        )
 
         return ResourceState(
             name=resource_name,
             resource_type=resource_type,
-            status="error",
+            status=ResourceStatus.ERROR.value,
             details={},
             error=error_msg,
         )
@@ -151,7 +174,7 @@ class ContainerStateChecker(BaseStateChecker):
                 return ResourceState(
                     name=resource_name,
                     resource_type=resource_type,
-                    status="error",
+                    status=ResourceStatus.ERROR.value,
                     details={},
                     error=f"container list failed: {result.stderr}",
                 )
@@ -192,25 +215,30 @@ class ContainerStateChecker(BaseStateChecker):
             return ResourceState(
                 name=resource_name,
                 resource_type=resource_type,
-                status="missing",
+                status=ResourceStatus.MISSING.value,
                 details={},
             )
 
-        except subprocess.TimeoutExpired as e:
-            return self._handle_check_error(e, resource_name, resource_type)
-        except json.JSONDecodeError as e:
-            return self._handle_check_error(e, resource_name, resource_type)
         except FileNotFoundError:
+            logger.error(f"Container CLI not found for {resource_name}")
             return ResourceState(
                 name=resource_name,
                 resource_type=resource_type,
-                status="error",
+                status=ResourceStatus.ERROR.value,
                 details={},
                 error="container CLI not found",
             )
-        except PermissionError as e:
+        except (
+            subprocess.TimeoutExpired,
+            json.JSONDecodeError,
+            PermissionError,
+        ) as e:
             return self._handle_check_error(e, resource_name, resource_type)
         except Exception as e:
+            # Log full traceback for unexpected errors
+            logger.exception(
+                f"Unexpected error checking state for {resource_name}: {e}"
+            )
             return self._handle_check_error(e, resource_name, resource_type)
 
 
@@ -244,7 +272,7 @@ class FileStateChecker(BaseStateChecker):
                 return ResourceState(
                     name=resource_name,
                     resource_type=resource_type,
-                    status="unknown",
+                    status=ResourceStatus.UNKNOWN.value,
                     details={},
                     error="Could not resolve file path",
                 )
@@ -255,7 +283,7 @@ class FileStateChecker(BaseStateChecker):
                 return ResourceState(
                     name=resource_name,
                     resource_type=resource_type,
-                    status="missing",
+                    status=ResourceStatus.MISSING.value,
                     details={"path": str(path)},
                 )
 
@@ -274,13 +302,17 @@ class FileStateChecker(BaseStateChecker):
             return ResourceState(
                 name=resource_name,
                 resource_type=resource_type,
-                status="exists",
+                status=ResourceStatus.EXISTS.value,
                 details=details,
             )
 
         except PermissionError as e:
             return self._handle_check_error(e, resource_name, resource_type)
         except Exception as e:
+            # Log full traceback for unexpected errors
+            logger.exception(
+                f"Unexpected error checking state for {resource_name}: {e}"
+            )
             return self._handle_check_error(e, resource_name, resource_type)
 
     def _resolve_path(self, resource: "Resource") -> str | None:
@@ -362,7 +394,7 @@ class GitRepoStateChecker(BaseStateChecker):
                 return ResourceState(
                     name=resource_name,
                     resource_type=resource_type,
-                    status="unknown",
+                    status=ResourceStatus.UNKNOWN.value,
                     details={},
                     error="No destination path specified",
                 )
@@ -376,7 +408,7 @@ class GitRepoStateChecker(BaseStateChecker):
                 return ResourceState(
                     name=resource_name,
                     resource_type=resource_type,
-                    status="missing",
+                    status=ResourceStatus.MISSING.value,
                     details={"path": str(repo_path)},
                 )
 
@@ -386,7 +418,7 @@ class GitRepoStateChecker(BaseStateChecker):
                 return ResourceState(
                     name=resource_name,
                     resource_type=resource_type,
-                    status="not_a_repo",
+                    status=ResourceStatus.NOT_A_REPO.value,
                     details={"path": str(repo_path)},
                 )
 
@@ -431,23 +463,26 @@ class GitRepoStateChecker(BaseStateChecker):
             return ResourceState(
                 name=resource_name,
                 resource_type=resource_type,
-                status="cloned",
+                status=ResourceStatus.CLONED.value,
                 details=details,
             )
 
-        except subprocess.TimeoutExpired as e:
-            return self._handle_check_error(e, resource_name, resource_type)
         except FileNotFoundError:
+            logger.error(f"Git CLI not found for {resource_name}")
             return ResourceState(
                 name=resource_name,
                 resource_type=resource_type,
-                status="error",
+                status=ResourceStatus.ERROR.value,
                 details={},
                 error="git CLI not found",
             )
-        except PermissionError as e:
+        except (subprocess.TimeoutExpired, PermissionError) as e:
             return self._handle_check_error(e, resource_name, resource_type)
         except Exception as e:
+            # Log full traceback for unexpected errors
+            logger.exception(
+                f"Unexpected error checking state for {resource_name}: {e}"
+            )
             return self._handle_check_error(e, resource_name, resource_type)
 
 
@@ -479,7 +514,7 @@ class BlankStateChecker(BaseStateChecker):
         return ResourceState(
             name=resource_name,
             resource_type=resource_type,
-            status="composite",
+            status=ResourceStatus.COMPOSITE.value,
             details={"children": children_count},
         )
 
@@ -523,7 +558,7 @@ async def check_resource_state(resource: "Resource") -> ResourceState:
         return ResourceState(
             name=resource.name or "unknown",
             resource_type=resource.__class__.__name__,
-            status="unknown",
+            status=ResourceStatus.UNKNOWN.value,
             details={},
             error=f"No state checker for {resource.__class__.__name__}",
         )

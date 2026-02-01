@@ -127,10 +127,41 @@ def _format_timings(result: dict) -> str | None:
     return " | ".join(timing_parts) if timing_parts else None
 
 
+def _handle_completion_error(e: CompletionError, debug: bool) -> None:
+    """Handle CompletionError with formatted output."""
+    error_output = format_completion_error(e, show_debug=debug)
+    console.print()
+    console.print(
+        Panel(
+            error_output,
+            title="[bold red]Completion Failed[/bold red]",
+            border_style="red",
+        )
+    )
+
+
+def _handle_assertion_error(e: RuntimeError) -> None:
+    """Handle assertion RuntimeError."""
+    console.print("\n[bold red]Assertion(s) failed[/bold red]")
+    console.print(f"[dim]{e}[/dim]")
+
+
+def _handle_generic_error(e: Exception, command_type: str, debug: bool) -> None:
+    """Handle generic errors with optional debug trace."""
+    console.print(
+        f"\n[bold red]{command_type.capitalize()} failed:[/bold red] {e}"
+    )
+    if debug:
+        console.print("\n[dim]Stack trace:[/dim]")
+        console.print(f"[dim]{traceback.format_exc()}[/dim]")
+
+
 def _handle_command_error(
     e: Exception, command_type: str, debug: bool = False
 ) -> None:
     """Handle command errors with appropriate formatting.
+
+    Uses dispatch pattern to route errors to appropriate handlers.
 
     Args:
         e: Exception that occurred
@@ -140,33 +171,15 @@ def _handle_command_error(
     Raises:
         SystemExit: Always exits with code 1
     """
-    # Special handling for CompletionError
+    # Dispatch to appropriate handler based on exception type
     if isinstance(e, CompletionError):
-        error_output = format_completion_error(e, show_debug=debug)
-        console.print()
-        console.print(
-            Panel(
-                error_output,
-                title="[bold red]Completion Failed[/bold red]",
-                border_style="red",
-            )
-        )
-    # Special handling for assertion RuntimeError
-    elif command_type == "assert" and isinstance(e, RuntimeError):
-        error_msg = str(e)
-        console.print("\n[bold red]Assertion(s) failed[/bold red]")
-        console.print(f"[dim]{error_msg}[/dim]")
-    elif not isinstance(e, CompletionError | typer.Exit):
-        console.print(
-            f"\n[bold red]{command_type.capitalize()} failed:[/bold red] {e}"
-        )
-        if debug:
-            console.print("\n[dim]Stack trace:[/dim]")
-            console.print(f"[dim]{traceback.format_exc()}[/dim]")
+        _handle_completion_error(e, debug)
+    elif isinstance(e, RuntimeError) and command_type == "assert":
+        _handle_assertion_error(e)
+    elif isinstance(e, typer.Exit):
+        pass  # Let typer.Exit pass through without additional output
     else:
-        console.print(
-            f"\n[bold red]{command_type.capitalize()} failed:[/bold red] {e}"
-        )
+        _handle_generic_error(e, command_type, debug)
 
     raise typer.Exit(code=1)
 
@@ -547,6 +560,11 @@ def status(
         "--json",
         help="Output in JSON format",
     ),
+    debug: bool = typer.Option(
+        False,
+        "--debug",
+        help="Show stack trace on errors",
+    ),
 ):
     """Show status of deployed resources.
 
@@ -635,7 +653,7 @@ def status(
                 console.print(f"  {r.get('name')}: {r.get('error')}")
 
     except Exception as e:
-        _handle_command_error(e, "status")
+        _handle_command_error(e, "status", debug=debug)
 
 
 def _format_status(status: str) -> str:
@@ -713,16 +731,23 @@ def cache_clear():
         console.print("[yellow]Cache is disabled in settings.[/yellow]")
         raise typer.Exit(code=0)
 
-    cache = CompletionCache(
-        cache_dir=settings.cache_dir,
-        ttl_days=settings.cache_ttl_days,
-    )
+    try:
+        cache = CompletionCache(
+            cache_dir=settings.cache_dir,
+            ttl_days=settings.cache_ttl_days,
+        )
 
-    count = cache.clear()
+        count = cache.clear()
 
-    console.print(
-        f"[bold green]Cache cleared.[/bold green] Removed {count} entries."
-    )
+        console.print(
+            f"[bold green]Cache cleared.[/bold green] Removed {count} entries."
+        )
+    except Exception as e:
+        console.print(
+            f"[bold red]Failed to clear cache:[/bold red] {e}\n"
+            f"[dim]Try deleting the cache manually: rm -rf {settings.cache_dir}[/dim]"
+        )
+        raise typer.Exit(code=1) from None
 
 
 @cache_app.command(name="stats")
@@ -734,33 +759,40 @@ def cache_stats():
         console.print("[yellow]Cache is disabled in settings.[/yellow]")
         raise typer.Exit(code=0)
 
-    cache = CompletionCache(
-        cache_dir=settings.cache_dir,
-        ttl_days=settings.cache_ttl_days,
-    )
+    try:
+        cache = CompletionCache(
+            cache_dir=settings.cache_dir,
+            ttl_days=settings.cache_ttl_days,
+        )
 
-    stats = cache.stats()
+        stats = cache.stats()
 
-    # Create a nice table for stats
-    table = Table(show_header=False, box=None)
-    table.add_column("Key", style="cyan")
-    table.add_column("Value", style="bold")
+        # Create a nice table for stats
+        table = Table(show_header=False, box=None)
+        table.add_column("Key", style="cyan")
+        table.add_column("Value", style="bold")
 
-    table.add_row("Cache Directory", stats["cache_dir"])
-    table.add_row("Database Size", _format_bytes(stats["db_size_bytes"]))
-    table.add_row("Total Entries", str(stats["total_entries"]))
-    table.add_row("Valid Entries", str(stats["valid_entries"]))
-    table.add_row("Expired Entries", str(stats["expired_entries"]))
-    table.add_row("TTL", f"{settings.cache_ttl_days} days")
+        table.add_row("Cache Directory", stats["cache_dir"])
+        table.add_row("Database Size", _format_bytes(stats["db_size_bytes"]))
+        table.add_row("Total Entries", str(stats["total_entries"]))
+        table.add_row("Valid Entries", str(stats["valid_entries"]))
+        table.add_row("Expired Entries", str(stats["expired_entries"]))
+        table.add_row("TTL", f"{settings.cache_ttl_days} days")
 
-    console.print("\n[bold]Completion Cache Statistics[/bold]\n")
-    console.print(table)
+        console.print("\n[bold]Completion Cache Statistics[/bold]\n")
+        console.print(table)
 
-    # Show resource type breakdown if any
-    if stats["resource_types"]:
-        console.print("\n[bold]Entries by Resource Type:[/bold]")
-        for resource_type, count in stats["resource_types"].items():
-            console.print(f"  {resource_type}: {count}")
+        # Show resource type breakdown if any
+        if stats["resource_types"]:
+            console.print("\n[bold]Entries by Resource Type:[/bold]")
+            for resource_type, count in stats["resource_types"].items():
+                console.print(f"  {resource_type}: {count}")
+    except Exception as e:
+        console.print(
+            f"[bold red]Failed to read cache stats:[/bold red] {e}\n"
+            f"[dim]Cache may be corrupted. Try: clockwork cache clear[/dim]"
+        )
+        raise typer.Exit(code=1) from None
 
 
 def _format_bytes(size_bytes: int) -> str:

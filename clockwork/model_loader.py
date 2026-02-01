@@ -5,6 +5,7 @@ This module provides automatic model loading when using LM Studio as the complet
 When a localhost:1234 endpoint is detected, the specified model is loaded automatically.
 """
 
+import json
 import logging
 from urllib.parse import urlparse
 
@@ -48,15 +49,22 @@ class LMStudioModelLoader:
                         m.get("id", "").lower() for m in data.get("data", [])
                     ]
                     return model_identifier.lower() in loaded_models
-        except Exception as e:
-            if (
-                "Connection refused" in str(e)
-                or "ConnectError" in type(e).__name__
-            ):
-                logger.info(f"LM Studio not running, skipping API check: {e}")
-            else:
-                logger.warning(f"Unexpected error checking loaded models: {e}")
-        return False
+                else:
+                    # Log non-200 responses
+                    logger.warning(
+                        f"LM Studio API returned status {response.status_code}: "
+                        f"{response.text[:200] if response.text else 'no response body'}"
+                    )
+                    return False
+        except httpx.ConnectError:
+            logger.info("LM Studio not running, will attempt to load model")
+            return False
+        except httpx.TimeoutException:
+            logger.warning("LM Studio API timed out, assuming model not loaded")
+            return False
+        except json.JSONDecodeError as e:
+            logger.error(f"LM Studio API returned invalid JSON: {e}")
+            return False
 
     @staticmethod
     def is_lmstudio_endpoint(base_url: str) -> bool:

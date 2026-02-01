@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from pydantic import Field
+from pydantic import BaseModel, Field
 
 try:
     import pulumi_aws as aws
@@ -13,6 +13,22 @@ except ImportError:
     aws = None
 
 from .base import Resource
+
+
+class WebsiteConfig(BaseModel):
+    """Configuration for S3 static website hosting.
+
+    Attributes:
+        index_document: The name of the index document (e.g., 'index.html')
+        error_document: The name of the error document (e.g., 'error.html')
+    """
+
+    index_document: str = Field(
+        ..., description="The name of the index document (e.g., 'index.html')"
+    )
+    error_document: str | None = Field(
+        None, description="The name of the error document (e.g., 'error.html')"
+    )
 
 
 class S3BucketResource(Resource):
@@ -80,7 +96,7 @@ class S3BucketResource(Resource):
         default=False,
         description="Enable versioning to keep multiple versions of objects",
     )
-    website_config: dict | None = Field(
+    website_config: WebsiteConfig | dict | None = Field(
         None,
         description="Static website hosting configuration",
         examples=[
@@ -139,9 +155,16 @@ class S3BucketResource(Resource):
         # Build website configuration if provided
         website_args = None
         if self.website_config:
+            # Handle both dict and WebsiteConfig types
+            if isinstance(self.website_config, WebsiteConfig):
+                index_doc = self.website_config.index_document
+                error_doc = self.website_config.error_document
+            else:
+                index_doc = self.website_config.get("index_document")
+                error_doc = self.website_config.get("error_document")
             website_args = aws.s3.BucketWebsiteArgs(
-                index_document=self.website_config.get("index_document"),
-                error_document=self.website_config.get("error_document"),
+                index_document=index_doc,
+                error_document=error_doc,
             )
 
         # Build versioning configuration

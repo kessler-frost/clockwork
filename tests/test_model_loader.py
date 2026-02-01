@@ -1,7 +1,7 @@
 """Tests for LM Studio model loader."""
 
 import asyncio
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
@@ -76,19 +76,20 @@ async def test_load_model_success():
     """Test successful model loading."""
     loader = LMStudioModelLoader()
 
-    # Mock the lmstudio module
-    mock_lmstudio = MagicMock()
+    # Mock the lmstudio module at the location where it's imported
+    mock_lms = MagicMock()
     mock_model = MagicMock()
-    mock_lmstudio.llm.return_value = mock_model
+    mock_lms.llm.return_value = mock_model
 
     with (
-        patch.dict("sys.modules", {"lmstudio": mock_lmstudio}),
+        patch("clockwork.model_loader.lms", mock_lms),
+        patch("clockwork.model_loader.HAS_LMSTUDIO", True),
         patch.object(loader, "_is_model_loaded_via_api", return_value=False),
     ):
         await loader.load_model("qwen/qwen3-4b-2507")
 
     # Verify model was loaded
-    mock_lmstudio.llm.assert_called_once_with("qwen/qwen3-4b-2507")
+    mock_lms.llm.assert_called_once_with("qwen/qwen3-4b-2507")
     assert loader._loaded_model == "qwen/qwen3-4b-2507"
 
 
@@ -97,23 +98,24 @@ async def test_load_model_idempotent():
     """Test that loading the same model twice is idempotent."""
     loader = LMStudioModelLoader()
 
-    # Mock the lmstudio module
-    mock_lmstudio = MagicMock()
+    # Mock the lmstudio module at the location where it's imported
+    mock_lms = MagicMock()
     mock_model = MagicMock()
-    mock_lmstudio.llm.return_value = mock_model
+    mock_lms.llm.return_value = mock_model
 
     with (
-        patch.dict("sys.modules", {"lmstudio": mock_lmstudio}),
+        patch("clockwork.model_loader.lms", mock_lms),
+        patch("clockwork.model_loader.HAS_LMSTUDIO", True),
         patch.object(loader, "_is_model_loaded_via_api", return_value=False),
     ):
         # Load model first time
         await loader.load_model("qwen/qwen3-4b-2507")
-        assert mock_lmstudio.llm.call_count == 1
+        assert mock_lms.llm.call_count == 1
 
         # Load same model second time - should skip (tracked in _loaded_model)
         await loader.load_model("qwen/qwen3-4b-2507")
         # Still only called once
-        assert mock_lmstudio.llm.call_count == 1
+        assert mock_lms.llm.call_count == 1
 
 
 @pytest.mark.asyncio
@@ -123,7 +125,7 @@ async def test_load_model_import_error():
 
     # Mock missing lmstudio package and API check returning False
     with (
-        patch.dict("sys.modules", {"lmstudio": None}),
+        patch("clockwork.model_loader.HAS_LMSTUDIO", False),
         patch.object(loader, "_is_model_loaded_via_api", return_value=False),
         pytest.raises(ImportError, match="lmstudio package required"),
     ):
@@ -135,12 +137,13 @@ async def test_load_model_connection_error():
     """Test error handling when LM Studio is not running."""
     loader = LMStudioModelLoader()
 
-    # Mock the lmstudio module
-    mock_lmstudio = MagicMock()
-    mock_lmstudio.llm.side_effect = ConnectionError("Connection refused")
+    # Mock the lmstudio module at the location where it's imported
+    mock_lms = MagicMock()
+    mock_lms.llm.side_effect = ConnectionError("Connection refused")
 
     with (
-        patch.dict("sys.modules", {"lmstudio": mock_lmstudio}),
+        patch("clockwork.model_loader.lms", mock_lms),
+        patch("clockwork.model_loader.HAS_LMSTUDIO", True),
         patch.object(loader, "_is_model_loaded_via_api", return_value=False),
         pytest.raises(ConnectionError, match="Cannot connect to LM Studio"),
     ):
@@ -152,12 +155,13 @@ async def test_load_model_not_found():
     """Test error handling when model is not downloaded."""
     loader = LMStudioModelLoader()
 
-    # Mock the lmstudio module
-    mock_lmstudio = MagicMock()
-    mock_lmstudio.llm.side_effect = FileNotFoundError("Model not found")
+    # Mock the lmstudio module at the location where it's imported
+    mock_lms = MagicMock()
+    mock_lms.llm.side_effect = FileNotFoundError("Model not found")
 
     with (
-        patch.dict("sys.modules", {"lmstudio": mock_lmstudio}),
+        patch("clockwork.model_loader.lms", mock_lms),
+        patch("clockwork.model_loader.HAS_LMSTUDIO", True),
         patch.object(loader, "_is_model_loaded_via_api", return_value=False),
         pytest.raises(ValueError, match=r"Model .* not found in LM Studio"),
     ):
@@ -169,12 +173,14 @@ async def test_load_model_invalid_identifier():
     """Test error handling for invalid model identifier."""
     loader = LMStudioModelLoader()
 
-    # Mock the lmstudio module
-    mock_lmstudio = MagicMock()
-    mock_lmstudio.llm.side_effect = ValueError("Invalid model identifier")
+    # Mock the lmstudio module at the location where it's imported
+    mock_lms = MagicMock()
+    mock_lms.llm.side_effect = ValueError("Invalid model identifier")
 
     with (
-        patch.dict("sys.modules", {"lmstudio": mock_lmstudio}),
+        patch("clockwork.model_loader.lms", mock_lms),
+        patch("clockwork.model_loader.HAS_LMSTUDIO", True),
+        patch.object(loader, "_is_model_loaded_via_api", return_value=False),
         pytest.raises(ValueError, match="Invalid model identifier"),
     ):
         await loader.load_model("invalid-model-id")
@@ -185,12 +191,13 @@ async def test_load_model_unexpected_error():
     """Test error handling for unexpected errors."""
     loader = LMStudioModelLoader()
 
-    # Mock the lmstudio module
-    mock_lmstudio = MagicMock()
-    mock_lmstudio.llm.side_effect = RuntimeError("Unexpected error")
+    # Mock the lmstudio module at the location where it's imported
+    mock_lms = MagicMock()
+    mock_lms.llm.side_effect = RuntimeError("Unexpected error")
 
     with (
-        patch.dict("sys.modules", {"lmstudio": mock_lmstudio}),
+        patch("clockwork.model_loader.lms", mock_lms),
+        patch("clockwork.model_loader.HAS_LMSTUDIO", True),
         patch.object(loader, "_is_model_loaded_via_api", return_value=False),
         pytest.raises(RuntimeError, match="Failed to load model"),
     ):
@@ -212,19 +219,20 @@ async def test_load_model_already_loaded_via_api():
     """Test that model loading is skipped if already loaded via API check."""
     loader = LMStudioModelLoader()
 
-    # Mock the lmstudio module
-    mock_lmstudio = MagicMock()
+    # Mock the lmstudio module at the location where it's imported
+    mock_lms = MagicMock()
     mock_model = MagicMock()
-    mock_lmstudio.llm.return_value = mock_model
+    mock_lms.llm.return_value = mock_model
 
     with (
-        patch.dict("sys.modules", {"lmstudio": mock_lmstudio}),
+        patch("clockwork.model_loader.lms", mock_lms),
+        patch("clockwork.model_loader.HAS_LMSTUDIO", True),
         patch.object(loader, "_is_model_loaded_via_api", return_value=True),
     ):
         await loader.load_model("qwen/qwen3-4b-2507")
 
     # Verify lmstudio.llm was NOT called since model was already loaded
-    mock_lmstudio.llm.assert_not_called()
+    mock_lms.llm.assert_not_called()
     # But loader should still track the model
     assert loader._loaded_model == "qwen/qwen3-4b-2507"
 
@@ -234,22 +242,23 @@ async def test_load_different_models():
     """Test loading different models sequentially."""
     loader = LMStudioModelLoader()
 
-    # Mock the lmstudio module
-    mock_lmstudio = MagicMock()
+    # Mock the lmstudio module at the location where it's imported
+    mock_lms = MagicMock()
     mock_model = MagicMock()
-    mock_lmstudio.llm.return_value = mock_model
+    mock_lms.llm.return_value = mock_model
 
     with (
-        patch.dict("sys.modules", {"lmstudio": mock_lmstudio}),
+        patch("clockwork.model_loader.lms", mock_lms),
+        patch("clockwork.model_loader.HAS_LMSTUDIO", True),
         patch.object(loader, "_is_model_loaded_via_api", return_value=False),
     ):
         # Load first model
         await loader.load_model("qwen/qwen3-4b-2507")
-        assert mock_lmstudio.llm.call_count == 1
+        assert mock_lms.llm.call_count == 1
 
         # Load different model - should load again
         await loader.load_model("meta-llama/llama-3.2-1b")
-        assert mock_lmstudio.llm.call_count == 2
+        assert mock_lms.llm.call_count == 2
         assert loader._loaded_model == "meta-llama/llama-3.2-1b"
 
 
@@ -260,11 +269,11 @@ async def test_is_model_loaded_via_api_network_error():
     loader = LMStudioModelLoader()
 
     with patch("httpx.AsyncClient") as mock_client_class:
-        # Set up mock to raise ConnectError
+        # Set up mock to raise ConnectError with proper async context manager
         mock_client = MagicMock()
-        mock_client.__aenter__ = MagicMock(return_value=mock_client)
-        mock_client.__aexit__ = MagicMock(return_value=None)
-        mock_client.get = MagicMock(
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+        mock_client.get = AsyncMock(
             side_effect=httpx.ConnectError("Connection refused")
         )
         mock_client_class.return_value = mock_client

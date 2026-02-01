@@ -31,9 +31,11 @@ __all__ = [
 # Conditionally export S3BucketResource if pulumi-aws is available
 try:
     from .s3_resource import S3BucketResource
+    from .s3_resource import WebsiteConfig as WebsiteConfig
 
     S3BucketResource.model_rebuild()
     __all__.append("S3BucketResource")
+    __all__.append("WebsiteConfig")
 except ImportError:
     # pulumi-aws not installed, S3BucketResource not available
     pass

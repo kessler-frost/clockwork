@@ -16,6 +16,12 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+class CacheError(Exception):
+    """Exception raised for cache operation failures."""
+
+    pass
+
+
 class CompletionCache:
     """
     SQLite-based cache for AI completion results.
@@ -31,7 +37,14 @@ class CompletionCache:
         Args:
             cache_dir: Directory to store the cache database
             ttl_days: Time-to-live for cache entries in days
+
+        Raises:
+            ValueError: If ttl_days is not positive
+            CacheError: If database initialization fails
         """
+        if isinstance(ttl_days, int) and ttl_days <= 0:
+            raise ValueError("ttl_days must be positive")
+
         self.cache_dir = Path(cache_dir)
         self.ttl_days = ttl_days
         self.db_path = self.cache_dir / "completions.db"
@@ -45,23 +58,34 @@ class CompletionCache:
         logger.debug(f"CompletionCache initialized at {self.db_path}")
 
     def _init_db(self) -> None:
-        """Initialize the SQLite database with required schema."""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS completions (
-                    cache_key TEXT PRIMARY KEY,
-                    resource_type TEXT NOT NULL,
-                    data TEXT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    expires_at TIMESTAMP NOT NULL
-                )
-            """)
-            # Create index for expiration cleanup
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_expires_at ON completions(expires_at)
-            """)
-            conn.commit()
+        """Initialize the SQLite database with required schema.
+
+        Raises:
+            CacheError: If database initialization fails
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS completions (
+                        cache_key TEXT PRIMARY KEY,
+                        resource_type TEXT NOT NULL,
+                        data TEXT NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        expires_at TIMESTAMP NOT NULL
+                    )
+                """)
+                # Create index for expiration cleanup
+                cursor.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_expires_at ON completions(expires_at)
+                """)
+                conn.commit()
+        except sqlite3.DatabaseError as e:
+            logger.error(f"Failed to initialize cache database: {e}")
+            raise CacheError(
+                f"Failed to initialize cache database at {self.db_path}: {e}. "
+                f"Try deleting the file and retrying."
+            ) from e
 
     def _get_connection(self) -> sqlite3.Connection:
         """Get a database connection with row factory configured."""
@@ -84,7 +108,7 @@ class CompletionCache:
             model: The model name used for completion
 
         Returns:
-            A 16-character hexadecimal cache key
+            A 16-character hexadecimal cache key (truncated SHA256 hash)
         """
         # Get user-provided fields (excluding non-serializable/completion-related fields)
         resource_data = resource.model_dump()
@@ -113,38 +137,52 @@ class CompletionCache:
             cache_key: The cache key to look up
 
         Returns:
-            The cached completion data as a dict, or None if not found/expired
+            The cached completion data as a dict, or None if not found/expired/error
         """
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
 
-            # Fetch entry and check expiration
-            cursor.execute(
-                """
-                SELECT data, expires_at FROM completions
-                WHERE cache_key = ?
-            """,
-                (cache_key,),
-            )
-
-            row = cursor.fetchone()
-            if row is None:
-                logger.debug(f"Cache miss: {cache_key}")
-                return None
-
-            # Parse expiration time
-            expires_at = datetime.fromisoformat(row["expires_at"])
-            if expires_at < datetime.now():
-                # Entry expired, remove it
+                # Fetch entry and check expiration
                 cursor.execute(
-                    "DELETE FROM completions WHERE cache_key = ?", (cache_key,)
+                    """
+                    SELECT data, expires_at FROM completions
+                    WHERE cache_key = ?
+                """,
+                    (cache_key,),
                 )
-                conn.commit()
-                logger.debug(f"Cache expired: {cache_key}")
-                return None
 
-            logger.debug(f"Cache hit: {cache_key}")
-            return json.loads(row["data"])
+                row = cursor.fetchone()
+                if row is None:
+                    logger.debug(f"Cache miss: {cache_key}")
+                    return None
+
+                # Parse expiration time
+                expires_at = datetime.fromisoformat(row["expires_at"])
+                if expires_at < datetime.now():
+                    # Entry expired, remove it
+                    cursor.execute(
+                        "DELETE FROM completions WHERE cache_key = ?",
+                        (cache_key,),
+                    )
+                    conn.commit()
+                    logger.debug(f"Cache expired: {cache_key}")
+                    return None
+
+                logger.debug(f"Cache hit: {cache_key}")
+                return json.loads(row["data"])
+        except sqlite3.OperationalError as e:
+            # More specific - transient operational issues (locked, busy)
+            logger.warning(
+                f"Cache operation failed: {e}. Treating as cache miss."
+            )
+            return None
+        except sqlite3.DatabaseError as e:
+            # More general - likely corruption
+            logger.error(
+                f"Cache database error during get: {e}. Treating as cache miss."
+            )
+            return None
 
     def set(self, cache_key: str, data: dict, resource_type: str) -> None:
         """
@@ -154,28 +192,38 @@ class CompletionCache:
             cache_key: The cache key to store under
             data: The completion data to cache (must be JSON-serializable)
             resource_type: The resource type name for reference
+
+        Note:
+            Silently fails on database errors to avoid interrupting completion flow.
         """
         expires_at = datetime.now() + timedelta(days=self.ttl_days)
 
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                INSERT OR REPLACE INTO completions
-                (cache_key, resource_type, data, created_at, expires_at)
-                VALUES (?, ?, ?, ?, ?)
-            """,
-                (
-                    cache_key,
-                    resource_type,
-                    json.dumps(data, default=str),
-                    datetime.now().isoformat(),
-                    expires_at.isoformat(),
-                ),
-            )
-            conn.commit()
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT OR REPLACE INTO completions
+                    (cache_key, resource_type, data, created_at, expires_at)
+                    VALUES (?, ?, ?, ?, ?)
+                """,
+                    (
+                        cache_key,
+                        resource_type,
+                        json.dumps(data, default=str),
+                        datetime.now().isoformat(),
+                        expires_at.isoformat(),
+                    ),
+                )
+                conn.commit()
 
-        logger.debug(f"Cache set: {cache_key} (expires: {expires_at})")
+            logger.debug(f"Cache set: {cache_key} (expires: {expires_at})")
+        except sqlite3.OperationalError as e:
+            # More specific - transient operational issues (locked, busy)
+            logger.warning(f"Cache write failed: {e}. Entry not cached.")
+        except sqlite3.DatabaseError as e:
+            # More general - likely corruption
+            logger.error(f"Failed to store in cache: {e}. Entry not cached.")
 
     def clear(self) -> int:
         """
@@ -183,17 +231,27 @@ class CompletionCache:
 
         Returns:
             Number of entries deleted
+
+        Raises:
+            CacheError: If database operation fails
         """
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) FROM completions")
-            count = cursor.fetchone()[0]
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT COUNT(*) FROM completions")
+                count = cursor.fetchone()[0]
 
-            cursor.execute("DELETE FROM completions")
-            conn.commit()
+                cursor.execute("DELETE FROM completions")
+                conn.commit()
 
-        logger.info(f"Cache cleared: {count} entries deleted")
-        return count
+            logger.info(f"Cache cleared: {count} entries deleted")
+            return count
+        except sqlite3.DatabaseError as e:
+            logger.error(f"Failed to clear cache: {e}")
+            raise CacheError(
+                f"Failed to clear cache: {e}. "
+                f"Try deleting {self.db_path} manually."
+            ) from e
 
     def cleanup_expired(self) -> int:
         """
@@ -230,45 +288,57 @@ class CompletionCache:
             - resource_types: Dict mapping resource type to count
             - cache_dir: Path to cache directory
             - db_size_bytes: Size of database file in bytes
+
+        Raises:
+            CacheError: If database operation fails
         """
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
 
-            # Total entries
-            cursor.execute("SELECT COUNT(*) FROM completions")
-            total = cursor.fetchone()[0]
+                # Total entries
+                cursor.execute("SELECT COUNT(*) FROM completions")
+                total = cursor.fetchone()[0]
 
-            # Valid entries (not expired)
-            cursor.execute(
-                """
-                SELECT COUNT(*) FROM completions
-                WHERE expires_at >= ?
-            """,
-                (datetime.now().isoformat(),),
+                # Valid entries (not expired)
+                cursor.execute(
+                    """
+                    SELECT COUNT(*) FROM completions
+                    WHERE expires_at >= ?
+                """,
+                    (datetime.now().isoformat(),),
+                )
+                valid = cursor.fetchone()[0]
+
+                # Expired entries
+                expired = total - valid
+
+                # Resource type breakdown
+                cursor.execute("""
+                    SELECT resource_type, COUNT(*) as count
+                    FROM completions
+                    GROUP BY resource_type
+                """)
+                resource_types = {
+                    row["resource_type"]: row["count"] for row in cursor
+                }
+
+            # Database file size
+            db_size = (
+                self.db_path.stat().st_size if self.db_path.exists() else 0
             )
-            valid = cursor.fetchone()[0]
 
-            # Expired entries
-            expired = total - valid
-
-            # Resource type breakdown
-            cursor.execute("""
-                SELECT resource_type, COUNT(*) as count
-                FROM completions
-                GROUP BY resource_type
-            """)
-            resource_types = {
-                row["resource_type"]: row["count"] for row in cursor
+            return {
+                "total_entries": total,
+                "valid_entries": valid,
+                "expired_entries": expired,
+                "resource_types": resource_types,
+                "cache_dir": str(self.cache_dir),
+                "db_size_bytes": db_size,
             }
-
-        # Database file size
-        db_size = self.db_path.stat().st_size if self.db_path.exists() else 0
-
-        return {
-            "total_entries": total,
-            "valid_entries": valid,
-            "expired_entries": expired,
-            "resource_types": resource_types,
-            "cache_dir": str(self.cache_dir),
-            "db_size_bytes": db_size,
-        }
+        except sqlite3.DatabaseError as e:
+            logger.error(f"Failed to get cache stats: {e}")
+            raise CacheError(
+                f"Failed to read cache statistics: {e}. "
+                f"Cache may be corrupted. Try 'clockwork cache clear'."
+            ) from e

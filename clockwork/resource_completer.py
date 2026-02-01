@@ -7,6 +7,7 @@ the completion task. No prompts needed - the schema IS the prompt!
 
 import asyncio
 import logging
+import warnings
 from typing import Any
 
 import httpx
@@ -316,7 +317,8 @@ class ResourceCompleter:
             raise
 
         except httpx.HTTPStatusError as e:
-            if e.response.status_code == 401:
+            status_code = e.response.status_code
+            if status_code == 401:
                 raise CompletionError(
                     "Authentication failed - check your API key",
                     resource_name=resource_name,
@@ -326,7 +328,7 @@ class ResourceCompleter:
                     ],
                     debug_info=debug_info if self.debug else None,
                 ) from e
-            elif e.response.status_code == 429:
+            elif status_code == 429:
                 raise CompletionError(
                     "Rate limited - too many requests",
                     resource_name=resource_name,
@@ -336,7 +338,19 @@ class ResourceCompleter:
                     ],
                     debug_info=debug_info if self.debug else None,
                 ) from e
-            raise
+            else:
+                # Wrap all other HTTP errors with context
+                response_text = e.response.text[:200] if e.response.text else ""
+                raise CompletionError(
+                    f"API request failed with HTTP {status_code}: {response_text}",
+                    resource_name=resource_name,
+                    suggestions=[
+                        f"Check if the model endpoint is healthy (HTTP {status_code})",
+                        "Verify the model name is correct",
+                        "Try a different model or endpoint",
+                    ],
+                    debug_info=debug_info if self.debug else None,
+                ) from e
 
         except Exception as e:
             # Catch-all for other errors
@@ -387,6 +401,13 @@ class ResourceCompleter:
                     logger.error(
                         f"Cache entry {cache_key} is corrupted or incompatible: {e}. "
                         "Run 'clockwork cache clear' to fix. Falling back to AI completion."
+                    )
+                    # Emit warning visible in CLI output
+                    warnings.warn(
+                        f"Cache entry corrupted for resource '{resource.name}': {e}. "
+                        "Falling back to AI completion. Run 'clockwork cache clear' to fix.",
+                        UserWarning,
+                        stacklevel=2,
                     )
             else:
                 logger.info(

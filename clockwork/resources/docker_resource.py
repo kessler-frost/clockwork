@@ -101,11 +101,12 @@ class DockerResource(Resource):
     def needs_completion(self) -> bool:
         """Returns True if any critical field needs intelligent completion.
 
-        Only critical fields (name, image, ports) trigger intelligent completion.
+        Checks if name, image, or ports are None (not set). Note that an empty
+        list [] for ports is considered "set" and won't trigger completion.
         Optional fields (volumes, env_vars, networks, command) default to empty.
 
         Returns:
-            bool: True if any critical field needs completion, False otherwise
+            bool: True if any critical field is None, False otherwise
         """
         return self.name is None or self.image is None or self.ports is None
 

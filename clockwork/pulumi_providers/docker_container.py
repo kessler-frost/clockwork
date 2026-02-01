@@ -6,6 +6,8 @@ the Docker CLI (docker command), available on Linux, macOS, and Windows.
 
 import asyncio
 import json
+import logging
+import re
 from typing import Any
 
 import pulumi
@@ -15,9 +17,12 @@ from pulumi.dynamic import (
     ResourceProvider,
     UpdateResult,
 )
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+logger = logging.getLogger(__name__)
 
 
-class DockerContainerInputs:
+class DockerContainerInputs(BaseModel):
     """Input properties for DockerContainer resource.
 
     Attributes:
@@ -36,55 +41,73 @@ class DockerContainerInputs:
         must_run: Whether the container must be running (True) or can be stopped (False)
     """
 
-    def __init__(
-        self,
-        image: str,
-        container_name: str,
-        ports: list[str] | None = None,
-        volumes: list[str] | None = None,
-        env_vars: dict[str, str] | None = None,
-        command: str | None = None,
-        networks: list[str] | None = None,
-        memory: str | None = None,
-        cpus: str | None = None,
-        user: str | None = None,
-        workdir: str | None = None,
-        labels: dict[str, str] | None = None,
-        must_run: bool = True,
-    ):
-        """Initialize DockerContainerInputs.
+    image: str = Field(
+        ..., description="Container image name (e.g., 'nginx:latest')"
+    )
+    container_name: str = Field(
+        ..., description="Logical container name for tracking"
+    )
+    ports: list[str] = Field(
+        default_factory=list,
+        description="Port mappings in format ['host:container', ...]",
+    )
+    volumes: list[str] = Field(
+        default_factory=list,
+        description="Volume mounts in format ['host:container', ...]",
+    )
+    env_vars: dict[str, str] = Field(
+        default_factory=dict, description="Environment variables"
+    )
+    command: str | None = Field(None, description="Command to run in container")
+    networks: list[str] = Field(
+        default_factory=list, description="Networks to attach container to"
+    )
+    memory: str | None = Field(
+        None, description="Memory limit (e.g., '512m', '1g')"
+    )
+    cpus: str | None = Field(None, description="Number of CPUs to allocate")
+    user: str | None = Field(None, description="User to run as")
+    workdir: str | None = Field(
+        None, description="Working directory inside container"
+    )
+    labels: dict[str, str] = Field(
+        default_factory=dict, description="Container labels"
+    )
+    must_run: bool = Field(
+        True,
+        description="Whether the container must be running (True) or can be stopped",
+    )
 
-        Args:
-            image: Container image name
-            container_name: Logical container name
-            ports: Port mappings (optional)
-            volumes: Volume mounts (optional)
-            env_vars: Environment variables (optional)
-            command: Command to run (optional)
-            networks: Networks to attach to (optional)
-            memory: Memory limit (optional)
-            cpus: Number of CPUs (optional)
-            user: User to run as (optional)
-            workdir: Working directory (optional)
-            labels: Container labels (optional)
-            must_run: Whether container must be running (default: True)
-        """
-        self.image = image
-        self.container_name = container_name
-        self.ports = ports or []
-        self.volumes = volumes or []
-        self.env_vars = env_vars or {}
-        self.command = command
-        self.networks = networks or []
-        self.memory = memory
-        self.cpus = cpus
-        self.user = user
-        self.workdir = workdir
-        self.labels = labels or {}
-        self.must_run = must_run
+    @field_validator("ports", mode="before")
+    @classmethod
+    def validate_ports(cls, v: list[str] | None) -> list[str]:
+        """Validate port format is 'host:container'."""
+        if v is None:
+            return []
+        for port in v:
+            if ":" not in port:
+                raise ValueError(
+                    f"Port must be in 'host:container' format, got: {port}"
+                )
+        return v
 
-        # Add clockwork.name label for tracking
-        self.labels["clockwork.name"] = container_name
+    @field_validator("memory", mode="before")
+    @classmethod
+    def validate_memory(cls, v: str | None) -> str | None:
+        """Validate memory format (e.g., '512m', '1g')."""
+        if v and not re.match(r"^\d+[kmgb]?$", v, re.IGNORECASE):
+            raise ValueError(
+                f"Invalid memory format: {v}. Use format like '512m' or '1g'."
+            )
+        return v
+
+    @model_validator(mode="after")
+    def add_tracking_label(self) -> "DockerContainerInputs":
+        """Add clockwork.name label for tracking."""
+        if "clockwork.name" not in self.labels:
+            # Create a new dict to avoid mutating the default
+            self.labels = {**self.labels, "clockwork.name": self.container_name}
+        return self
 
 
 class DockerContainerProvider(ResourceProvider):
@@ -268,8 +291,17 @@ class DockerContainerProvider(ResourceProvider):
                 )
                 if create_result["returncode"] == 0:
                     # Retry connection
-                    await self._run_command(
+                    retry_result = await self._run_command(
                         ["docker", "network", "connect", network, container_id]
+                    )
+                    if retry_result["returncode"] != 0:
+                        logger.warning(
+                            f"Failed to connect container {container_id} to network {network}: "
+                            f"{retry_result['stderr']}"
+                        )
+                else:
+                    logger.warning(
+                        f"Failed to create network {network}: {create_result['stderr']}"
                     )
 
     async def _create_async(self, props: dict[str, Any]) -> CreateResult:
@@ -404,8 +436,15 @@ class DockerContainerProvider(ResourceProvider):
                 # Update props with actual values
                 props["container_id"] = actual_id
                 props["status"] = container_info.get("State", {}).get("Status")
-        except (json.JSONDecodeError, KeyError):
-            pass
+        except json.JSONDecodeError as e:
+            # Log but continue - Docker may have returned unexpected output
+            logger.warning(
+                f"Failed to parse docker inspect output for {actual_id}: {e}"
+            )
+        except KeyError as e:
+            logger.warning(
+                f"Unexpected docker inspect schema for {actual_id}: missing key {e}"
+            )
 
         return props
 
@@ -589,22 +628,8 @@ class DockerContainer(pulumi.dynamic.Resource):
             inputs: Container input properties
             opts: Pulumi resource options
         """
-        # Convert inputs to dict for dynamic provider
-        props = {
-            "image": inputs.image,
-            "container_name": inputs.container_name,
-            "ports": inputs.ports,
-            "volumes": inputs.volumes,
-            "env_vars": inputs.env_vars,
-            "command": inputs.command,
-            "networks": inputs.networks,
-            "memory": inputs.memory,
-            "cpus": inputs.cpus,
-            "user": inputs.user,
-            "workdir": inputs.workdir,
-            "labels": inputs.labels,
-            "must_run": inputs.must_run,
-        }
+        # Convert Pydantic model to dict for dynamic provider
+        props = inputs.model_dump()
 
         super().__init__(
             DockerContainerProvider(),

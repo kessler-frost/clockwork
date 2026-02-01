@@ -140,7 +140,7 @@ class TestDockerResourceToPulumi:
 
         # Mock DockerContainer to avoid actual Pulumi initialization
         with patch(
-            "clockwork.pulumi_providers.docker_container.DockerContainer"
+            "clockwork.resources.docker_resource.DockerContainer"
         ) as mock_container:
             mock_instance = Mock()
             mock_container.return_value = mock_instance
@@ -162,7 +162,7 @@ class TestDockerResourceToPulumi:
         container.ports = []
 
         with patch(
-            "clockwork.pulumi_providers.docker_container.DockerContainer"
+            "clockwork.resources.docker_resource.DockerContainer"
         ) as mock_container:
             mock_instance = Mock()
             mock_container.return_value = mock_instance
@@ -203,7 +203,7 @@ class TestDockerResourceToPulumi:
         )
 
         with patch(
-            "clockwork.pulumi_providers.docker_container.DockerContainer"
+            "clockwork.resources.docker_resource.DockerContainer"
         ) as mock_container:
             mock_instance = Mock()
             mock_container.return_value = mock_instance
