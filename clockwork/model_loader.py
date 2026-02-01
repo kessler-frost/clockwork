@@ -18,6 +18,32 @@ class LMStudioModelLoader:
         """Initialize the LM Studio model loader."""
         self._loaded_model: str | None = None
 
+    async def _is_model_loaded_via_api(self, model_identifier: str) -> bool:
+        """
+        Check if a model is already loaded in LM Studio via the OpenAI API.
+
+        Args:
+            model_identifier: Model identifier to check
+
+        Returns:
+            True if model is available in the /v1/models endpoint
+        """
+        import httpx
+
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get("http://localhost:1234/v1/models")
+                if response.status_code == 200:
+                    data = response.json()
+                    # Case-insensitive comparison since LM Studio normalizes to lowercase
+                    loaded_models = [
+                        m.get("id", "").lower() for m in data.get("data", [])
+                    ]
+                    return model_identifier.lower() in loaded_models
+        except Exception as e:
+            logger.debug(f"Could not check loaded models via API: {e}")
+        return False
+
     @staticmethod
     def is_lmstudio_endpoint(base_url: str) -> bool:
         """
@@ -55,9 +81,17 @@ class LMStudioModelLoader:
             ValueError: If model identifier is invalid or model not downloaded
             RuntimeError: For other unexpected errors during model loading
         """
-        # Skip if already loaded this model
+        # Skip if already loaded this model in this session
         if self._loaded_model == model_identifier:
             logger.debug(f"Model {model_identifier} already loaded, skipping")
+            return
+
+        # Check if model is already loaded via OpenAI API (from lms load command)
+        if await self._is_model_loaded_via_api(model_identifier):
+            logger.info(
+                f"Model {model_identifier} already loaded in LM Studio (via API check)"
+            )
+            self._loaded_model = model_identifier
             return
 
         try:

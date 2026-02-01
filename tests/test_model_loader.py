@@ -80,7 +80,10 @@ async def test_load_model_success():
     mock_model = MagicMock()
     mock_lmstudio.llm.return_value = mock_model
 
-    with patch.dict("sys.modules", {"lmstudio": mock_lmstudio}):
+    with (
+        patch.dict("sys.modules", {"lmstudio": mock_lmstudio}),
+        patch.object(loader, "_is_model_loaded_via_api", return_value=False),
+    ):
         await loader.load_model("qwen/qwen3-4b-2507")
 
     # Verify model was loaded
@@ -98,12 +101,15 @@ async def test_load_model_idempotent():
     mock_model = MagicMock()
     mock_lmstudio.llm.return_value = mock_model
 
-    with patch.dict("sys.modules", {"lmstudio": mock_lmstudio}):
+    with (
+        patch.dict("sys.modules", {"lmstudio": mock_lmstudio}),
+        patch.object(loader, "_is_model_loaded_via_api", return_value=False),
+    ):
         # Load model first time
         await loader.load_model("qwen/qwen3-4b-2507")
         assert mock_lmstudio.llm.call_count == 1
 
-        # Load same model second time - should skip
+        # Load same model second time - should skip (tracked in _loaded_model)
         await loader.load_model("qwen/qwen3-4b-2507")
         # Still only called once
         assert mock_lmstudio.llm.call_count == 1
@@ -114,9 +120,10 @@ async def test_load_model_import_error():
     """Test error handling when lmstudio package is not installed."""
     loader = LMStudioModelLoader()
 
-    # Mock missing lmstudio package
+    # Mock missing lmstudio package and API check returning False
     with (
         patch.dict("sys.modules", {"lmstudio": None}),
+        patch.object(loader, "_is_model_loaded_via_api", return_value=False),
         pytest.raises(ImportError, match="lmstudio package required"),
     ):
         await loader.load_model("qwen/qwen3-4b-2507")
@@ -133,6 +140,7 @@ async def test_load_model_connection_error():
 
     with (
         patch.dict("sys.modules", {"lmstudio": mock_lmstudio}),
+        patch.object(loader, "_is_model_loaded_via_api", return_value=False),
         pytest.raises(ConnectionError, match="Cannot connect to LM Studio"),
     ):
         await loader.load_model("qwen/qwen3-4b-2507")
@@ -149,6 +157,7 @@ async def test_load_model_not_found():
 
     with (
         patch.dict("sys.modules", {"lmstudio": mock_lmstudio}),
+        patch.object(loader, "_is_model_loaded_via_api", return_value=False),
         pytest.raises(ValueError, match=r"Model .* not found in LM Studio"),
     ):
         await loader.load_model("qwen/qwen3-4b-2507")
@@ -181,6 +190,7 @@ async def test_load_model_unexpected_error():
 
     with (
         patch.dict("sys.modules", {"lmstudio": mock_lmstudio}),
+        patch.object(loader, "_is_model_loaded_via_api", return_value=False),
         pytest.raises(RuntimeError, match="Failed to load model"),
     ):
         await loader.load_model("qwen/qwen3-4b-2507")
@@ -197,6 +207,28 @@ def test_reset():
 
 
 @pytest.mark.asyncio
+async def test_load_model_already_loaded_via_api():
+    """Test that model loading is skipped if already loaded via API check."""
+    loader = LMStudioModelLoader()
+
+    # Mock the lmstudio module
+    mock_lmstudio = MagicMock()
+    mock_model = MagicMock()
+    mock_lmstudio.llm.return_value = mock_model
+
+    with (
+        patch.dict("sys.modules", {"lmstudio": mock_lmstudio}),
+        patch.object(loader, "_is_model_loaded_via_api", return_value=True),
+    ):
+        await loader.load_model("qwen/qwen3-4b-2507")
+
+    # Verify lmstudio.llm was NOT called since model was already loaded
+    mock_lmstudio.llm.assert_not_called()
+    # But loader should still track the model
+    assert loader._loaded_model == "qwen/qwen3-4b-2507"
+
+
+@pytest.mark.asyncio
 async def test_load_different_models():
     """Test loading different models sequentially."""
     loader = LMStudioModelLoader()
@@ -206,7 +238,10 @@ async def test_load_different_models():
     mock_model = MagicMock()
     mock_lmstudio.llm.return_value = mock_model
 
-    with patch.dict("sys.modules", {"lmstudio": mock_lmstudio}):
+    with (
+        patch.dict("sys.modules", {"lmstudio": mock_lmstudio}),
+        patch.object(loader, "_is_model_loaded_via_api", return_value=False),
+    ):
         # Load first model
         await loader.load_model("qwen/qwen3-4b-2507")
         assert mock_lmstudio.llm.call_count == 1
