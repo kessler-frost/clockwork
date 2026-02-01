@@ -316,6 +316,32 @@ Expand beyond current primitives:
 
 ---
 
+### 8. Example & Documentation Improvements
+
+Bridge gaps between documented features and examples:
+
+**Intelligence-Based Completion:**
+- Add example showing description-only resource completion (e.g., `AppleContainerResource(description="web server")` with no other fields)
+- Demonstrate the "Fast mode" intelligence level from CLAUDE.md
+- Show two-phase composite completion in action
+
+**Connection Type Examples:**
+- `DatabaseConnection` usage example (schema execution, connection string injection)
+- `NetworkConnection` usage example (Apple Container network creation)
+- `ServiceMeshConnection` usage example (service discovery, TLS)
+
+**Assertion Examples:**
+- `FileExistsAssert` usage in a real scenario
+- `FileContentMatchesAssert` with regex patterns
+- Combined file assertions in FileResource workflows
+
+**Tool Integration:**
+- Example using `duckduckgo_search_tool()` for content generation
+- Example with MCP server integration
+- Demonstrate tool selection behavior
+
+---
+
 ## Implemented Features
 
 ### Core Primitives & CLI Commands
