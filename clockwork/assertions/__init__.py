@@ -60,3 +60,22 @@ __all__ = [
     "HealthcheckAssert",
     "PortAccessibleAssert",
 ]
+
+# Conditionally export S3 assertions if boto3 is available
+try:
+    from .s3 import (  # noqa: F401
+        BucketAccessibleAssert,
+        BucketExistsAssert,
+        BucketVersioningEnabledAssert,
+    )
+
+    __all__.extend(
+        [
+            "BucketAccessibleAssert",
+            "BucketExistsAssert",
+            "BucketVersioningEnabledAssert",
+        ]
+    )
+except ImportError:
+    # boto3 not installed, S3 assertions not available
+    pass

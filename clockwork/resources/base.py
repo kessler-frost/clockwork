@@ -167,6 +167,7 @@ class Resource(BaseModel):
     _connections: list["Connection"] = PrivateAttr(default_factory=list)
     _children: list["Resource"] = PrivateAttr(default_factory=list)
     _parent: Optional["Resource"] = PrivateAttr(default=None)
+    _ai_completed_fields: set[str] = PrivateAttr(default_factory=set)
 
     # Intelligence and integration capabilities
     tools: list[Any] | None = (

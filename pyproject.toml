@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "clockwork"
 dynamic = ["version"]
-description = "Intelligent, Composable Primitives for Infrastructure"
+description = "Intelligent, Composable Primitives for Infrastructure in Python"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -23,6 +23,15 @@ dependencies = [
     "uvicorn>=0.30.0",
     "jinja2>=3.0.0",
     "lmstudio>=0.1.0",
+]
+
+[project.optional-dependencies]
+aws = [
+    "pulumi-aws>=6.0.0",
+    "boto3>=1.34.0",
+]
+docker = [
+    "docker>=7.0.0",
 ]
 
 [project.scripts]

@@ -141,7 +141,7 @@ readme = FileResource(
         mock_instance = Mock()
 
         # Mock complete to return resources (simulating completion)
-        async def mock_complete(resources):
+        async def mock_complete(resources, use_cache=True):
             return resources
 
         mock_instance.complete = mock_complete
@@ -182,7 +182,7 @@ readme = FileResource(
         mock_instance = Mock()
 
         # Mock complete to simulate intelligent completion of fields
-        async def mock_complete(resources):
+        async def mock_complete(resources, use_cache=True):
             for r in resources:
                 if hasattr(r, "content") and r.content is None:
                     r.content = "# Generated Content"
@@ -230,7 +230,7 @@ test_file = FileResource(
         mock_instance = Mock()
 
         # Mock complete to return resources (simulating completion)
-        async def mock_complete(resources):
+        async def mock_complete(resources, use_cache=True):
             return resources
 
         mock_instance.complete = mock_complete
@@ -278,7 +278,7 @@ ai_file = FileResource(
         mock_gen_instance = Mock()
 
         # Mock complete to return resources with completed fields
-        async def mock_complete(resources):
+        async def mock_complete(resources, use_cache=True):
             # Simulate intelligent completion of missing fields
             for r in resources:
                 if hasattr(r, "content") and r.content is None:
@@ -327,7 +327,10 @@ def test_artifact_generator_initialization():
         # base_url should come from settings when not provided
         settings = get_settings()
         mock_generator.assert_called_once_with(
-            api_key="test-key", model="custom-model", base_url=settings.base_url
+            api_key="test-key",
+            model="custom-model",
+            base_url=settings.base_url,
+            debug=False,
         )
 
 
@@ -359,7 +362,7 @@ dynamic_file = FileResource(
         mock_instance = Mock()
 
         # Mock complete to simulate intelligent content filling
-        async def mock_complete(resources):
+        async def mock_complete(resources, use_cache=True):
             for r in resources:
                 if hasattr(r, "content") and r.content is None:
                     r.content = "# Containers\n\nContainers are a lightweight virtualization platform."
@@ -407,7 +410,7 @@ test_file = FileResource(
         # Setup resource completer mock
         mock_gen_instance = Mock()
 
-        async def mock_complete(resources):
+        async def mock_complete(resources, use_cache=True):
             # Complete any missing fields
             for r in resources:
                 if hasattr(r, "directory") and r.directory is None:
@@ -455,7 +458,7 @@ readme = FileResource(
         mock_instance = Mock()
 
         # Mock complete to return resources with fields filled
-        async def mock_complete(resources):
+        async def mock_complete(resources, use_cache=True):
             for r in resources:
                 if hasattr(r, "directory") and r.directory is None:
                     r.directory = "."
@@ -508,7 +511,7 @@ dynamic_file = FileResource(
         mock_gen_instance = Mock()
 
         # Mock complete to return resources with completed fields
-        async def mock_complete(resources):
+        async def mock_complete(resources, use_cache=True):
             # Simulate intelligent completion of missing fields
             for r in resources:
                 if hasattr(r, "content") and r.content is None:
@@ -572,7 +575,7 @@ test_file = FileResource(
         mock_artifact_instance = Mock()
 
         # Mock complete to return resources
-        async def mock_complete(resources):
+        async def mock_complete(resources, use_cache=True):
             return resources
 
         mock_artifact_instance.complete = mock_complete
@@ -605,7 +608,7 @@ test_file = FileResource(
         mock_artifact_instance = Mock()
 
         # Mock complete to return resources
-        async def mock_complete(resources):
+        async def mock_complete(resources, use_cache=True):
             return resources
 
         mock_artifact_instance.complete = mock_complete
@@ -638,7 +641,7 @@ test_file = FileResource(
         mock_artifact_instance = Mock()
 
         # Mock complete to return resources
-        async def mock_complete(resources):
+        async def mock_complete(resources, use_cache=True):
             return resources
 
         mock_artifact_instance.complete = mock_complete
@@ -698,7 +701,7 @@ file2 = FileResource(
         mock_artifact_instance = Mock()
 
         # Mock complete to return resources
-        async def mock_complete(resources):
+        async def mock_complete(resources, use_cache=True):
             return resources
 
         mock_artifact_instance.complete = mock_complete

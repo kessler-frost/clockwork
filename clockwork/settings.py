@@ -66,6 +66,27 @@ class ClockworkSettings(BaseSettings):
         description="Maximum retry attempts for intelligent resource completion (env: CW_COMPLETION_MAX_RETRIES)",
     )
 
+    completion_timeout: int = Field(
+        default=30,
+        description="Timeout in seconds for completion requests (env: CW_COMPLETION_TIMEOUT)",
+    )
+
+    # Cache Configuration
+    cache_enabled: bool = Field(
+        default=True,
+        description="Enable completion caching for reproducible results (env: CW_CACHE_ENABLED)",
+    )
+
+    cache_ttl_days: int = Field(
+        default=7,
+        description="Cache time-to-live in days (env: CW_CACHE_TTL_DAYS)",
+    )
+
+    cache_dir: str = Field(
+        default=".clockwork/cache",
+        description="Directory for cache storage (env: CW_CACHE_DIR)",
+    )
+
 
 # Global settings instance
 _settings: ClockworkSettings | None = None

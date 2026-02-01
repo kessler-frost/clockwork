@@ -5,8 +5,19 @@ This module provides automatic model loading when using LM Studio as the complet
 When a localhost:1234 endpoint is detected, the specified model is loaded automatically.
 """
 
+import json
 import logging
 from urllib.parse import urlparse
+
+import httpx
+
+try:
+    import lmstudio as lms
+
+    HAS_LMSTUDIO = True
+except ImportError:
+    HAS_LMSTUDIO = False
+    lms = None
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +28,43 @@ class LMStudioModelLoader:
     def __init__(self):
         """Initialize the LM Studio model loader."""
         self._loaded_model: str | None = None
+
+    async def _is_model_loaded_via_api(self, model_identifier: str) -> bool:
+        """
+        Check if a model is already loaded in LM Studio via the OpenAI API.
+
+        Args:
+            model_identifier: Model identifier to check
+
+        Returns:
+            True if model is available in the /v1/models endpoint
+        """
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get("http://localhost:1234/v1/models")
+                if response.status_code == 200:
+                    data = response.json()
+                    # Case-insensitive comparison since LM Studio normalizes to lowercase
+                    loaded_models = [
+                        m.get("id", "").lower() for m in data.get("data", [])
+                    ]
+                    return model_identifier.lower() in loaded_models
+                else:
+                    # Log non-200 responses
+                    logger.warning(
+                        f"LM Studio API returned status {response.status_code}: "
+                        f"{response.text[:200] if response.text else 'no response body'}"
+                    )
+                    return False
+        except httpx.ConnectError:
+            logger.info("LM Studio not running, will attempt to load model")
+            return False
+        except httpx.TimeoutException:
+            logger.warning("LM Studio API timed out, assuming model not loaded")
+            return False
+        except json.JSONDecodeError as e:
+            logger.error(f"LM Studio API returned invalid JSON: {e}")
+            return False
 
     @staticmethod
     def is_lmstudio_endpoint(base_url: str) -> bool:
@@ -55,21 +103,27 @@ class LMStudioModelLoader:
             ValueError: If model identifier is invalid or model not downloaded
             RuntimeError: For other unexpected errors during model loading
         """
-        # Skip if already loaded this model
+        # Skip if already loaded this model in this session
         if self._loaded_model == model_identifier:
             logger.debug(f"Model {model_identifier} already loaded, skipping")
             return
 
-        try:
-            import lmstudio as lms
-        except ImportError as e:
+        # Check if model is already loaded via OpenAI API (from lms load command)
+        if await self._is_model_loaded_via_api(model_identifier):
+            logger.info(
+                f"Model {model_identifier} already loaded in LM Studio (via API check)"
+            )
+            self._loaded_model = model_identifier
+            return
+
+        if not HAS_LMSTUDIO:
             logger.error(
                 "lmstudio package not installed. Install with: uv add lmstudio"
             )
             raise ImportError(
                 "lmstudio package required for automatic model loading. "
                 "Install with: uv add lmstudio"
-            ) from e
+            )
 
         logger.info(f"Loading model in LM Studio: {model_identifier}")
 

@@ -1,6 +1,6 @@
 # Clockwork Development Guide
 
-**Intelligent, Composable Primitives for Infrastructure.**
+**Intelligent, Composable Primitives for Infrastructure in Python.**
 
 ## Quick Start
 
@@ -194,9 +194,9 @@ FileResource(description="...", tools=[duckduckgo_search_tool()])
 `.env` file:
 
 ```bash
-# LM Studio (local, auto-loads model)
+# LM Studio (local) - RECOMMENDED for development
 CW_API_KEY=lm-studio
-CW_MODEL=qwen/qwen3-coder-30b
+CW_MODEL=qwen/qwen3-30b-a3b
 CW_BASE_URL=http://localhost:1234/v1
 
 # OpenRouter (cloud)
@@ -206,13 +206,33 @@ CW_BASE_URL=https://openrouter.ai/api/v1
 
 # Optional
 CW_COMPLETION_MAX_RETRIES=3
+CW_COMPLETION_TIMEOUT=30
+CW_CACHE_ENABLED=true
+CW_CACHE_TTL_DAYS=7
 CW_PULUMI_CONFIG_PASSPHRASE=clockwork
 CW_LOG_LEVEL=INFO
 ```
 
-**LM Studio Auto-Loading**: When using `localhost:1234`, Clockwork auto-loads the specified model
+### LM Studio Setup (Recommended)
 
-**Models**: Must support tool calling. Default: `meta-llama/llama-4-scout:free`. Recommended: `anthropic/claude-haiku-4.5`
+```bash
+# 1. Start daemon
+lms daemon up
+
+# 2. Load model with tool support (required for Clockwork)
+lms load zai-org/glm-4.7-flash --ttl 3600
+
+# 3. Verify model is loaded
+lms ps
+
+# 4. Run Clockwork
+uv run clockwork show
+```
+
+**Auto-Loading**: Clockwork auto-loads models when using `localhost:1234` if not already loaded.
+
+**Model Requirements**: Must support tool calling. Recommended:
+- `zai-org/glm-4.7-flash` - Best tool calling (τ²-Bench: 79.5), 40 tok/s on Apple Silicon
 
 **State**: `~/.pulumi/`
 
