@@ -141,7 +141,7 @@ CW_MODEL=meta-llama/llama-4-scout:free  # Free tier model
 Deploy:
 
 ```bash
-uv run clockwork apply
+clockwork apply
 ```
 
 ## Example
@@ -173,7 +173,7 @@ nginx = AppleContainerResource(
 ```
 
 ```bash
-uv run clockwork apply
+clockwork apply
 ```
 
 ### Next Steps
@@ -186,7 +186,7 @@ After your first deployment:
 4. **Build composites**: Group related resources with `BlankResource` for reusable patterns
 5. **Check examples**: Browse `examples/` directory for real-world patterns
 
-Run `uv run clockwork --help` to see all available commands.
+Run `clockwork --help` to see all available commands.
 
 ## Resources
 
@@ -278,7 +278,7 @@ nginx = AppleContainerResource(
 Run assertions:
 
 ```bash
-uv run clockwork assert
+clockwork assert
 ```
 
 **Available Assertion Classes**:
@@ -297,37 +297,37 @@ All commands must be run from the clockwork directory where your `main.py` is lo
 
 ```bash
 # Show all available commands
-uv run clockwork --help
+clockwork --help
 
 # Show options for a specific command
-uv run clockwork apply --help
-uv run clockwork destroy --help
-uv run clockwork assert --help
+clockwork apply --help
+clockwork destroy --help
+clockwork assert --help
 ```
 
 **Available Commands**:
 
 ```bash
 # Full deployment
-uv run clockwork apply
+clockwork apply
 
 # Plan resources without deploying
-uv run clockwork plan
+clockwork plan
 
 # Validate deployed resources
-uv run clockwork assert
+clockwork assert
 
 # Destroy deployed resources (removes working directories by default)
-uv run clockwork destroy
+clockwork destroy
 
 # Destroy but keep working directories created by resources
-uv run clockwork destroy --keep-files
+clockwork destroy --keep-files
 
 # Custom model
-uv run clockwork apply --model "anthropic/claude-haiku-4.5"
+clockwork apply --model "anthropic/claude-haiku-4.5"
 
 # Show version
-uv run clockwork version
+clockwork version
 ```
 
 ## Resource Connections
@@ -453,7 +453,7 @@ For a minimal setup, see the Quick Start section above. For all available option
 Override via CLI:
 
 ```bash
-uv run clockwork apply --model "anthropic/claude-haiku-4.5"
+clockwork apply --model "anthropic/claude-haiku-4.5"
 ```
 
 ### Important Notes
@@ -481,17 +481,17 @@ Make sure you're in the clockwork directory, then explore these examples:
 # Composite resources - Grouping and hierarchical structures
 # Demonstrates: BlankResource, .add() composition, nested composites
 cd examples/composite-resources/simple-webapp
-uv run clockwork apply
-uv run clockwork assert
-uv run clockwork destroy
+clockwork apply
+clockwork assert
+clockwork destroy
 
 # Nested composites - Hierarchical resource structures
 cd examples/composite-resources/nested-composites
-uv run clockwork plan
+clockwork plan
 
 # Mixed patterns - Combining .add() and .connect()
 cd examples/composite-resources/mixed-pattern
-uv run clockwork plan
+clockwork plan
 
 # File connections - Demonstrates FileConnection patterns
 cd examples

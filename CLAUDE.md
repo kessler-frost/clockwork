@@ -5,9 +5,9 @@
 ## Quick Start
 
 ```bash
-uv run clockwork --help
+clockwork --help
 uv run pytest tests/
-cd examples/composite-resources/simple-webapp && uv run clockwork apply
+cd examples/composite-resources/simple-webapp && clockwork apply
 ```
 
 **Platform**: macOS | **Runtime**: Apple Containers
@@ -226,7 +226,7 @@ lms load zai-org/glm-4.7-flash --ttl 3600
 lms ps
 
 # 4. Run Clockwork
-uv run clockwork show
+clockwork show
 ```
 
 **Auto-Loading**: Clockwork auto-loads models when using `localhost:1234` if not already loaded.
