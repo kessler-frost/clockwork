@@ -8,6 +8,7 @@ with AI completion status markers.
 import json
 from typing import Any
 
+import yaml
 from rich.console import Console
 from rich.tree import Tree
 
@@ -200,3 +201,30 @@ def _filter_ai_fields(resource_data: dict[str, Any]) -> dict[str, Any] | None:
                 filtered["children"].append(filtered_child)
 
     return filtered
+
+
+def format_resource_yaml(
+    resources: list[dict[str, Any]],
+    diff_only: bool = False,
+) -> str:
+    """
+    Format resources as a YAML string.
+
+    Args:
+        resources: List of formatted resource dicts
+        diff_only: If True, only include AI-completed fields
+
+    Returns:
+        YAML string representation
+    """
+    if diff_only:
+        filtered_resources = [
+            filtered
+            for resource in resources
+            if (filtered := _filter_ai_fields(resource))
+        ]
+        data = filtered_resources
+    else:
+        data = resources
+
+    return yaml.safe_dump(data, default_flow_style=False, sort_keys=False)

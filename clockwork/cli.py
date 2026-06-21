@@ -17,7 +17,11 @@ from . import __version__
 from .completion import CompletionCache
 from .core import ClockworkCore
 from .exceptions import CompletionError, format_completion_error
-from .formatters import format_resource_json, format_resource_tree
+from .formatters import (
+    format_resource_json,
+    format_resource_tree,
+    format_resource_yaml,
+)
 from .settings import get_settings
 
 # Setup
@@ -379,6 +383,11 @@ def show(
         "--json",
         help="Output in JSON format",
     ),
+    yaml_output: bool = typer.Option(
+        False,
+        "--yaml",
+        help="Output in YAML format",
+    ),
     diff: bool = typer.Option(
         False,
         "--diff",
@@ -399,7 +408,7 @@ def show(
 
     Displays what AI decided for each resource field, marking AI-completed
     fields with [AI]. Use --diff to only see AI-completed fields, or --json
-    for machine-readable output.
+    / --yaml for machine-readable output.
     """
     main_file = _get_main_file()
     console.print(_create_command_panel("Clockwork Show", "magenta"))
@@ -423,10 +432,19 @@ def show(
                 console.print("\n[yellow]No resources found.[/yellow]")
             return
 
+        # Machine-readable formats are mutually exclusive
+        if json_output and yaml_output:
+            console.print(
+                "[bold red]✗ Error:[/bold red] --json and --yaml are mutually exclusive"
+            )
+            raise typer.Exit(code=1)
+
         # Output format
         if json_output:
-            output = format_resource_json(resources, diff_only=diff)
-            console.print(output)
+            console.print(format_resource_json(resources, diff_only=diff))
+        elif yaml_output:
+            # Use print (not console.print) to emit raw YAML without markup
+            print(format_resource_yaml(resources, diff_only=diff))
         else:
             console.print()  # Add spacing
             format_resource_tree(resources, console, diff_only=diff)
@@ -560,6 +578,12 @@ def status(
         "--json",
         help="Output in JSON format",
     ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Show all resource details, not just key fields",
+    ),
     debug: bool = typer.Option(
         False,
         "--debug",
@@ -570,6 +594,9 @@ def status(
 
     Inspects currently deployed resources and shows their actual system state.
     Shows container status (running/stopped), file existence, git repo status, etc.
+
+    Use --verbose to display every detail field for each resource instead of
+    only the key fields.
     """
     main_file = _get_main_file()
 
@@ -636,7 +663,7 @@ def status(
             status_styled = _format_status(status_value)
 
             # Format details
-            details_str = _format_details(details)
+            details_str = _format_details(details, verbose=verbose)
 
             table.add_row(name, resource_type, status_styled, details_str)
 
@@ -686,11 +713,12 @@ def _format_status(status: str) -> str:
     return status_colors.get(status, f"[dim]{status}[/dim]")
 
 
-def _format_details(details: dict) -> str:
+def _format_details(details: dict, verbose: bool = False) -> str:
     """Format details dictionary as a string.
 
     Args:
         details: Details dictionary
+        verbose: If True, show every detail field; otherwise only key fields
 
     Returns:
         Formatted string
@@ -698,18 +726,20 @@ def _format_details(details: dict) -> str:
     if not details:
         return ""
 
-    parts = []
-    # Priority order for displaying details
+    # In verbose mode show every key; otherwise restrict to the key fields
     priority_keys = ["ports", "path", "branch", "image", "size", "children"]
+    keys = list(details.keys()) if verbose else priority_keys
 
-    for key in priority_keys:
-        if key in details:
-            value = details[key]
-            if isinstance(value, bool):
-                if value:
-                    parts.append(key)
-            else:
-                parts.append(f"{key}: {value}")
+    parts = []
+    for key in keys:
+        if key not in details:
+            continue
+        value = details[key]
+        if isinstance(value, bool):
+            if value:
+                parts.append(key)
+        else:
+            parts.append(f"{key}: {value}")
 
     return ", ".join(parts) if parts else ""
 

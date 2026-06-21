@@ -4,6 +4,7 @@ import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import yaml
 from rich.console import Console
 from typer.testing import CliRunner
 
@@ -15,6 +16,7 @@ from clockwork.formatters import (
     _format_value,
     format_resource_json,
     format_resource_tree,
+    format_resource_yaml,
 )
 from clockwork.resources import AppleContainerResource, BlankResource
 
@@ -150,20 +152,33 @@ class TestBuildResourceTree:
         assert "[AI]" in tree.label
 
     def test_diff_only_mode(self, sample_resource_data):
-        """Test diff_only mode only shows AI-completed fields."""
+        """diff_only mode renders only AI-completed field nodes."""
         tree = _build_resource_tree(sample_resource_data, diff_only=True)
 
-        # Should have tree
-        assert tree is not None
+        labels = [str(child.label) for child in tree.children]
+        # AI-completed fields appear with the [AI] marker.
+        assert any("image" in label and "[AI]" in label for label in labels)
+        assert any("ports" in label and "[AI]" in label for label in labels)
+        # Non-AI fields (env_vars) and the description must be omitted.
+        assert not any("env_vars" in label for label in labels)
+        assert not any("description" in label for label in labels)
 
     def test_composite_resource_with_children(self, sample_composite_data):
-        """Test building tree for composite resource."""
+        """Composite tree nests a children branch with each child."""
         tree = _build_resource_tree(sample_composite_data)
 
-        # Should have children branch
-        assert tree is not None
-        # Should contain webapp name
         assert "webapp" in tree.label
+        # There is a "children:" branch holding the two child trees.
+        children_branches = [
+            child for child in tree.children if "children" in str(child.label)
+        ]
+        assert len(children_branches) == 1
+        # Each child node's label is itself a nested Tree (the child resource).
+        child_labels = [
+            str(node.label.label) for node in children_branches[0].children
+        ]
+        assert any("postgres" in label for label in child_labels)
+        assert any("redis" in label for label in child_labels)
 
 
 class TestFilterAiFields:
@@ -220,29 +235,70 @@ class TestFormatResourceJson:
         assert parsed[0]["name"] == "postgres"
 
     def test_json_diff_only(self, sample_resource_data):
-        """Test JSON output with diff_only flag."""
+        """diff_only must keep only AI-completed fields, dropping the rest."""
         output = format_resource_json([sample_resource_data], diff_only=True)
 
         parsed = json.loads(output)
         assert isinstance(parsed, list)
-        # Should still have the resource (since it has AI fields)
         assert len(parsed) == 1
+        # sample fixture marks image + ports as AI-completed.
+        assert set(parsed[0]["fields"].keys()) == {"image", "ports"}
+        # Non-AI fields must be excluded.
+        assert "env_vars" not in parsed[0]["fields"]
+        assert "volumes" not in parsed[0]["fields"]
+
+
+class TestFormatResourceYaml:
+    """Tests for format_resource_yaml function."""
+
+    def test_yaml_output(self, sample_resource_data):
+        """YAML output round-trips to the original structure."""
+        output = format_resource_yaml([sample_resource_data])
+
+        parsed = yaml.safe_load(output)
+        assert isinstance(parsed, list)
+        assert len(parsed) == 1
+        assert parsed[0]["name"] == "postgres"
+        assert parsed[0]["fields"]["image"]["value"] == "postgres:15-alpine"
+        # Full YAML keeps non-AI fields.
+        assert "volumes" in parsed[0]["fields"]
+
+    def test_yaml_diff_only(self, sample_resource_data):
+        """diff_only YAML keeps only AI-completed fields."""
+        output = format_resource_yaml([sample_resource_data], diff_only=True)
+
+        parsed = yaml.safe_load(output)
+        assert len(parsed) == 1
+        assert set(parsed[0]["fields"].keys()) == {"image", "ports"}
+        assert "env_vars" not in parsed[0]["fields"]
+
+    def test_yaml_diff_only_composite(self, sample_composite_data):
+        """diff_only YAML preserves children that have AI fields."""
+        output = format_resource_yaml([sample_composite_data], diff_only=True)
+
+        parsed = yaml.safe_load(output)
+        assert len(parsed) == 1
+        children = parsed[0]["children"]
+        assert {c["name"] for c in children} == {"postgres", "redis"}
 
 
 class TestFormatResourceTree:
     """Tests for format_resource_tree function."""
 
     def test_format_empty_resources(self):
-        """Test formatting empty resource list."""
-        console = Console(force_terminal=True, width=120)
-        # Should not raise
+        """Empty list renders a 'No resources' notice."""
+        console = Console(record=True, width=120)
         format_resource_tree([], console)
+        assert "No resources to display" in console.export_text()
 
     def test_format_resources(self, sample_resource_data):
-        """Test formatting resources."""
-        console = Console(force_terminal=True, width=120)
-        # Should not raise
+        """Rendering a resource prints its name and AI markers."""
+        console = Console(record=True, width=120)
         format_resource_tree([sample_resource_data], console)
+        text = console.export_text()
+        assert "postgres" in text
+        # AI-completed fields are marked with [AI].
+        assert "[AI]" in text
 
 
 class TestClockworkCoreShow:
@@ -419,133 +475,180 @@ class TestShowCLI:
         assert result.exit_code == 1
         assert "main.py" in result.output.lower()
 
+    @staticmethod
+    def _mock_show(resources, ai_count=0):
+        """Build an AsyncMock for core.show returning the given resources."""
+        return AsyncMock(
+            return_value={
+                "resources": resources,
+                "resource_count": len(resources),
+                "ai_completed_count": ai_count,
+            }
+        )
+
+    def _invoke_show(self, runner, main_file, mock_show, args):
+        """Invoke `clockwork show` with a mocked core."""
+        with patch("clockwork.cli._initialize_core") as mock_init:
+            mock_core = MagicMock()
+            mock_core.show = mock_show
+            mock_init.return_value = mock_core
+            with patch("clockwork.cli._get_main_file", return_value=main_file):
+                return runner.invoke(app, args)
+
     def test_show_with_json_flag(self, runner, temp_dir):
-        """Test show command with --json flag."""
+        """--json must emit a parseable JSON array with the resource fields."""
         main_file = temp_dir / "main.py"
-        main_file.write_text(
-            """
-from clockwork.resources import AppleContainerResource
+        main_file.write_text("# resources")
 
-db = AppleContainerResource(
-    name="postgres",
-    image="postgres:15",
-    ports=["5432:5432"],
-)
-"""
+        resources = [
+            {
+                "name": "postgres",
+                "type": "AppleContainerResource",
+                "ai_completed_fields": ["image"],
+                "fields": {
+                    "image": {
+                        "value": "postgres:15",
+                        "ai_completed": True,
+                    },
+                    "volumes": {"value": [], "ai_completed": False},
+                },
+                "children": [],
+            }
+        ]
+        result = self._invoke_show(
+            runner,
+            main_file,
+            self._mock_show(resources, ai_count=1),
+            ["show", "--json"],
         )
 
-        with patch("clockwork.cli._initialize_core") as mock_init:
-            mock_core = MagicMock()
-            mock_core.show = AsyncMock(
-                return_value={
-                    "resources": [
-                        {
-                            "name": "postgres",
-                            "type": "AppleContainerResource",
-                            "ai_completed_fields": [],
-                            "fields": {},
-                            "children": [],
-                        }
-                    ],
-                    "resource_count": 1,
-                    "ai_completed_count": 0,
-                }
-            )
-            mock_init.return_value = mock_core
-
-            with patch("clockwork.cli._get_main_file", return_value=main_file):
-                result = runner.invoke(app, ["show", "--json"])
-
-        # Should execute successfully and output JSON content
         assert result.exit_code == 0
-        # The output should contain JSON array with resource name
-        assert '"postgres"' in result.output or "postgres" in result.output
+        # The JSON array is printed after the Rich panel; extract & parse it.
+        start = result.output.index("[")
+        parsed = json.loads(result.output[start:])
+        assert isinstance(parsed, list)
+        assert parsed[0]["name"] == "postgres"
+        assert parsed[0]["fields"]["image"]["value"] == "postgres:15"
+        # Full (non-diff) JSON keeps non-AI fields too.
+        assert "volumes" in parsed[0]["fields"]
 
-    def test_show_with_diff_flag(self, runner, temp_dir):
-        """Test show command with --diff flag."""
+    def test_show_with_diff_flag_json(self, runner, temp_dir):
+        """--diff --json must include only AI-completed fields."""
         main_file = temp_dir / "main.py"
-        main_file.write_text(
-            """
-from clockwork.resources import AppleContainerResource
+        main_file.write_text("# resources")
 
-db = AppleContainerResource(
-    name="postgres",
-    description="PostgreSQL database",
-)
-"""
+        resources = [
+            {
+                "name": "postgres",
+                "type": "AppleContainerResource",
+                "ai_completed_fields": ["image"],
+                "fields": {
+                    "image": {
+                        "value": "postgres:15-alpine",
+                        "ai_completed": True,
+                    },
+                    "volumes": {"value": [], "ai_completed": False},
+                    "env_vars": {
+                        "value": {"USER": "x"},
+                        "ai_completed": False,
+                    },
+                },
+                "children": [],
+            }
+        ]
+        result = self._invoke_show(
+            runner,
+            main_file,
+            self._mock_show(resources, ai_count=1),
+            ["show", "--diff", "--json"],
         )
 
-        with patch("clockwork.cli._initialize_core") as mock_init:
-            mock_core = MagicMock()
-            mock_core.show = AsyncMock(
-                return_value={
-                    "resources": [
-                        {
-                            "name": "postgres",
-                            "type": "AppleContainerResource",
-                            "ai_completed_fields": ["image", "ports"],
-                            "fields": {
-                                "image": {
-                                    "value": "postgres:15-alpine",
-                                    "ai_completed": True,
-                                },
-                                "ports": {
-                                    "value": ["5432:5432"],
-                                    "ai_completed": True,
-                                },
-                            },
-                            "children": [],
-                        }
-                    ],
-                    "resource_count": 1,
-                    "ai_completed_count": 1,
-                }
-            )
-            mock_init.return_value = mock_core
-
-            with patch("clockwork.cli._get_main_file", return_value=main_file):
-                result = runner.invoke(app, ["show", "--diff"])
-
-        # Should execute without error
-        # The diff mode should only show AI-completed fields
         assert result.exit_code == 0
+        start = result.output.index("[")
+        parsed = json.loads(result.output[start:])
+        # Only the AI-completed field survives diff filtering.
+        assert set(parsed[0]["fields"].keys()) == {"image"}
+        assert "volumes" not in parsed[0]["fields"]
+        assert "env_vars" not in parsed[0]["fields"]
+
+    def test_show_with_yaml_flag(self, runner, temp_dir):
+        """--yaml must emit parseable YAML with the resource fields."""
+        main_file = temp_dir / "main.py"
+        main_file.write_text("# resources")
+
+        resources = [
+            {
+                "name": "redis",
+                "type": "AppleContainerResource",
+                "ai_completed_fields": ["image"],
+                "fields": {
+                    "image": {"value": "redis:7", "ai_completed": True},
+                },
+                "children": [],
+            }
+        ]
+        result = self._invoke_show(
+            runner,
+            main_file,
+            self._mock_show(resources, ai_count=1),
+            ["show", "--yaml"],
+        )
+
+        assert result.exit_code == 0
+        # YAML is printed after the panel; find the list start.
+        start = result.output.index("- name:")
+        parsed = yaml.safe_load(result.output[start:])
+        assert parsed[0]["name"] == "redis"
+        assert parsed[0]["fields"]["image"]["value"] == "redis:7"
+
+    def test_show_json_and_yaml_mutually_exclusive(self, runner, temp_dir):
+        """--json and --yaml together must fail with a clear error."""
+        main_file = temp_dir / "main.py"
+        main_file.write_text("# resources")
+
+        resources = [
+            {
+                "name": "x",
+                "type": "AppleContainerResource",
+                "ai_completed_fields": [],
+                "fields": {},
+                "children": [],
+            }
+        ]
+        result = self._invoke_show(
+            runner,
+            main_file,
+            self._mock_show(resources),
+            ["show", "--json", "--yaml"],
+        )
+
+        assert result.exit_code == 1
+        assert "mutually exclusive" in result.output
 
     def test_show_specific_resource(self, runner, temp_dir):
-        """Test show command with specific resource name."""
+        """A resource name argument must be passed through to core.show."""
         main_file = temp_dir / "main.py"
-        main_file.write_text(
-            """
-from clockwork.resources import AppleContainerResource
+        main_file.write_text("# resources")
 
-db = AppleContainerResource(name="postgres", image="postgres:15", ports=["5432:5432"])
-cache = AppleContainerResource(name="redis", image="redis:7", ports=["6379:6379"])
-"""
+        mock_show = self._mock_show(
+            [
+                {
+                    "name": "postgres",
+                    "type": "AppleContainerResource",
+                    "ai_completed_fields": [],
+                    "fields": {},
+                    "children": [],
+                }
+            ]
+        )
+        result = self._invoke_show(
+            runner, main_file, mock_show, ["show", "postgres"]
         )
 
-        with patch("clockwork.cli._initialize_core") as mock_init:
-            mock_core = MagicMock()
-            mock_core.show = AsyncMock(
-                return_value={
-                    "resources": [
-                        {
-                            "name": "postgres",
-                            "type": "AppleContainerResource",
-                            "ai_completed_fields": [],
-                            "fields": {},
-                            "children": [],
-                        }
-                    ],
-                    "resource_count": 1,
-                    "ai_completed_count": 0,
-                }
-            )
-            mock_init.return_value = mock_core
-
-            with patch("clockwork.cli._get_main_file", return_value=main_file):
-                result = runner.invoke(app, ["show", "postgres"])
-
-        # Should execute and filter to only postgres
         assert result.exit_code == 0
+        # The positional argument must reach core.show as resource_name.
+        assert mock_show.call_args.kwargs["resource_name"] == "postgres"
+        assert "postgres" in result.output
 
 
 class TestAiCompletedFieldsTracking:
