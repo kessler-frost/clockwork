@@ -288,6 +288,7 @@ db = AppleContainerResource(
                     api_key="test-key",  # pragma: allowlist secret
                     model="test-model",
                     base_url="http://localhost",
+                    cache_enabled=False,
                 )
 
                 core = ClockworkCore(
@@ -329,6 +330,7 @@ db = AppleContainerResource(
                     api_key="test-key",  # pragma: allowlist secret
                     model="test-model",
                     base_url="http://localhost",
+                    cache_enabled=False,
                 )
 
                 core = ClockworkCore(
@@ -353,6 +355,7 @@ class TestFormatResourceForShow:
                 api_key="test-key",  # pragma: allowlist secret
                 model="test-model",
                 base_url="http://localhost",
+                cache_enabled=False,
             )
 
             core = ClockworkCore(api_key="test-key")  # pragma: allowlist secret
@@ -379,6 +382,7 @@ class TestFormatResourceForShow:
                 api_key="test-key",  # pragma: allowlist secret
                 model="test-model",
                 base_url="http://localhost",
+                cache_enabled=False,
             )
 
             core = ClockworkCore(api_key="test-key")  # pragma: allowlist secret
@@ -558,6 +562,7 @@ class TestAiCompletedFieldsTracking:
                 api_key="test-key",  # pragma: allowlist secret
                 model="test-model",
                 base_url="http://localhost",
+                cache_enabled=False,
             )
 
             completer = ResourceCompleter(

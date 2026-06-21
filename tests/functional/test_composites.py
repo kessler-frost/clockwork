@@ -97,10 +97,10 @@ def cleanup_containers():
 
 @pytest.fixture(scope="module", autouse=True)
 def require_llm():
-    """Fail all tests in this module if LLM is not available."""
+    """Skip this module if an LLM endpoint is not available (env-gated)."""
     available, message = check_llm_available()
     if not available:
-        pytest.fail(f"LLM endpoint required for functional tests: {message}")
+        pytest.skip(f"LLM endpoint required for functional tests: {message}")
 
 
 # =============================================================================
@@ -248,9 +248,9 @@ print("✓ Nested composites configured")
             assert exit_code == 0, f"Plan failed:\\n{stderr}"
 
             # Should see composite/two-phase completion
-            assert (
-                "composite" in stderr.lower() or "Phase" in stderr
-            ), "Expected composite completion logs"
+            assert "composite" in stderr.lower() or "Phase" in stderr, (
+                "Expected composite completion logs"
+            )
 
             # Apply
             exit_code, stdout, stderr = run_clockwork_command(
@@ -362,9 +362,9 @@ print("✓ Composite with container configured")
                     c for c in containers if c.get("status") != "stopped"
                 ]
                 print(f"Running containers: {len(running)}")
-                assert (
-                    len(running) >= 1
-                ), "Expected at least 1 container running"
+                assert len(running) >= 1, (
+                    "Expected at least 1 container running"
+                )
 
             # Assert
             exit_code, stdout, stderr = run_clockwork_command(

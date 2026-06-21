@@ -139,9 +139,9 @@ test = FileResource(
 
         # Total should be >= sum of parts (approximately)
         parts_sum = timings["load"] + timings["complete"] + timings["deploy"]
-        assert (
-            timings["total"] >= parts_sum * 0.99
-        ), "Total should be >= sum of parts"
+        assert timings["total"] >= parts_sum * 0.99, (
+            "Total should be >= sum of parts"
+        )
 
     @pytest.mark.asyncio
     async def test_plan_returns_timings(self, tmp_path):

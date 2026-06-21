@@ -121,10 +121,10 @@ def cleanup_containers():
 
 @pytest.fixture(scope="module", autouse=True)
 def require_llm():
-    """Fail all tests in this module if LLM is not available."""
+    """Skip this module if an LLM endpoint is not available (env-gated)."""
     available, message = check_llm_available()
     if not available:
-        pytest.fail(f"LLM endpoint required for functional tests: {message}")
+        pytest.skip(f"LLM endpoint required for functional tests: {message}")
 
 
 # =============================================================================
@@ -177,9 +177,9 @@ print("✓ Fully specified resources - no intelligence needed")
             assert exit_code == 0, f"Plan failed:\\n{stderr}"
 
             # Verify no completion was needed
-            assert (
-                "already complete" in stderr.lower()
-            ), "Expected 'already complete' in logs for fully specified resources"
+            assert "already complete" in stderr.lower(), (
+                "Expected 'already complete' in logs for fully specified resources"
+            )
 
             # Apply
             exit_code, stdout, stderr = run_clockwork_command(
@@ -197,9 +197,9 @@ print("✓ Fully specified resources - no intelligence needed")
             time.sleep(3)
             running = get_running_container_ids()
             print(f"Running containers: {running}")
-            assert (
-                len(running) >= 1
-            ), f"Expected container running, found {len(running)}"
+            assert len(running) >= 1, (
+                f"Expected container running, found {len(running)}"
+            )
 
             # Assert
             exit_code, stdout, stderr = run_clockwork_command(
@@ -265,9 +265,9 @@ print("✓ Partially specified resources - intelligence fills gaps")
             assert exit_code == 0, f"Plan failed:\\n{stderr}"
 
             # Verify completion occurred
-            assert (
-                "Completed" in stderr or "Queuing" in stderr
-            ), "Expected completion activity in logs"
+            assert "Completed" in stderr or "Queuing" in stderr, (
+                "Expected completion activity in logs"
+            )
 
             # Apply
             exit_code, stdout, stderr = run_clockwork_command(
@@ -282,9 +282,9 @@ print("✓ Partially specified resources - intelligence fills gaps")
             content = config_path.read_text()
             print(f"Generated config content:\\n{content}")
             # Should have some config-like content
-            assert (
-                len(content) > 10
-            ), "Expected generated content in config file"
+            assert len(content) > 10, (
+                "Expected generated content in config file"
+            )
 
             # Verify container
             time.sleep(5)
@@ -341,12 +341,12 @@ print("✓ Description-only resources - full intelligence needed")
             assert exit_code == 0, f"Plan failed:\\n{stderr}"
 
             # Verify completion occurred
-            assert (
-                "Queuing resource for completion" in stderr
-            ), "Expected resources to be queued for completion"
-            assert (
-                "Completed resource" in stderr
-            ), "Expected resources to be completed"
+            assert "Queuing resource for completion" in stderr, (
+                "Expected resources to be queued for completion"
+            )
+            assert "Completed resource" in stderr, (
+                "Expected resources to be completed"
+            )
 
             # Apply
             exit_code, stdout, stderr = run_clockwork_command(
@@ -364,17 +364,17 @@ print("✓ Description-only resources - full intelligence needed")
                 and not f.name.startswith(".")
             ]
             print(f"Created files: {[f.name for f in created_files]}")
-            assert (
-                len(created_files) >= 2
-            ), f"Expected at least 2 files, found {len(created_files)}"
+            assert len(created_files) >= 2, (
+                f"Expected at least 2 files, found {len(created_files)}"
+            )
 
             # Verify content was generated
             for f in created_files:
                 content = f.read_text()
                 print(f"\\n{f.name}:\\n{content[:200]}...")
-                assert (
-                    len(content) > 20
-                ), f"Expected meaningful content in {f.name}"
+                assert len(content) > 20, (
+                    f"Expected meaningful content in {f.name}"
+                )
 
         finally:
             run_clockwork_command("destroy", test_dir, timeout=120)
@@ -467,9 +467,9 @@ print("✓ Mixed intelligence test configured")
             # Check container is running
             running = get_running_container_ids()
             print(f"Running containers: {running}")
-            assert (
-                len(running) >= 1
-            ), f"Expected at least 1 container, found {len(running)}"
+            assert len(running) >= 1, (
+                f"Expected at least 1 container, found {len(running)}"
+            )
 
             # Run assertions
             exit_code, stdout, stderr = run_clockwork_command(
@@ -545,9 +545,9 @@ print("✓ Composite with mixed children configured")
             assert exit_code == 0, f"Plan failed:\\n{stderr}"
 
             # Should see composite completion
-            assert (
-                "composite" in stderr.lower() or "Phase" in stderr
-            ), "Expected composite/two-phase completion in logs"
+            assert "composite" in stderr.lower() or "Phase" in stderr, (
+                "Expected composite/two-phase completion in logs"
+            )
 
             # Apply
             exit_code, stdout, stderr = run_clockwork_command(
@@ -559,17 +559,17 @@ print("✓ Composite with mixed children configured")
             # Verify files
             req_file = test_dir / "requirements.txt"
             assert req_file.exists(), "requirements.txt not created"
-            assert (
-                "requests" in req_file.read_text()
-            ), "requirements.txt should have exact content"
+            assert "requests" in req_file.read_text(), (
+                "requirements.txt should have exact content"
+            )
 
             setup_file = test_dir / "setup.py"
             assert setup_file.exists(), "setup.py not created"
             setup_content = setup_file.read_text()
             print(f"Generated setup.py:\\n{setup_content}")
-            assert (
-                len(setup_content) > 20
-            ), "setup.py should have generated content"
+            assert len(setup_content) > 20, (
+                "setup.py should have generated content"
+            )
 
             # Find the gitignore (name was generated)
             gitignore_candidates = list(test_dir.glob("*ignore*")) + list(

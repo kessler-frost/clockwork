@@ -128,9 +128,9 @@ class TestBatchCompletion:
             time_spread = max(call_times) - min(call_times)
             # In parallel, they should start almost simultaneously
             # Allow some tolerance for test environment variations
-            assert (
-                time_spread < 0.1
-            ), f"Calls spread over {time_spread}s, expected parallel"
+            assert time_spread < 0.1, (
+                f"Calls spread over {time_spread}s, expected parallel"
+            )
 
 
 class TestHelperMethods:

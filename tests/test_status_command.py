@@ -647,6 +647,8 @@ config = FileResource(
         mock_settings.base_url = "http://test"
         mock_settings.pulumi_config_passphrase = "test"
         mock_settings.log_level = "INFO"
+        # Disable caching so no cache dir is created from a mock cache_dir.
+        mock_settings.cache_enabled = False
 
         with (
             patch(
@@ -703,6 +705,8 @@ config = FileResource(
         mock_settings.base_url = "http://test"
         mock_settings.pulumi_config_passphrase = "test"
         mock_settings.log_level = "INFO"
+        # Disable caching so no cache dir is created from a mock cache_dir.
+        mock_settings.cache_enabled = False
 
         with (
             patch(

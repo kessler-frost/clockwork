@@ -588,7 +588,14 @@ def status(
         if json_output:
             # Output as JSON
             console.print(json.dumps(result, indent=2, default=str))
+            if not result.get("success", True):
+                raise typer.Exit(code=1)
             return
+
+        # A failed status (e.g. main.py could not be loaded) must surface as a
+        # clear error and non-zero exit, not a silent "No resources found".
+        if not result.get("success", True):
+            raise RuntimeError(result.get("error", "Status check failed"))
 
         # Display Pulumi state info
         pulumi_state = result.get("pulumi_state", {})
