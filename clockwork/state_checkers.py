@@ -137,16 +137,136 @@ class BaseStateChecker(ABC):
 
 
 class ContainerStateChecker(BaseStateChecker):
-    """State checker for Apple Container resources.
+    """State checker for container resources.
 
-    Queries the Apple Container CLI to get container status.
+    Queries the Apple Container CLI (AppleContainerResource) or the Docker CLI
+    (DockerResource) to get container status. Both runtimes tag managed
+    containers with a `clockwork.name` label used for lookup.
     """
 
+    _CONTAINER_TYPES: ClassVar[set[str]] = {
+        "AppleContainerResource",
+        "DockerResource",
+    }
+
     def can_check(self, resource: "Resource") -> bool:
-        """Check if resource is an AppleContainerResource."""
-        return resource.__class__.__name__ == "AppleContainerResource"
+        """Check if resource is a supported container resource."""
+        return resource.__class__.__name__ in self._CONTAINER_TYPES
 
     async def check(self, resource: "Resource") -> ResourceState:
+        """Check container status via the appropriate runtime CLI.
+
+        Dispatches to the Docker CLI for DockerResource and the Apple
+        Container CLI for AppleContainerResource.
+
+        Args:
+            resource: Container resource to check
+
+        Returns:
+            ResourceState with container status
+        """
+        if resource.__class__.__name__ == "DockerResource":
+            return await self._check_docker(resource)
+        return await self._check_apple(resource)
+
+    async def _check_docker(self, resource: "Resource") -> ResourceState:
+        """Check Docker container status via `docker ps`.
+
+        Looks up the container by its `clockwork.name` label and reports the
+        running/exited state plus image and id details.
+
+        Args:
+            resource: DockerResource to check
+
+        Returns:
+            ResourceState with container status
+        """
+        resource_name = resource.name or "unknown"
+        resource_type = resource.__class__.__name__
+
+        try:
+            cmd = [
+                "docker",
+                "ps",
+                "-a",
+                "--filter",
+                f"label=clockwork.name={resource_name}",
+                "--format",
+                "{{json .}}",
+            ]
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=10
+            )
+
+            if result.returncode != 0:
+                return ResourceState(
+                    name=resource_name,
+                    resource_type=resource_type,
+                    status=ResourceStatus.ERROR.value,
+                    details={},
+                    error=f"docker ps failed: {result.stderr.strip()}",
+                )
+
+            lines = [
+                line for line in result.stdout.splitlines() if line.strip()
+            ]
+            if not lines:
+                return ResourceState(
+                    name=resource_name,
+                    resource_type=resource_type,
+                    status=ResourceStatus.MISSING.value,
+                    details={},
+                )
+
+            container = json.loads(lines[0])
+
+            # docker State is "running", "exited", "created", etc.
+            docker_state = container.get("State", "").lower()
+            status_map = {
+                "running": ResourceStatus.RUNNING.value,
+                "exited": ResourceStatus.STOPPED.value,
+                "created": ResourceStatus.STOPPED.value,
+                "paused": ResourceStatus.STOPPED.value,
+            }
+            status = status_map.get(docker_state, docker_state or "unknown")
+
+            details: dict[str, Any] = {}
+            if getattr(resource, "ports", None):
+                details["ports"] = ", ".join(resource.ports)
+            if container.get("Image"):
+                details["image"] = container["Image"]
+            if container.get("ID"):
+                details["container_id"] = container["ID"][:12]
+
+            return ResourceState(
+                name=resource_name,
+                resource_type=resource_type,
+                status=status,
+                details=details,
+            )
+
+        except FileNotFoundError:
+            logger.error(f"Docker CLI not found for {resource_name}")
+            return ResourceState(
+                name=resource_name,
+                resource_type=resource_type,
+                status=ResourceStatus.ERROR.value,
+                details={},
+                error="docker CLI not found",
+            )
+        except (
+            subprocess.TimeoutExpired,
+            json.JSONDecodeError,
+            PermissionError,
+        ) as e:
+            return self._handle_check_error(e, resource_name, resource_type)
+        except Exception as e:
+            logger.exception(
+                f"Unexpected error checking state for {resource_name}: {e}"
+            )
+            return self._handle_check_error(e, resource_name, resource_type)
+
+    async def _check_apple(self, resource: "Resource") -> ResourceState:
         """Check if an Apple Container is running.
 
         Uses `container list --format json` to query container status.

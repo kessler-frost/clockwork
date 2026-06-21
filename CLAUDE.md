@@ -109,7 +109,7 @@ AppleContainerResource(description="web server", assertions=[HealthcheckAssert(.
 
 ## Resources
 
-**Containers**: AppleContainerResource | **Files**: FileResource | **Other**: GitRepoResource, BlankResource (composition)
+**Containers**: AppleContainerResource (macOS), DockerResource (cross-platform) | **Files**: FileResource | **Other**: GitRepoResource, BlankResource (composition)
 
 All support intelligent completion via `description`.
 

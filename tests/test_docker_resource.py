@@ -527,28 +527,60 @@ class TestDockerContainerProvider:
         assert "hello" in cmd
 
 
-# Integration tests - skip if Docker is not available
-@pytest.mark.skip(
-    reason="Integration tests require Docker and are not implemented yet"
+def _docker_available() -> bool:
+    """Return True if a working Docker daemon is reachable."""
+    from clockwork.platform import is_docker_available
+
+    return is_docker_available()
+
+
+# Integration tests run against a real Docker daemon when one is reachable and
+# are skipped cleanly otherwise (e.g. local dev / CI without Docker). They
+# exercise the DockerContainerProvider lifecycle end-to-end.
+@pytest.mark.skipif(
+    not _docker_available(),
+    reason="Docker daemon not available (live integration test)",
 )
 class TestDockerResourceIntegration:
-    """Integration tests for DockerResource (require Docker).
-
-    These tests are skipped by default as they require Docker to be
-    installed and running. They are intended for CI environments
-    with Docker available.
-    """
+    """Integration tests for DockerResource against a live Docker daemon."""
 
     @pytest.fixture
-    def skip_if_no_docker(self):
-        """Skip test if Docker is not available."""
-        from clockwork.platform import is_docker_available
+    def provider(self):
+        """Provide a DockerContainerProvider instance."""
+        from clockwork.pulumi_providers.docker_container import (
+            DockerContainerProvider,
+        )
 
-        if not is_docker_available():
-            pytest.skip("Docker not available")
+        return DockerContainerProvider()
 
-    def test_docker_container_lifecycle(self, skip_if_no_docker):
-        """Test full container lifecycle with Docker."""
-        # This test would actually create/destroy containers
-        # Only run in CI environments with Docker available
-        pytest.skip("Integration test not implemented")
+    def test_docker_container_lifecycle(self, provider):
+        """Create, read, then delete a real container via the provider.
+
+        Uses a long-lived, lightweight image (busybox sleep) so the container
+        stays running between create and read.
+        """
+        from clockwork.pulumi_providers.docker_container import (
+            DockerContainerInputs,
+        )
+
+        name = "clockwork-it-busybox"
+        inputs = DockerContainerInputs(
+            image="busybox:latest",
+            container_name=name,
+            command="sleep 3600",
+        )
+        props = inputs.model_dump()
+
+        create_result = provider.create(props)
+        try:
+            assert create_result.id_  # docker returned a container id
+            # read should report the container as running
+            read_props = provider.read(create_result.id_, props)
+            assert read_props.get("status") == "running"
+        finally:
+            # Always clean up the container, even if assertions fail
+            provider.delete(create_result.id_, props)
+
+        # After delete, read returns props unchanged (container gone)
+        post = provider.read(create_result.id_, props)
+        assert post.get("status") != "running"

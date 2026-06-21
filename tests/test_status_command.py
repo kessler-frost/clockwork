@@ -235,6 +235,137 @@ class TestContainerStateChecker:
         assert "parse" in state.error.lower() or "json" in state.error.lower()
 
 
+class TestDockerStateChecker:
+    """Tests for ContainerStateChecker handling DockerResource.
+
+    These are unit tests: the Docker CLI is mocked, so no daemon is needed.
+    Live-daemon behaviour is exercised by the gated integration suite in
+    tests/test_docker_resource.py::TestDockerResourceIntegration.
+    """
+
+    def test_can_check_docker_resource(self):
+        """ContainerStateChecker also handles DockerResource."""
+        from clockwork.resources import DockerResource
+
+        checker = ContainerStateChecker()
+        resource = DockerResource(
+            name="redis", image="redis:7", ports=["6379:6379"]
+        )
+
+        assert checker.can_check(resource) is True
+
+    def test_get_checker_for_docker_resource(self):
+        """The registry routes DockerResource to ContainerStateChecker."""
+        from clockwork.resources import DockerResource
+
+        resource = DockerResource(
+            name="redis", image="redis:7", ports=["6379:6379"]
+        )
+        checker = get_checker_for_resource(resource)
+
+        assert isinstance(checker, ContainerStateChecker)
+
+    @pytest.mark.asyncio
+    async def test_check_docker_container_running(self):
+        """A running Docker container reports status 'running' with details."""
+        from clockwork.resources import DockerResource
+
+        checker = ContainerStateChecker()
+        resource = DockerResource(
+            name="redis", image="redis:7-alpine", ports=["6379:6379"]
+        )
+
+        docker_output = json.dumps(
+            {
+                "State": "running",
+                "Image": "redis:7-alpine",
+                "ID": "abcdef1234567890",  # pragma: allowlist secret
+            }
+        )
+        with patch("clockwork.state_checkers.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout=docker_output + "\n", stderr=""
+            )
+            state = await checker.check(resource)
+
+        assert state.status == "running"
+        assert state.name == "redis"
+        assert state.details["image"] == "redis:7-alpine"
+        assert state.details["container_id"] == "abcdef123456"
+        assert state.details["ports"] == "6379:6379"
+        # Must have queried docker (not the Apple `container` CLI).
+        assert mock_run.call_args[0][0][0] == "docker"
+
+    @pytest.mark.asyncio
+    async def test_check_docker_container_stopped(self):
+        """An exited Docker container maps to status 'stopped'."""
+        from clockwork.resources import DockerResource
+
+        checker = ContainerStateChecker()
+        resource = DockerResource(name="worker", image="busybox", ports=[])
+
+        docker_output = json.dumps(
+            {"State": "exited", "Image": "busybox", "ID": "deadbeef"}
+        )
+        with patch("clockwork.state_checkers.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout=docker_output + "\n", stderr=""
+            )
+            state = await checker.check(resource)
+
+        assert state.status == "stopped"
+
+    @pytest.mark.asyncio
+    async def test_check_docker_container_missing(self):
+        """No matching container yields status 'missing'."""
+        from clockwork.resources import DockerResource
+
+        checker = ContainerStateChecker()
+        resource = DockerResource(name="ghost", image="alpine", ports=[])
+
+        with patch("clockwork.state_checkers.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout="", stderr=""
+            )
+            state = await checker.check(resource)
+
+        assert state.status == "missing"
+
+    @pytest.mark.asyncio
+    async def test_check_docker_cli_not_found(self):
+        """A missing docker CLI surfaces a clear error, not a crash."""
+        from clockwork.resources import DockerResource
+
+        checker = ContainerStateChecker()
+        resource = DockerResource(name="x", image="alpine", ports=[])
+
+        with patch(
+            "clockwork.state_checkers.subprocess.run",
+            side_effect=FileNotFoundError("docker not found"),
+        ):
+            state = await checker.check(resource)
+
+        assert state.status == "error"
+        assert "docker CLI not found" in state.error
+
+    @pytest.mark.asyncio
+    async def test_check_docker_command_failed(self):
+        """A non-zero docker exit becomes an error state with stderr."""
+        from clockwork.resources import DockerResource
+
+        checker = ContainerStateChecker()
+        resource = DockerResource(name="x", image="alpine", ports=[])
+
+        with patch("clockwork.state_checkers.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=1, stdout="", stderr="permission denied"
+            )
+            state = await checker.check(resource)
+
+        assert state.status == "error"
+        assert "permission denied" in state.error
+
+
 class TestFileStateChecker:
     """Tests for FileStateChecker."""
 
@@ -730,3 +861,150 @@ config = FileResource(
         # Should not fail even if Pulumi state is unavailable
         assert result["success"] is True
         assert result["pulumi_state"]["available"] is False
+
+
+class TestStatusCLI:
+    """End-to-end tests for the `clockwork status` CLI command.
+
+    core.status() is mocked so these tests exercise the CLI's output and
+    exit-code behaviour, including the Wave 1 silent-failure fix.
+    """
+
+    @pytest.fixture
+    def runner(self):
+        """Create a CLI test runner."""
+        from typer.testing import CliRunner
+
+        return CliRunner()
+
+    def _invoke_status(self, runner, status_result, args):
+        """Invoke `clockwork status` with a mocked core.status()."""
+        from unittest.mock import AsyncMock
+
+        from clockwork.cli import app
+
+        with patch("clockwork.cli._initialize_core") as mock_init:
+            mock_core = MagicMock()
+            mock_core.status = AsyncMock(return_value=status_result)
+            mock_init.return_value = mock_core
+            with patch("clockwork.cli._get_main_file", return_value="main.py"):
+                return runner.invoke(app, args)
+
+    def test_status_load_failure_exits_nonzero(self, runner):
+        """A failed status must exit non-zero, not print 'No resources found'.
+
+        This guards the Wave 1 silent-failure fix: when main.py cannot be
+        loaded, status surfaces the error and exits 1 instead of silently
+        reporting an empty resource list.
+        """
+        result = self._invoke_status(
+            runner,
+            {
+                "success": False,
+                "error": "Failed to load resources: boom",
+                "pulumi_state": {"available": False},
+                "resources": [],
+            },
+            ["status"],
+        )
+
+        assert result.exit_code == 1
+        assert "No resources found" not in result.output
+        assert "boom" in result.output
+
+    def test_status_json_failure_exits_nonzero(self, runner):
+        """--json on a failed status emits JSON and exits non-zero."""
+        result = self._invoke_status(
+            runner,
+            {
+                "success": False,
+                "error": "Failed to load resources: boom",
+                "pulumi_state": {"available": False},
+                "resources": [],
+            },
+            ["status", "--json"],
+        )
+
+        assert result.exit_code == 1
+        # JSON body still emitted before the non-zero exit.
+        start = result.output.index("{")
+        parsed = json.loads(result.output[start:])
+        assert parsed["success"] is False
+
+    def test_status_json_success(self, runner):
+        """--json on success emits a parseable resources array, exit 0."""
+        result = self._invoke_status(
+            runner,
+            {
+                "success": True,
+                "pulumi_state": {"available": False, "error": "no stack"},
+                "resources": [
+                    {
+                        "name": "cfg",
+                        "type": "FileResource",
+                        "status": "exists",
+                        "details": {"path": "/tmp/x"},
+                    }
+                ],
+            },
+            ["status", "--json"],
+        )
+
+        assert result.exit_code == 0
+        start = result.output.index("{")
+        parsed = json.loads(result.output[start:])
+        assert parsed["resources"][0]["name"] == "cfg"
+
+    def test_status_table_output(self, runner):
+        """Default (table) output lists each resource's name and status."""
+        result = self._invoke_status(
+            runner,
+            {
+                "success": True,
+                "pulumi_state": {"available": False, "error": "no stack"},
+                "resources": [
+                    {
+                        "name": "redis",
+                        "type": "DockerResource",
+                        "status": "running",
+                        "details": {"image": "redis:7"},
+                    }
+                ],
+            },
+            ["status"],
+        )
+
+        assert result.exit_code == 0
+        assert "redis" in result.output
+        assert "running" in result.output
+
+    def test_status_verbose_shows_all_details(self, runner):
+        """--verbose includes detail fields omitted from the default view."""
+        status_result = {
+            "success": True,
+            "pulumi_state": {"available": False, "error": "no stack"},
+            "resources": [
+                {
+                    "name": "cfg",
+                    "type": "FileResource",
+                    "status": "exists",
+                    "details": {
+                        "path": "/tmp/x",
+                        "size": "1.0KB",
+                        "mode": "644",
+                        "modified": "2026-01-01",
+                    },
+                }
+            ],
+        }
+
+        default = self._invoke_status(runner, status_result, ["status"])
+        verbose = self._invoke_status(
+            runner, status_result, ["status", "--verbose"]
+        )
+
+        assert default.exit_code == 0
+        assert verbose.exit_code == 0
+        # 'mode' is not a key field, so only --verbose surfaces it.
+        assert "mode" not in default.output
+        assert "mode" in verbose.output
