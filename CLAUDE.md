@@ -246,6 +246,11 @@ clockwork/
 └── pyproject.toml
 ```
 
+## Private Local Material
+
+- `.local/` contains private, gitignored working notes; consult it only when relevant to the task.
+- Never copy `.local/` content into tracked files, commits, PRs, issues, logs, or external tools without explicit permission.
+
 ## Development
 
 **Adding Resources**:

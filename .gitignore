@@ -49,6 +49,9 @@ dmypy.json
 *.swo
 .claude/
 
+# Private local working material
+/.local/
+
 # Clockwork specific
 clockwork/_version.py
 .clockwork/
