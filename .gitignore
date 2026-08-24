@@ -51,6 +51,7 @@ dmypy.json
 
 # Private local working material
 /.local/
+/.context/compound-engineering/
 
 # Clockwork specific
 clockwork/_version.py
