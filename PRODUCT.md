@@ -50,7 +50,7 @@ The product name is Clockwork. **Clockwork Workbench** is the canonical name for
 
 - `README.md` documents the product mechanism, current resource examples, and CLI workflow.
 - `clockwork/cli.py` and `clockwork/formatters.py` define the current lifecycle actions, hierarchy, statuses, and provenance display.
-- `.local/clockwork-vnext-research.md` records the product judgment, initial wedge, semantic graph grammar, visual co-authoring guardrails, and React Flow as the intended projection layer.
+- `docs/plans/2026-08-24-0455-feat-clockwork-stateful-canvas-prototypes-plan.md` records the Clockwork Workbench graph grammar, visual co-authoring guardrails, lifecycle, interaction requirements, and current prototype directions.
 - The repository has no existing web frontend, design system, logo, customer proof, benchmarks, or production UI imagery. Future surfaces must not fabricate commercial claims.
 
 ## Product Principles

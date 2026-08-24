@@ -1,0 +1,1469 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Clockwork — Motion Compiler</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Spline+Sans:wght@400;500;600&family=Spline+Sans+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: dark;
+      --graphite-100: #151a1d;
+      --graphite-95: #191f22;
+      --graphite-90: #1e2529;
+      --graphite-85: #252d31;
+      --graphite-80: #2b3439;
+      --graphite-70: #3a454b;
+      --graphite-60: #505c62;
+      --mist: #aab3b2;
+      --fog: #cbd0cb;
+      --chalk: #edf0e8;
+      --stage: #eef0e8;
+      --stage-soft: #e2e5dc;
+      --stage-line: #c5cbc2;
+      --stage-line-strong: #98a39c;
+      --stage-ink: #1c2427;
+      --stage-muted: #68736d;
+      --copper: #df8752;
+      --copper-soft: #f0b187;
+      --copper-deep: #895037;
+      --sage: #8ea697;
+      --sage-deep: #536b5e;
+      --amber: #d9a45c;
+      --danger: #d06f64;
+      --danger-deep: #87443f;
+      --relation-calls: #5f7069;
+      --relation-data: #3f635c;
+      --relation-storage: #806b51;
+      --relation-jobs: #765e6b;
+      --focus-ring: #f3bc98;
+      --font-ui: "Spline Sans", "Avenir Next", sans-serif;
+      --font-data: "Spline Sans Mono", ui-monospace, monospace;
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 24px;
+      --radius-1: 3px;
+      --radius-2: 6px;
+      --radius-3: 10px;
+      --line: 1px;
+      --hover-time: 120ms;
+      --settle-time: 420ms;
+      --panel-time: 480ms;
+      --hover-ease: cubic-bezier(.2, .72, .2, 1);
+      --spring-snappy: linear(0, .11 4%, .39 8%, .72 13%, .96 18%, 1.06 23%, 1.07 28%, 1.035 37%, 1.008 49%, .998 61%, 1.002 74%, 1);
+      --spring-settle: linear(0, .07 3%, .29 7%, .62 12%, .91 17%, 1.05 22%, 1.075 27%, 1.045 34%, 1.012 44%, .997 57%, 1.002 72%, 1);
+    }
+    :root {
+      --stage: #14191d;
+      --stage-soft: #1a2024;
+      --stage-line: #2c3539;
+      --stage-line-strong: #49555b;
+      --stage-ink: #edf0e8;
+      --stage-muted: #9aa59f;
+      --copper: #e39767;
+      --copper-soft: #f0b187;
+      --copper-deep: #bc7650;
+      --sage: #91b6a2;
+      --sage-deep: #6f9981;
+      --relation-calls: #8da49a;
+      --relation-data: #78a99f;
+      --relation-storage: #ae916a;
+      --relation-jobs: #9e8194;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { width: 1280px; height: 720px; margin: 0; overflow: hidden; }
+    body {
+      background: var(--graphite-100);
+      color: var(--chalk);
+      font-family: var(--font-ui);
+      font-size: 11px;
+      line-height: 1.35;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: geometricPrecision;
+    }
+
+    ::selection { color: var(--graphite-100); background: var(--copper-soft); }
+    * { scrollbar-color: var(--graphite-60) var(--graphite-90); scrollbar-width: thin; }
+    *::-webkit-scrollbar { width: var(--space-2); height: var(--space-2); }
+    *::-webkit-scrollbar-track { background: var(--graphite-90); }
+    *::-webkit-scrollbar-thumb { background: var(--graphite-60); border: 2px solid var(--graphite-90); border-radius: var(--radius-1); }
+    button { color: inherit; font: inherit; }
+    button:focus-visible, [tabindex]:focus-visible {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 2px;
+    }
+    button:disabled { cursor: not-allowed; opacity: .38; }
+
+    .icon-button,
+    .plain-button,
+    .plane-button,
+    .tree-row,
+    .collapse-button,
+    .evidence-button,
+    .action-button,
+    .mini-button,
+    .composite-button {
+      border: 0;
+      cursor: pointer;
+      transition: color var(--hover-time) var(--hover-ease), background-color var(--hover-time) var(--hover-ease), border-color var(--hover-time) var(--hover-ease), opacity var(--hover-time) var(--hover-ease), transform var(--hover-time) var(--hover-ease), box-shadow var(--hover-time) var(--hover-ease);
+    }
+
+    .app {
+      width: 1280px;
+      height: 720px;
+      display: grid;
+      grid-template-rows: 44px 474px 202px;
+      background: var(--graphite-100);
+      overflow: hidden;
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: 184px minmax(0, 1fr) auto;
+      align-items: stretch;
+      border-bottom: var(--line) solid var(--graphite-60);
+      background: var(--graphite-85);
+      position: relative;
+      z-index: 20;
+    }
+    .brand-lockup {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: 0 var(--space-3);
+      border-right: var(--line) solid var(--graphite-60);
+    }
+    .brand-mark { width: 21px; height: 21px; color: var(--chalk); }
+    .brand-name { font-weight: 600; letter-spacing: -.025em; }
+    .brand-mode { color: var(--mist); font-family: var(--font-data); font-size: 7px; letter-spacing: .05em; }
+    .document-bar { display: flex; align-items: center; justify-content: space-between; min-width: 0; padding: 0 var(--space-3); }
+    .document-crumb { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; }
+    .document-crumb strong { font-size: 11px; font-weight: 500; }
+    .document-crumb code { color: var(--mist); font-family: var(--font-data); font-size: 8px; }
+    .tool-cluster { display: flex; align-items: center; gap: var(--space-1); }
+    .icon-button {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      padding: 0;
+      color: var(--mist);
+      background: transparent;
+      border-radius: var(--radius-1);
+    }
+    .icon-button svg { width: 15px; height: 15px; }
+    .icon-button.is-active, .icon-button[aria-pressed="true"] { color: var(--graphite-100); background: var(--chalk); }
+    .top-status {
+      min-width: 250px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: var(--space-2);
+      padding: 0 var(--space-3);
+      border-left: var(--line) solid var(--graphite-60);
+      color: var(--fog);
+    }
+    .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--sage); box-shadow: 0 0 0 3px rgba(142, 166, 151, .13); }
+    .top-status strong { font-size: 9px; font-weight: 500; }
+    .top-status span:last-child { color: var(--mist); font-family: var(--font-data); font-size: 7px; }
+
+    .editor {
+      --hierarchy-width: 184px;
+      --inspector-width: 252px;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: var(--hierarchy-width) minmax(0, 1fr) var(--inspector-width);
+      background: var(--graphite-90);
+      transition: grid-template-columns var(--panel-time) var(--spring-settle);
+    }
+    .editor.hierarchy-collapsed { --hierarchy-width: 38px; }
+    .editor.inspector-collapsed { --inspector-width: 38px; }
+
+    .hierarchy, .inspector { min-width: 0; overflow: hidden; background: var(--graphite-85); position: relative; z-index: 5; }
+    .hierarchy { border-right: var(--line) solid var(--graphite-60); }
+    .inspector { border-left: var(--line) solid var(--graphite-60); }
+    .panel-heading {
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 var(--space-2) 0 var(--space-3);
+      border-bottom: var(--line) solid var(--graphite-60);
+      white-space: nowrap;
+    }
+    .panel-heading h2 { margin: 0; font-size: 9px; font-weight: 500; letter-spacing: .035em; }
+    .collapse-button {
+      width: 24px;
+      height: 24px;
+      flex: 0 0 auto;
+      display: grid;
+      place-items: center;
+      padding: 0;
+      color: var(--mist);
+      background: transparent;
+      border-radius: var(--radius-1);
+    }
+    .collapse-button svg { width: 13px; height: 13px; }
+    .inspector .collapse-button svg { transform: rotate(180deg); }
+    .hierarchy-collapsed .hierarchy .panel-heading, .inspector-collapsed .inspector .panel-heading { padding-left: 6px; padding-right: 6px; }
+    .hierarchy-collapsed .hierarchy h2, .inspector-collapsed .inspector h2 { opacity: 0; width: 0; }
+    .hierarchy-body, .inspector-body { transition: opacity var(--hover-time) var(--hover-ease); }
+    .hierarchy-collapsed .hierarchy-body, .inspector-collapsed .inspector-body { opacity: 0; pointer-events: none; }
+
+    .hierarchy-body { height: 438px; padding: var(--space-2) 0; overflow: hidden; }
+    .tree-label {
+      height: 25px;
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: 0 var(--space-3);
+      color: var(--mist);
+      font-size: 8px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+    .tree-label svg { width: 11px; height: 11px; }
+    .tree-row {
+      width: 100%;
+      height: 29px;
+      display: grid;
+      grid-template-columns: 14px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: var(--space-2);
+      padding: 0 var(--space-3) 0 var(--space-4);
+      color: var(--fog);
+      text-align: left;
+      background: transparent;
+      white-space: nowrap;
+    }
+    .tree-row svg { width: 13px; height: 13px; color: var(--mist); }
+    .tree-row span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; }
+    .tree-id { color: var(--mist); font-family: var(--font-data); font-size: 7px; }
+    .tree-row.is-selected { color: var(--chalk); background: var(--graphite-70); box-shadow: inset 2px 0 0 var(--copper); }
+    .tree-row.is-selected svg { color: var(--copper-soft); }
+    .tree-divider { height: 1px; margin: var(--space-2) var(--space-3); background: var(--graphite-60); opacity: .7; }
+    .hierarchy-foot { margin: var(--space-4) var(--space-3) 0; padding-top: var(--space-3); border-top: var(--line) solid var(--graphite-60); }
+    .hierarchy-foot strong { display: block; margin-bottom: var(--space-2); color: var(--fog); font-size: 8px; font-weight: 500; }
+    .legend-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
+    .legend-item { display: flex; align-items: center; gap: 6px; color: var(--mist); font-family: var(--font-data); font-size: 6.5px; }
+    .legend-mark { width: 8px; height: 8px; border: var(--line) solid var(--mist); }
+    .legend-mark.inferred { border-radius: 50%; }
+    .legend-mark.resolved { border-color: var(--copper); transform: rotate(45deg); }
+    .legend-mark.observed { background: var(--sage); border-color: var(--sage); }
+    .legend-mark.drift { border-color: var(--danger); background: repeating-linear-gradient(135deg, transparent 0 2px, var(--danger) 2px 3px); }
+
+    .stage-panel { min-width: 0; display: grid; grid-template-rows: 36px 438px; background: var(--stage-soft); color: var(--stage-ink); }
+    .stage-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-2);
+      padding: 0 var(--space-2) 0 var(--space-3);
+      border-bottom: var(--line) solid var(--stage-line);
+      background: var(--stage);
+    }
+    .stage-title { display: flex; align-items: center; gap: var(--space-2); min-width: 112px; font-weight: 600; }
+    .stage-title svg { width: 14px; height: 14px; }
+    .plane-controls { display: flex; align-items: center; gap: 2px; }
+    .plane-button {
+      height: 24px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 0 7px;
+      color: var(--stage-muted);
+      background: transparent;
+      border: var(--line) solid transparent;
+      border-radius: var(--radius-1);
+      font-size: 8px;
+    }
+    .plane-button::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .plane-button[aria-pressed="true"] { color: var(--stage-ink); background: var(--stage-soft); border-color: var(--stage-line); }
+    .plane-button[aria-pressed="false"] { text-decoration: line-through; opacity: .62; }
+    .plane-count { font-family: var(--font-data); font-size: 7px; }
+    .stage-meta { min-width: 92px; display: flex; justify-content: flex-end; color: var(--stage-muted); font-family: var(--font-data); font-size: 7px; }
+
+    .stage-canvas {
+      position: relative;
+      min-width: 0;
+      overflow: hidden;
+      background: var(--stage-soft);
+      touch-action: none;
+      cursor: grab;
+    }
+    .stage-canvas.is-panning { cursor: grabbing; }
+    .stage-grid { position: absolute; inset: 0; width: 100%; height: 100%; color: var(--stage-line-strong); opacity: .44; pointer-events: none; }
+    .ruler-x, .ruler-y { position: absolute; z-index: 2; color: var(--stage-muted); font-family: var(--font-data); font-size: 6px; pointer-events: none; }
+    .ruler-x { top: 7px; left: 50%; transform: translateX(-50%); }
+    .ruler-y { top: 50%; left: 7px; transform: translateY(-50%) rotate(-90deg); }
+    .world {
+      --pan-x: 0px;
+      --pan-y: 0px;
+      --zoom: 1;
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 820px;
+      height: 400px;
+      transform: translate(-50%, -50%) translate3d(var(--pan-x), var(--pan-y), 0) scale(var(--zoom));
+      transform-origin: center;
+      transition: transform var(--settle-time) var(--spring-settle);
+      will-change: transform;
+    }
+    .stage-canvas.is-panning .world { transition: opacity var(--hover-time) var(--hover-ease); }
+    .world-frame { position: absolute; inset: 0; border: var(--line) solid var(--stage-line); background: var(--stage); box-shadow: 0 15px 36px rgba(41, 49, 47, .16); }
+    .world-heading { position: absolute; z-index: 3; top: var(--space-3); left: var(--space-4); right: var(--space-4); display: flex; align-items: center; justify-content: space-between; pointer-events: none; }
+    .world-heading strong { font-size: 10px; font-weight: 600; }
+    .world-heading span { color: var(--stage-muted); font-family: var(--font-data); font-size: 7px; }
+    .edge-map { position: absolute; inset: 0; z-index: 1; width: 820px; height: 400px; overflow: visible; pointer-events: none; }
+    .edge-group { opacity: .52; transition: opacity var(--hover-time) var(--hover-ease); }
+    .edge-group.is-active { opacity: 1; }
+    .edge-group.is-quiet { opacity: .16; }
+    .edge-group.is-hidden { opacity: 0; }
+    .edge-separator { fill: none; stroke: var(--stage); stroke-width: 5; stroke-linejoin: round; }
+    .edge-line { fill: none; stroke-width: 1.35; stroke-linejoin: round; }
+    .edge-group[data-family="calls"] .edge-line, .edge-group[data-family="calls"] .switch-dot { stroke: var(--relation-calls); }
+    .edge-group[data-family="data"] .edge-line, .edge-group[data-family="data"] .switch-dot { stroke: var(--relation-data); }
+    .edge-group[data-family="storage"] .edge-line, .edge-group[data-family="storage"] .switch-dot { stroke: var(--relation-storage); }
+    .edge-group[data-family="jobs"] .edge-line, .edge-group[data-family="jobs"] .switch-dot { stroke: var(--relation-jobs); }
+    .switch-dot { fill: var(--stage); stroke-width: 1.2; }
+    .edge-label-bg { fill: var(--stage); stroke: var(--stage-line); stroke-width: 1; }
+    .edge-label { fill: var(--stage-muted); font-family: var(--font-data); font-size: 6.5px; }
+
+    .node {
+      --node-x: 0px;
+      --node-y: 0px;
+      position: absolute;
+      z-index: 4;
+      min-height: 68px;
+      display: flex;
+      flex-direction: column;
+      color: var(--stage-ink);
+      background: var(--stage);
+      border: var(--line) solid var(--stage-line-strong);
+      border-radius: var(--radius-1);
+      box-shadow: 0 5px 13px rgba(36, 45, 43, .1);
+      transform: translate3d(var(--node-x), var(--node-y), 0);
+      cursor: grab;
+      touch-action: none;
+      user-select: none;
+      transition: transform var(--settle-time) var(--spring-settle), box-shadow var(--hover-time) var(--hover-ease), border-color var(--hover-time) var(--hover-ease), background-color var(--hover-time) var(--hover-ease), opacity var(--hover-time) var(--hover-ease);
+    }
+    .node.is-dragging { z-index: 8; cursor: grabbing; transition: box-shadow var(--hover-time) var(--hover-ease), border-color var(--hover-time) var(--hover-ease), opacity var(--hover-time) var(--hover-ease); box-shadow: 0 18px 30px rgba(34, 42, 41, .22); }
+    .node.is-selected { border-color: var(--copper-deep); box-shadow: 0 0 0 1px var(--copper), 0 10px 22px rgba(39, 46, 44, .17); }
+    .node.is-selected::before { content: ""; position: absolute; inset: -5px; border: var(--line) solid rgba(137, 80, 55, .48); pointer-events: none; }
+    .node-handle { position: absolute; z-index: 2; width: 7px; height: 7px; display: none; background: var(--stage); border: var(--line) solid var(--copper-deep); }
+    .is-selected .node-handle { display: block; }
+    .node-handle.nw { left: -5px; top: -5px; }
+    .node-handle.ne { right: -5px; top: -5px; }
+    .node-handle.sw { left: -5px; bottom: -5px; }
+    .node-handle.se { right: -5px; bottom: -5px; }
+    .node-top { min-height: 34px; display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 7px; padding: 6px 7px 2px; }
+    .node-icon { width: 22px; height: 22px; display: grid; place-items: center; color: var(--stage-muted); border: var(--line) solid var(--stage-line); border-radius: 2px; }
+    .node-icon svg { width: 13px; height: 13px; }
+    .node-identity { min-width: 0; }
+    .node-id { display: block; color: var(--stage-muted); font-family: var(--font-data); font-size: 6.5px; letter-spacing: .04em; }
+    .node-name { display: block; margin-top: 1px; overflow: hidden; font-size: 10px; font-weight: 600; line-height: 1.1; text-overflow: ellipsis; white-space: nowrap; }
+    .health-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--sage-deep); }
+    .node-detail { min-height: 24px; display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: 0 7px 6px 36px; color: var(--stage-muted); font-family: var(--font-data); font-size: 6.5px; }
+    .node-detail span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .node-evidence { flex: 0 0 auto; color: var(--copper-deep); }
+    .node-web { width: 138px; }
+    .node-api { width: 178px; height: 104px; }
+    .node-api.is-expanded { height: 166px; }
+    .node-database { width: 160px; min-height: 86px; }
+    .node-store { width: 148px; }
+    .node-queue { width: 146px; }
+    .node-worker { width: 150px; }
+    .node-mark {
+      position: absolute;
+      top: -18px;
+      right: -1px;
+      height: 17px;
+      display: none;
+      align-items: center;
+      padding: 0 7px;
+      color: var(--graphite-100);
+      background: var(--copper);
+      border-radius: var(--radius-1) var(--radius-1) 0 0;
+      font-family: var(--font-data);
+      font-size: 6.5px;
+    }
+    .node-database.has-mark .node-mark { display: flex; }
+    .node-database.has-drift .node-mark, .node-database.has-failure .node-mark { color: var(--chalk); background: var(--danger-deep); }
+    .node-database.is-reconciled .node-mark { background: var(--sage); }
+    .node-database.has-drift .health-dot, .node-database.has-failure .health-dot { background: var(--danger); }
+
+    .composite-button {
+      position: absolute;
+      right: 6px;
+      bottom: 6px;
+      width: 21px;
+      height: 21px;
+      display: grid;
+      place-items: center;
+      padding: 0;
+      color: var(--stage-muted);
+      background: var(--stage-soft);
+      border: var(--line) solid var(--stage-line);
+      border-radius: var(--radius-1);
+    }
+    .composite-button svg { width: 11px; height: 11px; transform: rotate(-90deg); transition: transform var(--settle-time) var(--spring-snappy); }
+    .node-api.is-expanded .composite-button svg { transform: rotate(90deg); }
+    .composite-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 3px var(--space-2); margin: 0 32px 6px 36px; color: var(--stage-muted); font-family: var(--font-data); font-size: 6px; }
+    .composite-summary b { color: var(--stage-ink); font-weight: 500; }
+    .composite-children { min-height: 0; margin: 0 32px 7px 36px; overflow: hidden; opacity: 0; transform: translateY(-6px); transition: opacity 220ms var(--hover-ease), transform var(--panel-time) var(--spring-settle); }
+    .node-api.is-expanded .composite-children { opacity: 1; transform: translateY(0); }
+    .composite-child { height: 17px; display: flex; align-items: center; justify-content: space-between; border-top: var(--line) solid var(--stage-line); color: var(--stage-muted); font-family: var(--font-data); font-size: 6px; }
+    .composite-child strong { color: var(--stage-ink); font-family: var(--font-ui); font-size: 7px; font-weight: 500; }
+
+    .hidden-effect {
+      position: absolute;
+      z-index: 9;
+      top: var(--space-3);
+      right: var(--space-3);
+      min-height: 25px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 var(--space-2);
+      color: var(--stage-muted);
+      background: var(--stage);
+      border: var(--line) solid var(--stage-line);
+      border-radius: var(--radius-1);
+      font-family: var(--font-data);
+      font-size: 6.5px;
+      box-shadow: 0 5px 12px rgba(38, 47, 44, .08);
+    }
+    .hidden-effect[hidden] { display: none; }
+    .hidden-effect svg { width: 12px; height: 12px; }
+
+    .semantic-lens {
+      position: absolute;
+      z-index: 10;
+      left: 50%;
+      bottom: var(--space-4);
+      width: 440px;
+      min-height: 58px;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: var(--space-3);
+      padding: var(--space-2) var(--space-3);
+      color: var(--chalk);
+      background: var(--graphite-90);
+      border: var(--line) solid var(--graphite-60);
+      border-radius: var(--radius-2);
+      box-shadow: 0 14px 30px rgba(24, 30, 31, .24);
+      opacity: 0;
+      pointer-events: none;
+      transform: translate(-50%, 14px) scale(.98);
+      transition: opacity 240ms var(--hover-ease), transform var(--settle-time) var(--spring-snappy);
+    }
+    .stage-canvas.lens-open .semantic-lens { opacity: 1; pointer-events: auto; transform: translate(-50%, 0) scale(1); }
+    .lens-icon { width: 31px; height: 31px; display: grid; place-items: center; color: var(--copper-soft); border: var(--line) solid var(--graphite-60); border-radius: 50%; }
+    .lens-icon svg { width: 16px; height: 16px; }
+    .lens-copy small { display: block; color: var(--mist); font-family: var(--font-data); font-size: 6.5px; text-transform: uppercase; letter-spacing: .08em; }
+    .lens-copy strong { display: block; margin-top: 2px; font-size: 10px; font-weight: 500; }
+    .lens-copy span { display: block; margin-top: 2px; color: var(--mist); font-size: 7.5px; }
+    .lens-mode { color: var(--copper-soft); font-family: var(--font-data); font-size: 7px; }
+    .stage-canvas.lens-open .edge-group.is-quiet { opacity: .08; }
+    .stage-canvas.lens-open .node.is-quiet { opacity: .32; }
+
+    .source-plane {
+      position: absolute;
+      z-index: 14;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: 318px;
+      color: var(--chalk);
+      background: var(--graphite-90);
+      border-left: var(--line) solid var(--graphite-60);
+      box-shadow: -12px 0 28px rgba(21, 26, 29, .18);
+      opacity: 0;
+      visibility: hidden;
+      transform: translateX(100%);
+      transition: opacity 240ms var(--hover-ease), transform var(--panel-time) var(--spring-settle), visibility 0ms linear var(--panel-time);
+    }
+    .stage-canvas.source-open .source-plane { opacity: 1; visibility: visible; transform: translateX(0); transition: opacity 240ms var(--hover-ease), transform var(--panel-time) var(--spring-settle), visibility 0ms linear 0ms; }
+    .source-head { height: 40px; display: flex; align-items: center; justify-content: space-between; padding: 0 var(--space-3); border-bottom: var(--line) solid var(--graphite-60); }
+    .source-head div { min-width: 0; }
+    .source-head strong { display: block; font-size: 9px; font-weight: 500; }
+    .source-head code { display: block; margin-top: 2px; color: var(--mist); font-family: var(--font-data); font-size: 6.5px; }
+    .source-body { height: 398px; padding: var(--space-3) 0; overflow: auto; font-family: var(--font-data); font-size: 7px; line-height: 1.75; }
+    .source-line { display: grid; grid-template-columns: 31px 1fr; padding: 0 var(--space-3); color: var(--fog); }
+    .source-line em { color: var(--graphite-60); font-style: normal; text-align: right; padding-right: var(--space-2); }
+    .source-line.is-hit { color: var(--chalk); background: var(--graphite-70); box-shadow: inset 2px 0 0 var(--copper); }
+    .source-token { color: var(--copper-soft); }
+    .source-comment { color: var(--mist); }
+
+    .pan-zoom {
+      position: absolute;
+      z-index: 8;
+      left: var(--space-3);
+      bottom: var(--space-3);
+      height: 28px;
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+      color: var(--stage-ink);
+      background: var(--stage);
+      border: var(--line) solid var(--stage-line);
+      border-radius: var(--radius-1);
+      box-shadow: 0 5px 12px rgba(38, 47, 44, .09);
+    }
+    .mini-button { width: 27px; height: 27px; display: grid; place-items: center; padding: 0; color: var(--stage-muted); background: transparent; border-right: var(--line) solid var(--stage-line); }
+    .mini-button:last-child { border-right: 0; }
+    .mini-button svg { width: 12px; height: 12px; }
+    .zoom-readout { min-width: 38px; color: var(--stage-muted); font-family: var(--font-data); font-size: 6.5px; text-align: center; }
+
+    .minimap {
+      position: absolute;
+      z-index: 8;
+      right: var(--space-3);
+      bottom: var(--space-3);
+      width: 112px;
+      height: 64px;
+      padding: 5px;
+      color: var(--stage-muted);
+      background: var(--stage);
+      border: var(--line) solid var(--stage-line);
+      border-radius: var(--radius-1);
+      box-shadow: 0 5px 12px rgba(38, 47, 44, .09);
+    }
+    .minimap svg { width: 100%; height: 100%; }
+    .mini-edge { fill: none; stroke: var(--stage-line-strong); stroke-width: 1; }
+    .mini-node { fill: var(--stage-line-strong); }
+    .mini-node.selected { fill: var(--copper-deep); }
+    .minimap-window { fill: none; stroke: var(--copper-deep); stroke-width: 1; vector-effect: non-scaling-stroke; transition: transform var(--settle-time) var(--spring-settle); }
+
+    .inspector-body { height: 438px; padding: var(--space-3); overflow: auto; }
+    .selection-heading { padding-bottom: var(--space-3); border-bottom: var(--line) solid var(--graphite-60); }
+    .selection-heading-line { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+    .selection-heading strong { overflow: hidden; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+    .selection-health { display: flex; align-items: center; gap: 5px; color: var(--fog); font-family: var(--font-data); font-size: 6px; }
+    .selection-heading code { display: block; margin-top: 3px; color: var(--mist); font-family: var(--font-data); font-size: 7px; }
+    .inspector-tabs { display: grid; grid-template-columns: 1fr 1fr; margin: var(--space-3) 0; border: var(--line) solid var(--graphite-60); border-radius: var(--radius-1); overflow: hidden; }
+    .inspector-tabs span { min-height: 24px; display: grid; place-items: center; color: var(--mist); font-size: 8px; }
+    .inspector-tabs .is-active { color: var(--chalk); background: var(--graphite-70); }
+    .property-section { padding: var(--space-3) 0; border-top: var(--line) solid var(--graphite-60); }
+    .property-section:first-of-type { padding-top: 0; border-top: 0; }
+    .property-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-2); color: var(--mist); font-size: 7px; text-transform: uppercase; letter-spacing: .08em; }
+    .property-title span:last-child { color: var(--copper-soft); font-family: var(--font-data); }
+    .property-row { min-height: 24px; display: grid; grid-template-columns: 70px minmax(0, 1fr); align-items: center; gap: var(--space-2); color: var(--mist); font-size: 8px; }
+    .property-row code { overflow: hidden; color: var(--chalk); font-family: var(--font-data); font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
+    .inspector-callout { margin-top: var(--space-2); padding: var(--space-2); color: var(--fog); background: var(--graphite-90); border: var(--line) solid var(--graphite-60); border-radius: var(--radius-1); font-size: 7px; line-height: 1.45; }
+    .inspector-callout strong { color: var(--copper-soft); font-weight: 500; }
+    .inspector-actions { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); margin-top: var(--space-3); }
+    .plain-button { min-height: 28px; padding: 0 var(--space-2); color: var(--fog); background: var(--graphite-90); border: var(--line) solid var(--graphite-60); border-radius: var(--radius-1); font-size: 8px; }
+    .plain-button.primary { color: var(--graphite-100); background: var(--copper); border-color: var(--copper); }
+
+    .lower-surface { min-height: 0; border-top: var(--line) solid var(--graphite-60); background: var(--graphite-90); }
+    .lower-header { height: 38px; display: grid; grid-template-columns: 184px minmax(0, 1fr) 252px; align-items: stretch; border-bottom: var(--line) solid var(--graphite-60); }
+    .lower-name { display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-3); border-right: var(--line) solid var(--graphite-60); font-weight: 500; }
+    .lower-name svg { width: 14px; height: 14px; color: var(--copper); }
+    .evidence-controls-wrap { display: flex; align-items: center; justify-content: center; }
+    .evidence-controls {
+      position: relative;
+      width: 288px;
+      height: 26px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      padding: 2px;
+      background: var(--graphite-100);
+      border: var(--line) solid var(--graphite-60);
+      border-radius: var(--radius-1);
+    }
+    .evidence-slider { position: absolute; z-index: 0; top: 2px; left: 2px; width: calc((100% - 4px) / 3); height: 20px; background: var(--graphite-70); border: var(--line) solid var(--graphite-60); border-radius: 2px; transform: translateX(calc(var(--evidence-index, 0) * 100%)); transition: transform var(--settle-time) var(--spring-snappy); }
+    .evidence-button { position: relative; z-index: 1; padding: 0; color: var(--mist); background: transparent; border-radius: 2px; font-size: 8px; }
+    .evidence-button.is-active { color: var(--chalk); }
+    .lower-counts { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-2); padding: 0 var(--space-3); border-left: var(--line) solid var(--graphite-60); color: var(--mist); font-family: var(--font-data); font-size: 7px; }
+    .count-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--copper); }
+
+    .lower-body { height: 164px; display: grid; grid-template-columns: 184px minmax(0, 1fr) 252px; }
+    .state-summary { min-width: 0; padding: var(--space-3); border-right: var(--line) solid var(--graphite-60); background: var(--graphite-85); }
+    .state-summary small, .action-dock small { display: block; color: var(--mist); font-family: var(--font-data); font-size: 6.5px; text-transform: uppercase; letter-spacing: .08em; }
+    .state-summary strong { display: block; margin-top: var(--space-1); font-size: 11px; font-weight: 500; }
+    .state-summary p { margin: var(--space-1) 0 var(--space-3); color: var(--mist); font-size: 7px; line-height: 1.4; }
+    .assertion-meter { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-1); }
+    .assertion-segment { height: 3px; background: var(--graphite-60); }
+    .assertion-segment.pass { background: var(--sage); }
+    .assertion-segment.fail { background: var(--danger); }
+    .assertion-segment.pending { background: var(--amber); }
+    .assertion-copy { display: block; margin-top: var(--space-2); color: var(--fog); font-family: var(--font-data); font-size: 6.5px; }
+
+    .evidence-surface { position: relative; min-width: 0; display: grid; grid-template-columns: repeat(3, 1fr); overflow: hidden; }
+    .evidence-rail { position: absolute; z-index: 0; top: 48px; left: 14%; right: 14%; height: 1px; background: var(--graphite-60); }
+    .evidence-rail::before, .evidence-rail::after { content: ""; position: absolute; top: -3px; width: 7px; height: 7px; border-radius: 50%; background: var(--graphite-60); }
+    .evidence-rail::before { left: 33%; }
+    .evidence-rail::after { right: 33%; }
+    .evidence-cell { position: relative; z-index: 1; min-width: 0; padding: var(--space-3) var(--space-4); border-right: var(--line) solid var(--graphite-60); opacity: .62; transition: opacity var(--hover-time) var(--hover-ease), background-color var(--hover-time) var(--hover-ease), transform var(--settle-time) var(--spring-snappy); }
+    .evidence-cell:last-child { border-right: 0; }
+    .evidence-cell.is-active { opacity: 1; background: var(--graphite-85); transform: translateY(-2px); }
+    .evidence-kicker { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); color: var(--mist); font-family: var(--font-data); font-size: 6.5px; text-transform: uppercase; letter-spacing: .07em; }
+    .evidence-kicker i { width: 8px; height: 8px; display: block; background: var(--graphite-90); border: var(--line) solid var(--mist); }
+    .evidence-cell[data-mode="resolution"] .evidence-kicker i { border-color: var(--copper); transform: rotate(45deg); }
+    .evidence-cell[data-mode="reality"] .evidence-kicker i { border-radius: 50%; border-color: var(--sage); background: var(--sage); }
+    .evidence-cell strong { display: block; margin-top: var(--space-4); overflow: hidden; font-size: 11px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+    .evidence-cell code { display: block; margin-top: var(--space-1); overflow: hidden; color: var(--fog); font-family: var(--font-data); font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
+    .evidence-cell p { margin: var(--space-2) 0 0; color: var(--mist); font-size: 7px; line-height: 1.35; }
+
+    .action-dock { padding: var(--space-3); border-left: var(--line) solid var(--graphite-60); background: var(--graphite-85); }
+    .action-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); }
+    .shortcut { color: var(--mist); font-family: var(--font-data); font-size: 6px; }
+    .action-stack { height: 58px; margin-top: var(--space-2); }
+    .action-button { width: 100%; min-height: 34px; display: none; align-items: center; justify-content: space-between; gap: var(--space-2); padding: 0 var(--space-3); color: var(--graphite-100); background: var(--copper); border: var(--line) solid var(--copper); border-radius: var(--radius-1); font-size: 9px; font-weight: 500; }
+    .action-button.is-next { display: flex; }
+    .action-button svg { width: 14px; height: 14px; }
+    .action-button.is-pending { color: var(--chalk); background: var(--copper-deep); border-color: var(--copper-deep); }
+    .action-button.is-pending svg { animation: pending-turn 720ms linear infinite; }
+    .complete-copy { display: none; min-height: 34px; align-items: center; gap: var(--space-2); color: var(--fog); font-size: 8px; }
+    .complete-copy svg { width: 16px; height: 16px; color: var(--sage); }
+    .action-dock.is-complete .complete-copy { display: flex; }
+    .reset-action { width: 100%; min-height: 26px; color: var(--mist); background: transparent; border: var(--line) solid var(--graphite-60); border-radius: var(--radius-1); font-size: 7px; }
+    @keyframes pending-turn { to { transform: rotate(360deg); } }
+
+    .keyboard-input *, .keyboard-input *::before, .keyboard-input *::after { transition-duration: 0ms !important; animation-duration: 0ms !important; }
+
+    @media (hover: hover) and (pointer: fine) {
+      .icon-button:hover, .collapse-button:hover { color: var(--chalk); background: var(--graphite-70); }
+      .tree-row:hover { color: var(--chalk); background: var(--graphite-80); }
+      .plane-button:hover { color: var(--stage-ink); background: var(--stage-soft); }
+      .mini-button:hover { color: var(--stage-ink); background: var(--stage-soft); }
+      .plain-button:hover { color: var(--chalk); border-color: var(--fog); transform: translateY(-1px); }
+      .plain-button.primary:hover, .action-button:hover { color: var(--graphite-100); background: var(--copper-soft); border-color: var(--copper-soft); transform: translateY(-1px); box-shadow: 0 7px 14px rgba(16, 21, 23, .18); }
+      .node:hover { border-color: var(--stage-muted); box-shadow: 0 9px 20px rgba(36, 45, 43, .14); }
+      .composite-button:hover { color: var(--stage-ink); border-color: var(--stage-muted); background: var(--stage); }
+      .evidence-button:hover { color: var(--chalk); }
+      .reset-action:hover { color: var(--chalk); border-color: var(--fog); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; scroll-behavior: auto !important; }
+      .icon-button, .plain-button, .plane-button, .tree-row, .collapse-button, .evidence-button, .action-button, .mini-button, .composite-button, .node, .world, .edge-group, .evidence-cell, .evidence-slider, .semantic-lens, .minimap-window, .composite-children { transition: opacity 80ms linear !important; }
+      .source-plane { transform: none; transition: opacity 80ms linear, visibility 0ms linear 80ms !important; }
+      .stage-canvas.source-open .source-plane { transition: opacity 80ms linear, visibility 0ms linear 0ms !important; }
+      .semantic-lens { transform: translate(-50%, 0) !important; }
+      .plain-button:hover, .action-button:hover, .evidence-cell.is-active { transform: none !important; }
+    }
+  </style>
+</head>
+<body data-lifecycle="authored"><!--
+THESIS: Clockwork compiles architecture through a physical semantic stage, refusing both static property workbenches and diagrams whose pixels become product truth.
+OWN-WORLD: Powdered graphite hierarchy and inspector rails frame a bright mineral canvas; copper authorizes change, square handles promise direct manipulation, and railway trunks keep causal families legible.
+STORY: A builder reopens DB-03, resolves PostgreSQL 19, carries it through plan and runtime observation, repairs backup drift, and reconciles evidence without the topology moving.
+FIRST VIEWPORT: A 1280 by 720 editor places compact collapsible rails around an overview-first stage, with edge planes above, viewport controls within, and a dark state/evidence compiler shelf below.
+FORM: Motion Compiler / PHYSICAL, seed 2d0e6da4.
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+-->
+  <svg aria-hidden="true" width="0" height="0" style="position:absolute">
+    <defs>
+      <symbol id="i-logo" viewBox="0 0 24 24"><path d="M4 7.5h8.5V4l5 4.5-5 4.5V9.5H4zM20 16.5h-8.5V20l-5-4.5 5-4.5v3.5H20z" fill="currentColor"/></symbol>
+      <symbol id="i-pointer" viewBox="0 0 24 24"><path d="M5 3l12 9-6 1.5L8 19z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+      <symbol id="i-focus" viewBox="0 0 24 24"><path d="M8 4H4v4M16 4h4v4M20 16v4h-4M8 20H4v-4" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="3.5" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+      <symbol id="i-source" viewBox="0 0 24 24"><path d="M9 6l-6 6 6 6M15 6l6 6-6 6M13 4l-2 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-fit" viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+      <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M14 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-layer" viewBox="0 0 24 24"><path d="M12 4L3.5 8.5 12 13l8.5-4.5zM5 13l7 4 7-4M7 17l5 3 5-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></symbol>
+      <symbol id="i-web" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M4 12h16M12 4c2.7 2.5 3.5 5.2 3.5 8s-.8 5.5-3.5 8c-2.7-2.5-3.5-5.2-3.5-8S9.3 6.5 12 4z" fill="none" stroke="currentColor" stroke-width="1.2"/></symbol>
+      <symbol id="i-api" viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 12h8M12 8v8" stroke="currentColor" stroke-width="1.4"/></symbol>
+      <symbol id="i-db" viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="7" ry="3" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+      <symbol id="i-store" viewBox="0 0 24 24"><path d="M4 8l8-4 8 4-8 4zM4 8v8l8 4 8-4V8M12 12v8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+      <symbol id="i-queue" viewBox="0 0 24 24"><path d="M5 7h10M5 12h14M5 17h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="18" cy="7" r="1.5" fill="currentColor"/><circle cx="16" cy="17" r="1.5" fill="currentColor"/></symbol>
+      <symbol id="i-worker" viewBox="0 0 24 24"><path d="M12 4v4M12 16v4M4 12h4M16 12h4M6.3 6.3l2.8 2.8M14.9 14.9l2.8 2.8M17.7 6.3l-2.8 2.8M9.1 14.9l-2.8 2.8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+      <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M3 4l18 16M10.5 10.3a2.5 2.5 0 003.2 3.2M7 6.2C5 7.4 3.7 9.4 3 12c1.5 4.3 4.5 6.5 9 6.5 1.4 0 2.7-.2 3.8-.7M10.4 5.6c.5-.1 1-.1 1.6-.1 4.5 0 7.5 2.2 9 6.5-.5 1.4-1.1 2.5-2 3.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+      <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14M12 5v14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
+      <symbol id="i-reset" viewBox="0 0 24 24"><path d="M5 8V4l3 2.2A8 8 0 112 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-graph" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="6" r="2" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="19" cy="13" r="2" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="19" r="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M7 11l3.5-3.5M13.8 7.3l3.5 4M17.3 14.5l-3.5 3.2M10.2 17.5L6.7 13.7" fill="none" stroke="currentColor" stroke-width="1.3"/></symbol>
+      <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M15 8l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M12 7v5l3 2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.2 4.2L19 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    </defs>
+  </svg>
+
+  <div class="app" id="app">
+    <header class="topbar">
+      <div class="brand-lockup">
+        <svg class="brand-mark" aria-hidden="true"><use href="#i-logo"></use></svg>
+        <div><div class="brand-name">Clockwork</div><div class="brand-mode">MOTION COMPILER</div></div>
+      </div>
+      <div class="document-bar">
+        <div class="document-crumb"><strong>Photo-sharing / production</strong><code>architecture.cw</code></div>
+        <div class="tool-cluster" aria-label="Canvas tools">
+          <button class="icon-button is-active" id="selectTool" type="button" aria-label="Select and move nodes" aria-pressed="true" title="Select and move"><svg aria-hidden="true"><use href="#i-pointer"></use></svg></button>
+          <button class="icon-button" type="button" data-action="focus" aria-label="Open semantic lens" aria-pressed="false" title="Semantic lens"><svg aria-hidden="true"><use href="#i-focus"></use></svg></button>
+          <button class="icon-button" type="button" data-action="source" aria-label="Open source drawer" aria-expanded="false" title="Source"><svg aria-hidden="true"><use href="#i-source"></use></svg></button>
+          <button class="icon-button" type="button" data-action="fit" aria-label="Fit architecture in viewport" title="Fit architecture"><svg aria-hidden="true"><use href="#i-fit"></use></svg></button>
+        </div>
+      </div>
+      <div class="top-status" aria-live="polite"><span class="live-dot" aria-hidden="true"></span><strong id="topStatus">Authored baseline</strong><span id="topStatusMeta">DB-03 · 18 / 18.6</span></div>
+    </header>
+
+    <main class="editor" id="editor">
+      <aside class="hierarchy" aria-label="Architecture hierarchy">
+        <div class="panel-heading"><h2>Hierarchy</h2><button class="collapse-button" id="toggleHierarchy" type="button" aria-label="Collapse hierarchy" aria-expanded="true"><svg aria-hidden="true"><use href="#i-chevron"></use></svg></button></div>
+        <div class="hierarchy-body">
+          <div class="tree-label"><svg aria-hidden="true"><use href="#i-layer"></use></svg>Application</div>
+          <button class="tree-row" type="button" data-node="web"><svg aria-hidden="true"><use href="#i-web"></use></svg><span>Frontend</span><span class="tree-id">WEB-01</span></button>
+          <button class="tree-row" type="button" data-node="api"><svg aria-hidden="true"><use href="#i-api"></use></svg><span>Photo API composite</span><span class="tree-id">API-02</span></button>
+          <div class="tree-divider"></div>
+          <div class="tree-label"><svg aria-hidden="true"><use href="#i-layer"></use></svg>Data &amp; jobs</div>
+          <button class="tree-row is-selected" type="button" data-node="database"><svg aria-hidden="true"><use href="#i-db"></use></svg><span id="dbTreeName">PostgreSQL 18</span><span class="tree-id">DB-03</span></button>
+          <button class="tree-row" type="button" data-node="store"><svg aria-hidden="true"><use href="#i-store"></use></svg><span>Media store</span><span class="tree-id">OBJ-04</span></button>
+          <button class="tree-row" type="button" data-node="queue"><svg aria-hidden="true"><use href="#i-queue"></use></svg><span>Image jobs</span><span class="tree-id">QUE-05</span></button>
+          <button class="tree-row" type="button" data-node="worker"><svg aria-hidden="true"><use href="#i-worker"></use></svg><span>Processor</span><span class="tree-id">WRK-06</span></button>
+          <div class="hierarchy-foot">
+            <strong>Evidence marks</strong>
+            <div class="legend-grid">
+              <span class="legend-item"><i class="legend-mark"></i>specified</span>
+              <span class="legend-item"><i class="legend-mark inferred"></i>inferred</span>
+              <span class="legend-item"><i class="legend-mark resolved"></i>AI-resolved</span>
+              <span class="legend-item"><i class="legend-mark observed"></i>observed</span>
+              <span class="legend-item"><i class="legend-mark drift"></i>drifted</span>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <section class="stage-panel" aria-label="Semantic architecture stage">
+        <header class="stage-toolbar">
+          <div class="stage-title"><svg aria-hidden="true"><use href="#i-fit"></use></svg>Semantic stage</div>
+          <div class="plane-controls" role="group" aria-label="Relation planes">
+            <button class="plane-button" type="button" data-plane="calls" aria-pressed="true">Calls <span class="plane-count">1</span></button>
+            <button class="plane-button" type="button" data-plane="data" aria-pressed="true">Data <span class="plane-count">2</span></button>
+            <button class="plane-button" type="button" data-plane="storage" aria-pressed="true">Storage <span class="plane-count">2</span></button>
+            <button class="plane-button" type="button" data-plane="jobs" aria-pressed="true">Jobs <span class="plane-count">2</span></button>
+          </div>
+          <div class="stage-meta"><span id="stageMode">INTENT · OVERVIEW</span></div>
+        </header>
+        <div class="stage-canvas" id="stageCanvas">
+          <svg class="stage-grid" aria-hidden="true" preserveAspectRatio="none">
+            <defs><pattern id="canvas-grid" width="16" height="16" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r=".65" fill="currentColor"/></pattern></defs>
+            <rect width="100%" height="100%" fill="url(#canvas-grid)"/>
+          </svg>
+          <span class="ruler-x">−410 · 0 · +410</span><span class="ruler-y">−200 · +200</span>
+
+          <div class="world" id="world">
+            <div class="world-frame" aria-hidden="true"></div>
+            <div class="world-heading"><strong>Photo-sharing architecture</strong><span>source-derived topology · drag snaps to 8</span></div>
+            <svg class="edge-map" id="edgeMap" viewBox="0 0 820 400" aria-label="Architecture relations">
+              <defs>
+                <marker id="arrow-calls" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0l8 4-8 4z" fill="var(--relation-calls)"/></marker>
+                <marker id="arrow-data" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0l8 4-8 4z" fill="var(--relation-data)"/></marker>
+                <marker id="arrow-storage" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0l8 4-8 4z" fill="var(--relation-storage)"/></marker>
+                <marker id="arrow-jobs" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0l8 4-8 4z" fill="var(--relation-jobs)"/></marker>
+              </defs>
+              <g id="relationsLayer"></g>
+            </svg>
+
+            <div class="node node-web" data-node="web" data-x="24" data-y="68" tabindex="0" role="button" aria-label="WEB-01 Frontend, specified">
+              <span class="node-handle nw"></span><span class="node-handle ne"></span><span class="node-handle sw"></span><span class="node-handle se"></span>
+              <div class="node-top"><span class="node-icon"><svg aria-hidden="true"><use href="#i-web"></use></svg></span><span class="node-identity"><span class="node-id">WEB-01</span><span class="node-name">Frontend</span></span><span class="health-dot"></span></div>
+              <div class="node-detail"><span>web.public</span><span class="node-evidence">specified</span></div>
+            </div>
+
+            <div class="node node-api" data-node="api" data-x="238" data-y="54" tabindex="0" role="button" aria-label="API-02 Photo API composite, collapsed, three children">
+              <span class="node-handle nw"></span><span class="node-handle ne"></span><span class="node-handle sw"></span><span class="node-handle se"></span>
+              <div class="node-top"><span class="node-icon"><svg aria-hidden="true"><use href="#i-api"></use></svg></span><span class="node-identity"><span class="node-id">API-02 · COMPOSITE</span><span class="node-name">Photo API</span></span><span class="health-dot"></span></div>
+              <div class="composite-summary"><span><b>main.py</b> source</span><span><b>3</b> children</span><span><b>5</b> ext ports</span><span><b>4/4</b> assertions</span><span><b>healthy</b></span><span><b>0</b> proposals</span></div>
+              <div class="composite-children" aria-hidden="true"><div class="composite-child"><strong>Router</strong><span>/photos/*</span></div><div class="composite-child"><strong>Photo service</strong><span>compose</span></div><div class="composite-child"><strong>Auth policy</strong><span>required</span></div></div>
+              <button class="composite-button" type="button" data-composite="api" aria-label="Expand Photo API composite" aria-expanded="false"><svg aria-hidden="true"><use href="#i-chevron"></use></svg></button>
+            </div>
+
+            <div class="node node-database is-selected" data-node="database" data-x="628" data-y="42" tabindex="0" role="button" aria-label="DB-03 PostgreSQL 18, selected">
+              <span class="node-mark" id="dbMark">AUTHORED 18</span>
+              <span class="node-handle nw"></span><span class="node-handle ne"></span><span class="node-handle sw"></span><span class="node-handle se"></span>
+              <div class="node-top"><span class="node-icon"><svg aria-hidden="true"><use href="#i-db"></use></svg></span><span class="node-identity"><span class="node-id">DB-03</span><span class="node-name" id="dbNodeName">PostgreSQL 18</span></span><span class="health-dot"></span></div>
+              <div class="node-detail"><span>db.primary</span><span class="node-evidence" id="dbNodeEvidence">specified 18</span></div>
+            </div>
+
+            <div class="node node-store" data-node="store" data-x="630" data-y="218" tabindex="0" role="button" aria-label="OBJ-04 Media store, observed">
+              <span class="node-handle nw"></span><span class="node-handle ne"></span><span class="node-handle sw"></span><span class="node-handle se"></span>
+              <div class="node-top"><span class="node-icon"><svg aria-hidden="true"><use href="#i-store"></use></svg></span><span class="node-identity"><span class="node-id">OBJ-04</span><span class="node-name">Media store</span></span><span class="health-dot"></span></div>
+              <div class="node-detail"><span>object.media</span><span class="node-evidence">observed</span></div>
+            </div>
+
+            <div class="node node-queue" data-node="queue" data-x="330" data-y="278" tabindex="0" role="button" aria-label="QUE-05 Image jobs, AI-resolved">
+              <span class="node-handle nw"></span><span class="node-handle ne"></span><span class="node-handle sw"></span><span class="node-handle se"></span>
+              <div class="node-top"><span class="node-icon"><svg aria-hidden="true"><use href="#i-queue"></use></svg></span><span class="node-identity"><span class="node-id">QUE-05</span><span class="node-name">Image jobs</span></span><span class="health-dot"></span></div>
+              <div class="node-detail"><span>queue.images</span><span class="node-evidence">AI-resolved</span></div>
+            </div>
+
+            <div class="node node-worker" data-node="worker" data-x="42" data-y="278" tabindex="0" role="button" aria-label="WRK-06 Processor, observed">
+              <span class="node-handle nw"></span><span class="node-handle ne"></span><span class="node-handle sw"></span><span class="node-handle se"></span>
+              <div class="node-top"><span class="node-icon"><svg aria-hidden="true"><use href="#i-worker"></use></svg></span><span class="node-identity"><span class="node-id">WRK-06</span><span class="node-name">Processor</span></span><span class="health-dot"></span></div>
+              <div class="node-detail"><span>worker.processor</span><span class="node-evidence">observed</span></div>
+            </div>
+          </div>
+
+          <div class="hidden-effect" id="hiddenEffect" hidden><svg aria-hidden="true"><use href="#i-eye-off"></use></svg><span id="hiddenEffectCopy">0 relations hidden</span></div>
+          <div class="semantic-lens" id="semanticLens" aria-live="polite">
+            <span class="lens-icon"><svg aria-hidden="true"><use href="#i-focus"></use></svg></span>
+            <div class="lens-copy"><small>Semantic lens · <span id="lensId">DB-03</span></small><strong id="lensTitle">PostgreSQL 18 is explicit intent</strong><span id="lensDetail">main.py specifies version 18; observed runtime reports 18.6.</span></div>
+            <span class="lens-mode" id="lensMode">INTENT</span>
+          </div>
+
+          <aside class="source-plane" id="sourcePlane" aria-label="Source evidence drawer">
+            <div class="source-head"><div><strong id="sourceTitle">DB-03 / source evidence</strong><code id="sourcePath">main.py:42–48</code></div><button class="icon-button" type="button" id="closeSource" aria-label="Close source drawer"><svg aria-hidden="true"><use href="#i-chevron"></use></svg></button></div>
+            <div class="source-body" id="sourceBody"></div>
+          </aside>
+
+          <div class="pan-zoom" aria-label="Viewport controls">
+            <button class="mini-button" type="button" id="zoomOut" aria-label="Zoom out"><svg aria-hidden="true"><use href="#i-minus"></use></svg></button>
+            <span class="zoom-readout" id="zoomReadout">100%</span>
+            <button class="mini-button" type="button" id="zoomIn" aria-label="Zoom in"><svg aria-hidden="true"><use href="#i-plus"></use></svg></button>
+            <button class="mini-button" type="button" id="resetView" aria-label="Reset pan and zoom"><svg aria-hidden="true"><use href="#i-reset"></use></svg></button>
+          </div>
+
+          <div class="minimap" aria-label="Canvas mini-map and viewport locator">
+            <svg viewBox="0 0 100 52" role="img" aria-label="Architecture mini-map">
+              <path class="mini-edge" d="M16 14H34M48 14H76M42 19V38M76 19V34M34 42H18M48 42H76"/>
+              <rect class="mini-node" data-mini-node="web" x="7" y="9" width="12" height="8"/><rect class="mini-node" data-mini-node="api" x="33" y="9" width="16" height="10"/><rect class="mini-node selected" data-mini-node="database" x="76" y="8" width="15" height="9"/><rect class="mini-node" data-mini-node="store" x="77" y="34" width="14" height="8"/><rect class="mini-node" data-mini-node="queue" x="36" y="38" width="13" height="8"/><rect class="mini-node" data-mini-node="worker" x="8" y="38" width="14" height="8"/>
+              <rect class="minimap-window" id="minimapWindow" x="3" y="3" width="94" height="46"/>
+            </svg>
+          </div>
+        </div>
+      </section>
+
+      <aside class="inspector" aria-label="Selected node inspector">
+        <div class="panel-heading"><h2>Inspector</h2><button class="collapse-button" id="toggleInspector" type="button" aria-label="Collapse inspector" aria-expanded="true"><svg aria-hidden="true"><use href="#i-chevron"></use></svg></button></div>
+        <div class="inspector-body">
+          <div class="selection-heading"><div class="selection-heading-line"><strong id="inspectorName">DB-03 / PostgreSQL</strong><span class="selection-health"><i class="health-dot"></i><span id="inspectorHealth">healthy</span></span></div><code id="inspectorPath">app.data.db.primary</code></div>
+          <div class="inspector-tabs" aria-label="Inspector views"><span class="is-active">Properties</span><span>Provenance</span></div>
+          <section class="property-section">
+            <div class="property-title"><span>Identity</span><span id="inspectorProvenance">specified</span></div>
+            <div class="property-row"><span>Kind</span><code id="inspectorKind">database</code></div>
+            <div class="property-row"><span>Source</span><code id="inspectorSource">main.py:42</code></div>
+            <div class="property-row"><span>Ports</span><code id="inspectorPorts">3 external</code></div>
+          </section>
+          <section class="property-section">
+            <div class="property-title"><span id="inspectorStateTitle">State / DB-03</span><span id="inspectorPhase">authored</span></div>
+            <div class="property-row"><span>Intent</span><code id="inspectorIntent">PostgreSQL 18</code></div>
+            <div class="property-row"><span>Resolution</span><code id="inspectorResolution">none</code></div>
+            <div class="property-row"><span>Reality</span><code id="inspectorReality">runtime 18.6</code></div>
+            <div class="inspector-callout" id="inspectorCallout">Version 18 is explicit and runtime 18.6 is healthy. Reopen the field to reconsider it.</div>
+          </section>
+          <section class="property-section">
+            <div class="property-title"><span>Assertions</span><span id="inspectorAssertions">3 / 3</span></div>
+            <div class="property-row"><span>Reachable</span><code>pass · API → DB</code></div>
+            <div class="property-row"><span>Engine</span><code>pass · postgres</code></div>
+            <div class="property-row"><span>Backup</span><code id="inspectorBackup">pass · 03:00</code></div>
+          </section>
+          <div class="inspector-actions"><button class="plain-button primary" type="button" id="inspectorFocus">Focus node</button><button class="plain-button" type="button" id="inspectorSourceButton">View source</button></div>
+        </div>
+      </aside>
+    </main>
+
+    <section class="lower-surface" aria-label="Lifecycle state and evidence compiler">
+      <header class="lower-header">
+        <div class="lower-name"><svg aria-hidden="true"><use href="#i-graph"></use></svg>State / evidence</div>
+        <div class="evidence-controls-wrap">
+          <div class="evidence-controls" id="evidenceControls" role="group" aria-label="Evidence projection">
+            <span class="evidence-slider" aria-hidden="true"></span>
+            <button class="evidence-button is-active" type="button" data-evidence="intent" aria-pressed="true">Intent</button>
+            <button class="evidence-button" type="button" data-evidence="resolution" aria-pressed="false">Resolution</button>
+            <button class="evidence-button" type="button" data-evidence="reality" aria-pressed="false">Reality</button>
+          </div>
+        </div>
+        <div class="lower-counts"><span class="count-dot" aria-hidden="true"></span><span id="lifecycleCounts">0 proposals · 0 updates · 3/3 checks</span></div>
+      </header>
+      <div class="lower-body">
+        <aside class="state-summary">
+          <small>Lifecycle / <span id="stageLabel">authored</span></small>
+          <strong id="stateTitle">Authored baseline</strong>
+          <p id="stateMessage">Version 18 is specified; runtime 18.6 is healthy. Reopen to reconsider.</p>
+          <div class="assertion-meter" id="assertionMeter"><i class="assertion-segment pass"></i><i class="assertion-segment pass"></i><i class="assertion-segment pass"></i></div>
+          <span class="assertion-copy" id="assertionCopy">3 pass · 0 fail · 0 drift</span>
+        </aside>
+
+        <div class="evidence-surface">
+          <span class="evidence-rail" aria-hidden="true"></span>
+          <article class="evidence-cell is-active" data-mode="intent"><div class="evidence-kicker"><span>Intent / authored</span><i></i></div><strong id="intentTitle">PostgreSQL 18</strong><code id="intentMeta">specified · main.py:43</code><p id="intentCopy">The source explicitly owns the major version.</p></article>
+          <article class="evidence-cell" data-mode="resolution"><div class="evidence-kicker"><span>Resolution / authority</span><i></i></div><strong id="resolutionTitle">No active resolution</strong><code id="resolutionMeta">reopen to reconsider</code><p id="resolutionCopy">No proposal exists while authored intent is settled.</p></article>
+          <article class="evidence-cell" data-mode="reality"><div class="evidence-kicker"><span>Reality / observed</span><i></i></div><strong id="realityTitle">Runtime 18.6</strong><code id="realityMeta">healthy · backup 03:00</code><p id="realityCopy">Observed runtime satisfies the authored major version.</p></article>
+        </div>
+
+        <aside class="action-dock" id="actionDock">
+          <div class="action-head"><small>Next compiler action</small><span class="shortcut">ENTER = INSTANT</span></div>
+          <div class="action-stack">
+            <button class="action-button is-next" type="button" data-action="reopen">Reopen version <svg aria-hidden="true"><use href="#i-arrow"></use></svg></button>
+            <button class="action-button" type="button" data-action="resolve" disabled>Resolve with AI <svg aria-hidden="true"><use href="#i-arrow"></use></svg></button>
+            <button class="action-button" type="button" data-action="accept" disabled>Accept resolution <svg aria-hidden="true"><use href="#i-check"></use></svg></button>
+            <button class="action-button" type="button" data-action="plan" disabled>Plan one update <svg aria-hidden="true"><use href="#i-arrow"></use></svg></button>
+            <button class="action-button" type="button" data-action="apply" disabled>Apply plan <svg aria-hidden="true"><use href="#i-arrow"></use></svg></button>
+            <button class="action-button" type="button" data-action="observe" disabled>Observe runtime <svg aria-hidden="true"><use href="#i-focus"></use></svg></button>
+            <button class="action-button" type="button" data-action="assert" disabled>Run assertions <svg aria-hidden="true"><use href="#i-check"></use></svg></button>
+            <button class="action-button" type="button" data-action="recover" disabled>Recover schedule <svg aria-hidden="true"><use href="#i-reset"></use></svg></button>
+            <button class="action-button" type="button" data-action="retry" disabled>Retry assertions <svg aria-hidden="true"><use href="#i-reset"></use></svg></button>
+            <div class="complete-copy"><svg aria-hidden="true"><use href="#i-check"></use></svg><span>Reconciled · all three assertions pass.</span></div>
+          </div>
+          <button class="reset-action" type="button" data-action="reset" disabled>Reset lifecycle to authored</button>
+        </aside>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const body = document.body;
+    const editor = document.getElementById('editor');
+    const stageCanvas = document.getElementById('stageCanvas');
+    const world = document.getElementById('world');
+    const relationsLayer = document.getElementById('relationsLayer');
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+    const nodeCatalog = {
+      web: { id: 'WEB-01', name: 'Frontend', path: 'app.web.public', kind: 'frontend', source: 'main.py:12', ports: '1 external', provenance: 'specified', health: 'healthy' },
+      api: { id: 'API-02', name: 'Photo API', path: 'app.api.photos', kind: 'composite', source: 'main.py:28–67', ports: '5 external', provenance: 'specified', health: 'healthy' },
+      database: { id: 'DB-03', name: 'PostgreSQL', path: 'app.data.db.primary', kind: 'database', source: 'main.py:42', ports: '3 external', provenance: 'specified', health: 'healthy' },
+      store: { id: 'OBJ-04', name: 'Media store', path: 'app.data.object.media', kind: 'object store', source: 'main.py:53', ports: '2 external', provenance: 'observed', health: 'healthy' },
+      queue: { id: 'QUE-05', name: 'Image jobs', path: 'app.jobs.queue.images', kind: 'queue', source: 'inferred:api.publish', ports: '2 external', provenance: 'AI-resolved', health: 'healthy' },
+      worker: { id: 'WRK-06', name: 'Processor', path: 'app.jobs.worker.processor', kind: 'worker', source: 'runtime:worker-3', ports: '3 external', provenance: 'observed', health: 'healthy' }
+    };
+
+    const sourceLines = {
+      web: [[10, 'class Frontend:'], [11, '    public = True'], [12, '    calls = api.photos']],
+      api: [[28, 'class PhotoAPI(Composite):'], [29, '    source = "main.py"'], [30, '    children = [router, service, auth]'], [31, '    assertions = 4'], [34, '    calls = db.primary'], [35, '    stores = object.media'], [36, '    publishes = queue.images']],
+      database: [[40, 'database = Database('], [41, '    name = "db.primary",'], [42, '    engine = "postgres",'], [43, '    major_version = 18,'], [44, '    backup_window = "03:00",'], [45, ')'], [47, '# observed runtime: 18.6']],
+      store: [[51, 'media = ObjectStore('], [52, '    name = "object.media",'], [53, '    region = "us-east-1",'], [54, ')']],
+      queue: [[62, '# inferred from publish / consume'], [63, 'images = Queue("queue.images")'], [64, 'images.durable = True']],
+      worker: [[70, 'processor = Worker('], [71, '    name = "worker.processor",'], [72, '    consumes = queue.images,'], [73, '    writes = db.primary,'], [74, ')']]
+    };
+
+    const relations = [
+      { from: 'web', to: 'api', family: 'calls', label: 'calls /api/*', lane: -6 },
+      { from: 'api', to: 'database', family: 'data', label: 'reads + writes', lane: -9 },
+      { from: 'api', to: 'store', family: 'storage', label: 'stores media', lane: 8 },
+      { from: 'api', to: 'queue', family: 'jobs', label: 'publishes', lane: -7 },
+      { from: 'worker', to: 'queue', family: 'jobs', label: 'consumes', lane: 6 },
+      { from: 'worker', to: 'store', family: 'storage', label: 'stores derivatives', lane: 12 },
+      { from: 'worker', to: 'database', family: 'data', label: 'writes status', lane: -12 }
+    ];
+
+    const lifecycleFacts = {
+      authored: {
+        label: 'authored', title: 'Authored baseline', message: 'Version 18 is specified; runtime 18.6 is healthy. Reopen to reconsider.',
+        intentTitle: 'PostgreSQL 18', intentMeta: 'specified · main.py:43', intentCopy: 'The source explicitly owns the major version.',
+        resolutionTitle: 'No active resolution', resolutionMeta: 'reopen to reconsider', resolutionCopy: 'No proposal exists while authored intent is settled.',
+        realityTitle: 'Runtime 18.6', realityMeta: 'healthy · backup 03:00', realityCopy: 'Observed runtime satisfies the authored major version.',
+        dbName: 'PostgreSQL 18', mark: '', nodeIntent: 'specified 18', nodeResolution: 'no resolution', nodeReality: 'runtime 18.6',
+        proposal: 0, updates: 0, pass: 3, fail: 0, pending: 0, drift: 0, backup: 'pass · 03:00', provenance: 'specified', callout: 'Version 18 is explicit and runtime 18.6 is healthy. Reopen the field to reconsider it.'
+      },
+      unresolved: {
+        label: 'unresolved', title: 'Version reopened', message: 'DB-03 now has one unresolved field. Topology and observed reality remain fixed.',
+        intentTitle: 'PostgreSQL 18', intentMeta: 'prior intent · reopened', intentCopy: 'The previous authored value remains visible, not silently discarded.',
+        resolutionTitle: 'Version unresolved', resolutionMeta: '1 field needs authority', resolutionCopy: 'Resolution can now evaluate a replacement and its provenance.',
+        realityTitle: 'Runtime 18.6', realityMeta: 'observed · unchanged', realityCopy: 'Runtime remains separate while intent is unresolved.',
+        dbName: 'PostgreSQL · unresolved', mark: '1 UNRESOLVED', nodeIntent: 'reopened 18', nodeResolution: 'needs authority', nodeReality: 'runtime 18.6',
+        proposal: 0, updates: 0, pass: 3, fail: 0, pending: 0, drift: 0, backup: 'pass · 03:00', provenance: 'reopened', callout: 'Only db.primary.major_version is unresolved. The observed runtime is still PostgreSQL 18.6.'
+      },
+      proposed: {
+        label: 'proposed', title: 'Resolution proposed', message: 'PostgreSQL 19 is proposed with provenance, a reason, and an explicit rejected alternative.',
+        intentTitle: 'PostgreSQL 18', intentMeta: 'specified · unchanged', intentCopy: 'Authored intent stays 18 until the proposal is accepted.',
+        resolutionTitle: 'PostgreSQL 19', resolutionMeta: 'AI-resolved · proposal P-19', resolutionCopy: 'Reason: supported major with compatible extensions. SQLite was rejected.',
+        realityTitle: 'Runtime 18.6', realityMeta: 'observed · unchanged', realityCopy: 'A proposal does not rewrite runtime evidence.',
+        dbName: 'PostgreSQL 18 → 19', mark: 'P-19 · PROPOSED', nodeIntent: 'specified 18', nodeResolution: 'proposal 19', nodeReality: 'runtime 18.6',
+        proposal: 1, updates: 0, pass: 3, fail: 0, pending: 0, drift: 0, backup: 'pass · 03:00', provenance: 'AI-resolved', callout: '<strong>Reason:</strong> supported major, extension-compatible. <strong>Rejected:</strong> SQLite — durability and extension mismatch.'
+      },
+      accepted: {
+        label: 'accepted', title: 'Resolution accepted', message: 'PostgreSQL 19 is now authorized intent. Runtime evidence remains 18.6.',
+        intentTitle: 'PostgreSQL 19', intentMeta: 'accepted · explicit review', intentCopy: 'The accepted resolution becomes desired intent.',
+        resolutionTitle: 'P-19 accepted', resolutionMeta: 'authority · explicit review', resolutionCopy: 'The proposal is accepted but not yet planned or applied.',
+        realityTitle: 'Runtime 18.6', realityMeta: 'observed · unchanged', realityCopy: 'Reality still reports the previous runtime.',
+        dbName: 'PostgreSQL 19 desired', mark: 'P-19 · ACCEPTED', nodeIntent: 'desired 19', nodeResolution: 'accepted 19', nodeReality: 'runtime 18.6',
+        proposal: 1, updates: 0, pass: 3, fail: 0, pending: 0, drift: 0, backup: 'pass · 03:00', provenance: 'accepted', callout: 'Explicit review accepted PostgreSQL 19. No infrastructure operation has run yet.'
+      },
+      planned: {
+        label: 'planned', title: 'One update planned', message: 'The compiler produced one bounded update for db.primary.major_version.',
+        intentTitle: 'PostgreSQL 19', intentMeta: 'desired · accepted', intentCopy: 'Intent remains independently legible from the plan.',
+        resolutionTitle: 'Plan U-01 ready', resolutionMeta: '1 update · DB-03 only', resolutionCopy: 'The plan changes the major version without moving topology.',
+        realityTitle: 'Runtime 18.6', realityMeta: 'observed · unchanged', realityCopy: 'Reality remains untouched until apply and observe.',
+        dbName: 'PostgreSQL 19 desired', mark: 'PLAN U-01 · 1', nodeIntent: 'desired 19', nodeResolution: '1 update ready', nodeReality: 'runtime 18.6',
+        proposal: 1, updates: 1, pass: 3, fail: 0, pending: 0, drift: 0, backup: 'pass · 03:00', provenance: 'planned', callout: 'Plan U-01 contains one update: db.primary.major_version 18 → 19.'
+      },
+      applied: {
+        label: 'applied', title: 'Desired state applied', message: 'Desired version is 19. Observed runtime intentionally remains 18.6 until observation.',
+        intentTitle: 'PostgreSQL 19', intentMeta: 'desired · applied', intentCopy: 'The desired major version is now applied.',
+        resolutionTitle: 'Plan U-01 applied', resolutionMeta: '1 update · completed', resolutionCopy: 'The infrastructure write completed without inventing observation.',
+        realityTitle: 'Runtime 18.6', realityMeta: 'last observation · stale', realityCopy: 'Observed reality is preserved separately until refreshed.',
+        dbName: 'PostgreSQL 19 desired', mark: 'DESIRED 19', nodeIntent: 'desired 19', nodeResolution: 'applied 19', nodeReality: 'observed 18.6',
+        proposal: 1, updates: 1, pass: 3, fail: 0, pending: 0, drift: 0, backup: 'pass · 03:00', provenance: 'applied', callout: 'Desired state is 19; the last observation is still 18.6. Observe before asserting.'
+      },
+      observed: {
+        label: 'observed', title: 'Runtime observed with drift', message: 'Runtime is PostgreSQL 19.0. Backup runs at 03:20, twenty minutes after intended 03:00.',
+        intentTitle: 'PostgreSQL 19', intentMeta: 'desired · backup 03:00', intentCopy: 'Intent includes version 19 and the 03:00 backup window.',
+        resolutionTitle: 'Plan U-01 applied', resolutionMeta: 'version reconciled', resolutionCopy: 'The version update succeeded; schedule evidence now differs.',
+        realityTitle: 'Runtime 19.0', realityMeta: 'backup 03:20 · +20m drift', realityCopy: 'Version matches. Backup timing is observed out of tolerance.',
+        dbName: 'PostgreSQL 19.0', mark: 'DRIFT · +20m', nodeIntent: 'desired 19 · 03:00', nodeResolution: 'applied 19', nodeReality: '19.0 · backup 03:20',
+        proposal: 1, updates: 1, pass: 2, fail: 0, pending: 1, drift: 1, backup: 'pending · 03:20', provenance: 'observed', callout: '<strong>Observed drift:</strong> runtime 19.0 matches version intent; backup 03:20 differs from intended 03:00.'
+      },
+      failed: {
+        label: 'failed', title: 'Assertion failed', message: 'Two assertions pass. Backup schedule fails because 03:20 differs from intended 03:00.',
+        intentTitle: 'PostgreSQL 19', intentMeta: 'desired · backup 03:00', intentCopy: 'The intended schedule supplies the assertion boundary.',
+        resolutionTitle: 'Version reconciled', resolutionMeta: 'backup recovery required', resolutionCopy: 'The version change is sound; only schedule recovery remains.',
+        realityTitle: 'Runtime 19.0', realityMeta: '2 pass · 1 fail', realityCopy: 'Reachability and engine pass. Backup schedule fails.',
+        dbName: 'PostgreSQL 19.0', mark: 'ASSERT · 2/3', nodeIntent: 'desired 19 · 03:00', nodeResolution: 'recovery required', nodeReality: 'backup 03:20 · fail',
+        proposal: 1, updates: 1, pass: 2, fail: 1, pending: 0, drift: 1, backup: 'fail · 03:20', provenance: 'asserted', callout: '<strong>Failure:</strong> backup.window expected 03:00, observed 03:20. Recover the schedule; do not suppress the assertion.'
+      },
+      recovered: {
+        label: 'recovered', title: 'Schedule recovered', message: 'Backup is corrected to 03:00. The repaired evidence is ready for assertion retry.',
+        intentTitle: 'PostgreSQL 19', intentMeta: 'desired · backup 03:00', intentCopy: 'Intent is unchanged throughout recovery.',
+        resolutionTitle: 'Recovery applied', resolutionMeta: 'backup 03:20 → 03:00', resolutionCopy: 'Recovery corrected the source of drift, not the assertion.',
+        realityTitle: 'Runtime 19.0', realityMeta: 'backup 03:00 · retry pending', realityCopy: 'Observed schedule now matches; assertions await retry.',
+        dbName: 'PostgreSQL 19.0', mark: 'RECOVERED · 03:00', nodeIntent: 'desired 19 · 03:00', nodeResolution: 'schedule fixed', nodeReality: '19.0 · backup 03:00',
+        proposal: 1, updates: 1, pass: 2, fail: 0, pending: 1, drift: 0, backup: 'pending · 03:00', provenance: 'recovered', callout: 'Backup schedule is corrected to 03:00. Retry all assertions against fresh evidence.'
+      },
+      reconciled: {
+        label: 'reconciled', title: 'Intent and reality reconciled', message: 'PostgreSQL 19.0 is observed, backup runs at 03:00, and all three assertions pass.',
+        intentTitle: 'PostgreSQL 19', intentMeta: 'desired · backup 03:00', intentCopy: 'Accepted intent remains explicit and reviewable.',
+        resolutionTitle: 'P-19 + recovery', resolutionMeta: 'applied · reconciled', resolutionCopy: 'Version and schedule resolutions are complete.',
+        realityTitle: 'Runtime 19.0', realityMeta: 'backup 03:00 · 3/3 pass', realityCopy: 'Observed reality now satisfies every assertion.',
+        dbName: 'PostgreSQL 19.0', mark: 'RECONCILED · 3/3', nodeIntent: 'desired 19 · 03:00', nodeResolution: 'reconciled', nodeReality: '19.0 · 3/3 pass',
+        proposal: 1, updates: 1, pass: 3, fail: 0, pending: 0, drift: 0, backup: 'pass · 03:00', provenance: 'reconciled', callout: '<strong>Reconciled:</strong> runtime 19.0, backup 03:00, and all three assertions pass.'
+      }
+    };
+
+    const nextAction = { authored: 'reopen', unresolved: 'resolve', proposed: 'accept', accepted: 'plan', planned: 'apply', applied: 'observe', observed: 'assert', failed: 'recover', recovered: 'retry', reconciled: null };
+    const actionTarget = { reopen: 'unresolved', resolve: 'proposed', accept: 'accepted', plan: 'planned', apply: 'applied', observe: 'observed', assert: 'failed', recover: 'recovered', retry: 'reconciled' };
+    const pendingActions = new Set(['resolve', 'plan', 'apply', 'observe', 'assert', 'retry']);
+    const pendingLabels = { resolve: 'Resolving…', plan: 'Planning…', apply: 'Applying…', observe: 'Observing…', assert: 'Asserting…', retry: 'Retrying…' };
+    const actionLabels = { reopen: 'Reopen version', resolve: 'Resolve with AI', accept: 'Accept resolution', plan: 'Plan one update', apply: 'Apply plan', observe: 'Observe runtime', assert: 'Run assertions', recover: 'Recover schedule', retry: 'Retry assertions' };
+
+    let selectedNode = 'database';
+    let selectedEvidence = 'intent';
+    let lifecycle = 'authored';
+    let isPending = false;
+    const visiblePlanes = new Set(['calls', 'data', 'storage', 'jobs']);
+    const view = { panX: 0, panY: 0, zoom: 1 };
+
+    const nodeElement = (name) => world.querySelector(`.node[data-node="${name}"]`);
+    const worldNodes = () => [...world.querySelectorAll('.node[data-node]')];
+
+    const setKeyboardMode = (event) => {
+      const keyboard = event && event.detail === 0;
+      body.classList.toggle('keyboard-input', keyboard);
+      if (keyboard) requestAnimationFrame(() => body.classList.remove('keyboard-input'));
+      return keyboard;
+    };
+
+    const setNodePosition = (node) => {
+      node.style.setProperty('--node-x', `${Number(node.dataset.x)}px`);
+      node.style.setProperty('--node-y', `${Number(node.dataset.y)}px`);
+    };
+
+    const edgeGeometry = (relation) => {
+      const from = nodeElement(relation.from);
+      const to = nodeElement(relation.to);
+      const fx = Number(from.dataset.x); const fy = Number(from.dataset.y);
+      const tx = Number(to.dataset.x); const ty = Number(to.dataset.y);
+      const fw = from.offsetWidth; const fh = from.offsetHeight;
+      const tw = to.offsetWidth; const th = to.offsetHeight;
+      const fcx = fx + fw / 2; const fcy = fy + fh / 2;
+      const tcx = tx + tw / 2; const tcy = ty + th / 2;
+      const horizontal = Math.abs(tcx - fcx) >= Math.abs(tcy - fcy);
+      if (horizontal) {
+        const direction = tcx >= fcx ? 1 : -1;
+        const sx = fcx + direction * fw / 2; const sy = fcy;
+        const ex = tcx - direction * tw / 2; const ey = tcy;
+        const mid = (sx + ex) / 2 + relation.lane;
+        return { d: `M${sx} ${sy}H${mid}V${ey}H${ex}`, dots: [[mid, sy], [mid, ey]], labelX: mid + 4, labelY: (sy + ey) / 2 - 5 };
+      }
+      const direction = tcy >= fcy ? 1 : -1;
+      const sx = fcx; const sy = fcy + direction * fh / 2;
+      const ex = tcx; const ey = tcy - direction * th / 2;
+      const mid = (sy + ey) / 2 + relation.lane;
+      return { d: `M${sx} ${sy}V${mid}H${ex}V${ey}`, dots: [[sx, mid], [ex, mid]], labelX: (sx + ex) / 2 + 4, labelY: mid - 5 };
+    };
+
+    const drawEdges = () => {
+      relationsLayer.innerHTML = relations.map((relation) => {
+        const geometry = edgeGeometry(relation);
+        const width = relation.label.length * 4.2 + 10;
+        const active = relation.from === selectedNode || relation.to === selectedNode;
+        const hidden = !visiblePlanes.has(relation.family);
+        const classes = ['edge-group', active ? 'is-active' : 'is-quiet', hidden ? 'is-hidden' : ''].join(' ');
+        const dots = geometry.dots.map(([x, y]) => `<circle class="switch-dot" cx="${x}" cy="${y}" r="2.5"/>`).join('');
+        return `<g class="${classes}" data-family="${relation.family}" data-from="${relation.from}" data-to="${relation.to}"><path class="edge-separator" d="${geometry.d}"/><path class="edge-line" d="${geometry.d}" marker-end="url(#arrow-${relation.family})"/>${dots}<g transform="translate(${geometry.labelX} ${geometry.labelY})"><rect class="edge-label-bg" x="0" y="0" width="${width}" height="13" rx="2"/><text class="edge-label" x="5" y="9">${relation.label}</text></g></g>`;
+      }).join('');
+    };
+
+    const animateEdgeGeometry = () => {
+      const started = performance.now();
+      const tick = (now) => {
+        drawEdges();
+        if (now - started < 500 && !reducedMotion.matches) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    };
+
+    const renderSource = () => {
+      const item = nodeCatalog[selectedNode];
+      document.getElementById('sourceTitle').textContent = `${item.id} / source evidence`;
+      document.getElementById('sourcePath').textContent = item.source;
+      const lines = sourceLines[selectedNode];
+      document.getElementById('sourceBody').innerHTML = lines.map(([number, text], index) => {
+        const highlighted = selectedNode === 'database' ? number === 43 || number === 44 : index === 1;
+        const escaped = text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+        const marked = escaped.replace(/(class|major_version|backup_window|source|children|assertions|engine|calls|stores|publishes|consumes|writes)/g, '<span class="source-token">$1</span>').replace(/(#.*)$/g, '<span class="source-comment">$1</span>');
+        return `<div class="source-line${highlighted ? ' is-hit' : ''}"><em>${number}</em><span>${marked}</span></div>`;
+      }).join('');
+    };
+
+    const updateNeighborhood = () => {
+      const neighbors = new Set([selectedNode]);
+      relations.forEach((relation) => {
+        if (relation.from === selectedNode) neighbors.add(relation.to);
+        if (relation.to === selectedNode) neighbors.add(relation.from);
+      });
+      worldNodes().forEach((node) => node.classList.toggle('is-quiet', !neighbors.has(node.dataset.node)));
+      drawEdges();
+    };
+
+    const updateInspector = () => {
+      const item = nodeCatalog[selectedNode];
+      const facts = lifecycleFacts[lifecycle];
+      document.getElementById('inspectorName').textContent = `${item.id} / ${item.name}`;
+      document.getElementById('inspectorPath').textContent = item.path;
+      document.getElementById('inspectorHealth').textContent = selectedNode === 'database' && (facts.fail || facts.drift) ? 'attention' : item.health;
+      document.getElementById('inspectorProvenance').textContent = selectedNode === 'database' ? facts.provenance : item.provenance;
+      document.getElementById('inspectorKind').textContent = item.kind;
+      document.getElementById('inspectorSource').textContent = item.source;
+      document.getElementById('inspectorPorts').textContent = item.ports;
+      const dbSpecific = selectedNode === 'database';
+      document.getElementById('inspectorIntent').textContent = dbSpecific ? facts.intentTitle : 'stable';
+      document.getElementById('inspectorResolution').textContent = dbSpecific ? facts.resolutionTitle : 'none open';
+      document.getElementById('inspectorReality').textContent = dbSpecific ? facts.realityTitle : item.health;
+      document.getElementById('inspectorPhase').textContent = dbSpecific ? facts.label : item.provenance;
+      document.getElementById('inspectorStateTitle').textContent = `State / ${item.id}`;
+      document.getElementById('inspectorCallout').innerHTML = dbSpecific ? facts.callout : `${item.id} is ${item.provenance.toLowerCase()} and ${item.health}. Select a relation plane to isolate its neighborhood.`;
+      document.getElementById('inspectorAssertions').textContent = dbSpecific ? `${facts.pass} / 3` : selectedNode === 'api' ? '4 / 4' : 'healthy';
+      document.getElementById('inspectorBackup').textContent = dbSpecific ? facts.backup : 'not applicable';
+      renderSource();
+    };
+
+    const updateLens = () => {
+      const item = nodeCatalog[selectedNode];
+      const facts = lifecycleFacts[lifecycle];
+      const modeTitle = selectedEvidence === 'intent' ? facts.intentTitle : selectedEvidence === 'resolution' ? facts.resolutionTitle : facts.realityTitle;
+      const modeDetail = selectedEvidence === 'intent' ? facts.intentCopy : selectedEvidence === 'resolution' ? facts.resolutionCopy : facts.realityCopy;
+      document.getElementById('lensId').textContent = item.id;
+      document.getElementById('lensTitle').textContent = selectedNode === 'database' ? modeTitle : `${item.name} · ${item.provenance}`;
+      document.getElementById('lensDetail').textContent = selectedNode === 'database' ? modeDetail : `${item.path} · ${item.source} · ${item.ports}`;
+      document.getElementById('lensMode').textContent = selectedEvidence.toUpperCase();
+    };
+
+    const selectNode = (name, event) => {
+      if (!nodeCatalog[name]) return;
+      setKeyboardMode(event);
+      selectedNode = name;
+      worldNodes().forEach((node) => node.classList.toggle('is-selected', node.dataset.node === name));
+      document.querySelectorAll('.tree-row[data-node]').forEach((row) => row.classList.toggle('is-selected', row.dataset.node === name));
+      document.querySelectorAll('[data-mini-node]').forEach((node) => node.classList.toggle('selected', node.dataset.miniNode === name));
+      editor.classList.remove('inspector-collapsed');
+      document.getElementById('toggleInspector').setAttribute('aria-expanded', 'true');
+      updateNeighborhood();
+      updateInspector();
+      updateLens();
+    };
+
+    const updateEvidence = (mode, event) => {
+      setKeyboardMode(event);
+      selectedEvidence = mode;
+      const modes = ['intent', 'resolution', 'reality'];
+      document.getElementById('evidenceControls').style.setProperty('--evidence-index', String(modes.indexOf(mode)));
+      document.querySelectorAll('[data-evidence]').forEach((button) => {
+        const active = button.dataset.evidence === mode;
+        button.classList.toggle('is-active', active);
+        button.setAttribute('aria-pressed', String(active));
+      });
+      document.querySelectorAll('.evidence-cell').forEach((cell) => cell.classList.toggle('is-active', cell.dataset.mode === mode));
+      const facts = lifecycleFacts[lifecycle];
+      const nodeEvidence = mode === 'intent' ? facts.nodeIntent : mode === 'resolution' ? facts.nodeResolution : facts.nodeReality;
+      document.getElementById('dbNodeEvidence').textContent = nodeEvidence;
+      document.getElementById('stageMode').textContent = `${mode.toUpperCase()} · ${stageCanvas.classList.contains('lens-open') ? 'LENS' : 'OVERVIEW'}`;
+      updateLens();
+    };
+
+    const updateMeter = (facts) => {
+      const segments = [];
+      for (let index = 0; index < facts.pass; index += 1) segments.push('pass');
+      for (let index = 0; index < facts.fail; index += 1) segments.push('fail');
+      for (let index = 0; index < facts.pending; index += 1) segments.push('pending');
+      while (segments.length < 3) segments.push('');
+      document.getElementById('assertionMeter').innerHTML = segments.slice(0, 3).map((state) => `<i class="assertion-segment ${state}"></i>`).join('');
+      document.getElementById('assertionCopy').textContent = `${facts.pass} pass · ${facts.fail} fail · ${facts.drift} drift`;
+    };
+
+    const updateActions = () => {
+      const current = nextAction[lifecycle];
+      document.querySelectorAll('.action-button[data-action]').forEach((button) => {
+        const active = button.dataset.action === current;
+        button.classList.toggle('is-next', active);
+        button.disabled = !active || isPending;
+        button.classList.toggle('is-pending', active && isPending);
+        const label = active && isPending ? pendingLabels[current] : actionLabels[button.dataset.action];
+        button.firstChild.textContent = `${label} `;
+      });
+      const reset = document.querySelector('[data-action="reset"]');
+      reset.disabled = lifecycle === 'authored' || isPending;
+      document.getElementById('actionDock').classList.toggle('is-complete', lifecycle === 'reconciled');
+    };
+
+    const renderLifecycle = () => {
+      const facts = lifecycleFacts[lifecycle];
+      body.dataset.lifecycle = lifecycle;
+      document.getElementById('stageLabel').textContent = facts.label;
+      document.getElementById('stateTitle').textContent = facts.title;
+      document.getElementById('stateMessage').textContent = facts.message;
+      document.getElementById('topStatus').textContent = isPending ? pendingLabels[nextAction[lifecycle]] : facts.title;
+      document.getElementById('topStatusMeta').textContent = `DB-03 · ${facts.intentTitle.replace('PostgreSQL ', '')} / ${facts.realityTitle.replace('Runtime ', '')}`;
+      document.getElementById('lifecycleCounts').textContent = `${facts.proposal} proposal${facts.proposal === 1 ? '' : 's'} · ${facts.updates} update${facts.updates === 1 ? '' : 's'} · ${facts.pass}/3 checks`;
+      document.getElementById('intentTitle').textContent = facts.intentTitle;
+      document.getElementById('intentMeta').textContent = facts.intentMeta;
+      document.getElementById('intentCopy').textContent = facts.intentCopy;
+      document.getElementById('resolutionTitle').textContent = facts.resolutionTitle;
+      document.getElementById('resolutionMeta').textContent = facts.resolutionMeta;
+      document.getElementById('resolutionCopy').textContent = facts.resolutionCopy;
+      document.getElementById('realityTitle').textContent = facts.realityTitle;
+      document.getElementById('realityMeta').textContent = facts.realityMeta;
+      document.getElementById('realityCopy').textContent = facts.realityCopy;
+      document.getElementById('dbNodeName').textContent = facts.dbName;
+      document.getElementById('dbTreeName').textContent = facts.dbName;
+      document.getElementById('dbMark').textContent = facts.mark;
+      const dbNode = nodeElement('database');
+      dbNode.classList.toggle('has-mark', Boolean(facts.mark));
+      dbNode.classList.toggle('has-drift', Boolean(facts.drift));
+      dbNode.classList.toggle('has-failure', Boolean(facts.fail));
+      dbNode.classList.toggle('is-reconciled', lifecycle === 'reconciled' || lifecycle === 'recovered');
+      updateMeter(facts);
+      updateEvidence(selectedEvidence);
+      updateActions();
+      updateInspector();
+      updateLens();
+    };
+
+    const transitionLifecycle = (action, event) => {
+      if (action === 'reset') {
+        setKeyboardMode(event);
+        lifecycle = 'authored';
+        isPending = false;
+        delete body.dataset.pending;
+        renderLifecycle();
+        return;
+      }
+      if (isPending || nextAction[lifecycle] !== action) return;
+      const keyboard = setKeyboardMode(event);
+      const target = actionTarget[action];
+      const needsPending = pendingActions.has(action) && !keyboard;
+      if (!needsPending) {
+        lifecycle = target;
+        renderLifecycle();
+        return;
+      }
+      isPending = true;
+      body.dataset.pending = action;
+      updateActions();
+      document.getElementById('topStatus').textContent = pendingLabels[action];
+      document.getElementById('stateTitle').textContent = pendingLabels[action];
+      document.getElementById('stateMessage').textContent = `Compiling ${nodeCatalog.database.id} evidence without moving topology.`;
+      window.setTimeout(() => {
+        lifecycle = target;
+        isPending = false;
+        delete body.dataset.pending;
+        renderLifecycle();
+      }, reducedMotion.matches ? 280 : 380);
+    };
+
+    const updateHiddenEffect = () => {
+      const hiddenRelations = relations.filter((relation) => !visiblePlanes.has(relation.family));
+      const affectedNodes = new Set(hiddenRelations.flatMap((relation) => [relation.from, relation.to]));
+      const panel = document.getElementById('hiddenEffect');
+      panel.hidden = hiddenRelations.length === 0;
+      document.getElementById('hiddenEffectCopy').textContent = `${hiddenRelations.length} relation${hiddenRelations.length === 1 ? '' : 's'} hidden · ${affectedNodes.size} node${affectedNodes.size === 1 ? '' : 's'} affected`;
+      drawEdges();
+    };
+
+    const updateView = () => {
+      world.style.setProperty('--pan-x', `${view.panX}px`);
+      world.style.setProperty('--pan-y', `${view.panY}px`);
+      world.style.setProperty('--zoom', String(view.zoom));
+      document.getElementById('zoomReadout').textContent = `${Math.round(view.zoom * 100)}%`;
+      const mini = document.getElementById('minimapWindow');
+      const scale = Math.max(.56, Math.min(1, 1 / view.zoom));
+      mini.setAttribute('width', String(94 * scale));
+      mini.setAttribute('height', String(46 * scale));
+      mini.setAttribute('x', String(3 + (1 - scale) * 47 - view.panX / 22));
+      mini.setAttribute('y', String(3 + (1 - scale) * 23 - view.panY / 22));
+    };
+
+    const fitView = (event) => {
+      setKeyboardMode(event);
+      const bounds = stageCanvas.getBoundingClientRect();
+      view.zoom = Math.min(1, (bounds.width - 28) / 820, (bounds.height - 28) / 400);
+      view.panX = 0;
+      view.panY = 0;
+      updateView();
+    };
+
+    const toggleSource = (open, event) => {
+      setKeyboardMode(event);
+      const sourceButton = document.querySelector('[data-action="source"]');
+      stageCanvas.classList.toggle('source-open', open);
+      sourceButton.setAttribute('aria-expanded', String(open));
+      sourceButton.classList.toggle('is-active', open);
+      renderSource();
+    };
+
+    const toggleLens = (event) => {
+      setKeyboardMode(event);
+      const open = !stageCanvas.classList.contains('lens-open');
+      stageCanvas.classList.toggle('lens-open', open);
+      const button = document.querySelector('[data-action="focus"]');
+      button.setAttribute('aria-pressed', String(open));
+      button.classList.toggle('is-active', open);
+      document.getElementById('stageMode').textContent = `${selectedEvidence.toUpperCase()} · ${open ? 'LENS' : 'OVERVIEW'}`;
+      updateNeighborhood();
+    };
+    document.getElementById('selectTool').addEventListener('click', (event) => {
+      setKeyboardMode(event);
+      toggleSource(false, event);
+      if (stageCanvas.classList.contains('lens-open')) toggleLens(event);
+      document.getElementById('selectTool').setAttribute('aria-pressed', 'true');
+      document.getElementById('topStatus').textContent = 'Select · drag to move';
+      document.getElementById('topStatusMeta').textContent = 'snap · 8px / settle · 420ms';
+    });
+
+    document.querySelectorAll('.tree-row[data-node]').forEach((row) => row.addEventListener('click', (event) => selectNode(row.dataset.node, event)));
+    worldNodes().forEach((node) => {
+      setNodePosition(node);
+      let drag = null;
+      node.addEventListener('pointerdown', (event) => {
+        if (event.target.closest('button')) return;
+        selectNode(node.dataset.node, event);
+        drag = { pointerId: event.pointerId, originX: event.clientX, originY: event.clientY, baseX: Number(node.dataset.x), baseY: Number(node.dataset.y) };
+        node.setPointerCapture(event.pointerId);
+        node.classList.add('is-dragging');
+      });
+      node.addEventListener('pointermove', (event) => {
+        if (!drag || event.pointerId !== drag.pointerId) return;
+        const x = Math.max(0, Math.min(820 - node.offsetWidth, drag.baseX + (event.clientX - drag.originX) / view.zoom));
+        const y = Math.max(34, Math.min(400 - node.offsetHeight, drag.baseY + (event.clientY - drag.originY) / view.zoom));
+        node.dataset.x = String(x);
+        node.dataset.y = String(y);
+        setNodePosition(node);
+        drawEdges();
+      });
+      const settleNode = (event) => {
+        if (!drag || event.pointerId !== drag.pointerId) return;
+        node.dataset.x = String(Math.round(Number(node.dataset.x) / 8) * 8);
+        node.dataset.y = String(Math.round(Number(node.dataset.y) / 8) * 8);
+        node.classList.remove('is-dragging');
+        node.releasePointerCapture(event.pointerId);
+        drag = null;
+        setNodePosition(node);
+        animateEdgeGeometry();
+      };
+      node.addEventListener('pointerup', settleNode);
+      node.addEventListener('pointercancel', settleNode);
+      node.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        selectNode(node.dataset.node, { detail: 0 });
+      });
+    });
+
+    document.querySelectorAll('[data-plane]').forEach((button) => {
+      button.addEventListener('click', (event) => {
+        setKeyboardMode(event);
+        const plane = button.dataset.plane;
+        const active = visiblePlanes.has(plane);
+        if (active) visiblePlanes.delete(plane); else visiblePlanes.add(plane);
+        button.setAttribute('aria-pressed', String(!active));
+        const count = relations.filter((relation) => relation.family === plane).length;
+        button.querySelector('.plane-count').textContent = active ? `−${count}` : String(count);
+        updateHiddenEffect();
+      });
+    });
+
+    document.querySelectorAll('[data-evidence]').forEach((button) => button.addEventListener('click', (event) => updateEvidence(button.dataset.evidence, event)));
+    document.querySelectorAll('.action-button[data-action], [data-action="reset"]').forEach((button) => button.addEventListener('click', (event) => transitionLifecycle(button.dataset.action, event)));
+
+    document.querySelector('[data-composite="api"]').addEventListener('click', (event) => {
+      event.stopPropagation();
+      setKeyboardMode(event);
+      const api = nodeElement('api');
+      const expanded = api.classList.toggle('is-expanded');
+      event.currentTarget.setAttribute('aria-expanded', String(expanded));
+      event.currentTarget.setAttribute('aria-label', `${expanded ? 'Collapse' : 'Expand'} Photo API composite`);
+      api.setAttribute('aria-label', `API-02 Photo API composite, ${expanded ? 'expanded' : 'collapsed'}, three children`);
+      animateEdgeGeometry();
+    });
+
+    document.getElementById('toggleHierarchy').addEventListener('click', (event) => {
+      setKeyboardMode(event);
+      const collapsed = editor.classList.toggle('hierarchy-collapsed');
+      event.currentTarget.setAttribute('aria-expanded', String(!collapsed));
+      event.currentTarget.setAttribute('aria-label', `${collapsed ? 'Expand' : 'Collapse'} hierarchy`);
+    });
+    document.getElementById('toggleInspector').addEventListener('click', (event) => {
+      setKeyboardMode(event);
+      const collapsed = editor.classList.toggle('inspector-collapsed');
+      event.currentTarget.setAttribute('aria-expanded', String(!collapsed));
+      event.currentTarget.setAttribute('aria-label', `${collapsed ? 'Expand' : 'Collapse'} inspector`);
+    });
+
+    document.querySelector('[data-action="focus"]').addEventListener('click', toggleLens);
+    document.querySelector('[data-action="source"]').addEventListener('click', (event) => toggleSource(!stageCanvas.classList.contains('source-open'), event));
+    document.querySelector('[data-action="fit"]').addEventListener('click', fitView);
+    document.getElementById('closeSource').addEventListener('click', (event) => toggleSource(false, event));
+    document.getElementById('inspectorFocus').addEventListener('click', toggleLens);
+    document.getElementById('inspectorSourceButton').addEventListener('click', (event) => toggleSource(true, event));
+
+    document.getElementById('zoomOut').addEventListener('click', (event) => { setKeyboardMode(event); view.zoom = Math.max(.6, Math.round((view.zoom - .1) * 10) / 10); updateView(); });
+    document.getElementById('zoomIn').addEventListener('click', (event) => { setKeyboardMode(event); view.zoom = Math.min(1.4, Math.round((view.zoom + .1) * 10) / 10); updateView(); });
+    document.getElementById('resetView').addEventListener('click', (event) => { setKeyboardMode(event); view.zoom = 1; view.panX = 0; view.panY = 0; updateView(); });
+
+    let pan = null;
+    stageCanvas.addEventListener('pointerdown', (event) => {
+      if (event.target !== stageCanvas && !event.target.classList.contains('stage-grid')) return;
+      pan = { pointerId: event.pointerId, originX: event.clientX, originY: event.clientY, baseX: view.panX, baseY: view.panY };
+      stageCanvas.setPointerCapture(event.pointerId);
+      stageCanvas.classList.add('is-panning');
+    });
+    stageCanvas.addEventListener('pointermove', (event) => {
+      if (!pan || event.pointerId !== pan.pointerId) return;
+      view.panX = pan.baseX + event.clientX - pan.originX;
+      view.panY = pan.baseY + event.clientY - pan.originY;
+      updateView();
+    });
+    const settlePan = (event) => {
+      if (!pan || event.pointerId !== pan.pointerId) return;
+      view.panX = Math.round(view.panX / 8) * 8;
+      view.panY = Math.round(view.panY / 8) * 8;
+      pan = null;
+      stageCanvas.classList.remove('is-panning');
+      updateView();
+    };
+    stageCanvas.addEventListener('pointerup', settlePan);
+    stageCanvas.addEventListener('pointercancel', settlePan);
+    stageCanvas.addEventListener('wheel', (event) => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      event.preventDefault();
+      view.zoom = Math.max(.6, Math.min(1.4, view.zoom + (event.deltaY > 0 ? -.1 : .1)));
+      updateView();
+    }, { passive: false });
+
+    worldNodes().forEach(setNodePosition);
+    drawEdges();
+    renderLifecycle();
+    renderSource();
+    updateView();
+  </script>
+</body>
+</html>

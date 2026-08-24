@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Clockwork Workbench — working alternatives</title>
+<style>
+:root{color-scheme:dark;--ink:#f1f3f5;--paper:#14181d;--line:#303740;--muted:#98a1ad;--signal:#caff46}
+*{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#0f1216;font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}body{display:grid;grid-template-rows:76px minmax(0,1fr)}button,a{font:inherit}button:focus-visible,a:focus-visible,iframe:focus-visible{outline:3px solid #7595ff;outline-offset:-3px}::selection{background:var(--signal);color:#11151a}
+.bar{position:relative;z-index:4;display:grid;grid-template-columns:230px minmax(580px,1fr) 230px;background:var(--paper);color:var(--ink);border-bottom:1px solid var(--line);box-shadow:0 10px 24px rgba(0,0,0,.38)}.brand{display:flex;align-items:center;gap:10px;padding:0 18px;border-right:1px solid var(--line);font-size:18px;font-weight:800;letter-spacing:-.03em}.brand svg{width:25px;height:25px}.brand small{display:block;color:var(--muted);font-size:10px;font-weight:500;letter-spacing:0}.tabs{display:grid;grid-template-columns:repeat(2,1fr)}.tab{position:relative;padding:11px 15px;border:0;border-right:1px solid var(--line);background:transparent;color:var(--ink);cursor:pointer;text-align:left}.tab:hover{background:#1d232a}.tab[aria-selected=true]{background:#232a33;color:#fff}.tab[aria-selected=true]:after{content:"";position:absolute;left:15px;right:15px;bottom:0;height:4px;background:var(--signal)}.tab b,.tab span{display:block}.tab b{font-size:14px;margin-bottom:3px}.tab span{color:var(--muted);font-size:10px;line-height:1.25}.tab[aria-selected=true] span{color:#c6ccd4}.tools{display:grid;grid-template-columns:1fr 40px;align-items:center;gap:8px;padding:0 12px;background:#1a1f25}.scale{display:flex;flex-direction:column}.scale strong{font-size:13px}.scale span{color:var(--muted);font:9px ui-monospace,SFMono-Regular,Menlo,monospace}.reset{width:40px;height:36px;display:grid;place-items:center;border:1px solid var(--line);border-radius:7px;background:#20262d;color:var(--ink);cursor:pointer}.reset:hover{background:#2a323c}.reset svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8}
+.stage{position:relative;min-height:0;overflow:auto;background:#181918}.artboard-wrap{position:absolute;left:50%;top:50%;width:1152px;height:648px;transform:translate(-50%,-50%);background:#101110;box-shadow:0 20px 50px rgba(0,0,0,.34)}iframe{display:block;width:1280px;height:720px;border:0;background:#fff;transform:scale(.9);transform-origin:top left}.loading{position:absolute;inset:0;display:grid;place-items:center;background:#181918;color:#f2f2ec;font:11px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.1em;pointer-events:none;transition:opacity .16s linear}.loading.done{opacity:0}
+@media(max-width:1170px){.bar{grid-template-columns:160px 1fr}.tools{display:none}.brand{padding:0 12px}.artboard-wrap{left:8px;transform:translateY(-50%)}}
+</style>
+</head>
+<body>
+<!-- THESIS: Compare two complete dark-mode Clockwork Workbench products under one fixed state, viewport, and zoom contract. OWN-WORLD: Dark comparison chrome recedes while each 1280×720 workbench owns its visual system. STORY: Switch alternatives, complete the same intent-to-reality lifecycle, and judge UX rather than feature completeness. FIRST VIEWPORT: A compact selector sits above one exact 1280×720 artboard presented at 90%. FORM: stateful two-product comparison; seed key 2d0e6da4. FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md. -->
+<header class="bar">
+<div class="brand"><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="2" width="28" height="28" rx="4" fill="#222933"/><path d="M9 21V11h5.5c4.7 0 7.5 1.7 7.5 5s-2.8 5-7.5 5H9Z" fill="none" stroke="#caff46" stroke-width="2"/><circle cx="14.5" cy="16" r="2.5" fill="#caff46"/></svg><span>Clockwork Workbench<small>Working dark-mode alternatives</small></span></div>
+<nav class="tabs" role="tablist" aria-label="Working Clockwork alternatives">
+<button class="tab" role="tab" aria-selected="true" data-src="410-precision-working.html"><b>Precision Workbench</b><span>Dark · surgical · command-first</span></button>
+<button class="tab" role="tab" aria-selected="false" data-src="420-motion-working.html"><b>Motion Compiler</b><span>Dark · physical · state-authoring</span></button>
+</nav>
+<div class="tools"><div class="scale"><strong>1280 × 720</strong><span>fixed artboard · displayed 90%</span></div><button class="reset" id="resetCurrent" aria-label="Reset current prototype"><svg viewBox="0 0 18 18" aria-hidden="true"><path d="M4 5.5A6 6 0 1 1 3.3 11M4 2v3.5H.5"/></svg></button></div>
+</header>
+<main class="stage"><div class="artboard-wrap"><iframe id="productFrame" title="Precision Workbench working prototype" src="410-precision-working.html"></iframe></div><div class="loading" id="loading">LOADING 1280 × 720 PRODUCT</div></main>
+<script>
+const tabs=[...document.querySelectorAll('.tab')],frame=document.getElementById('productFrame'),loading=document.getElementById('loading');
+const titles={'410-precision-working.html':'Precision Workbench working prototype','420-motion-working.html':'Motion Compiler working prototype'};
+function select(tab){tabs.forEach(item=>item.setAttribute('aria-selected',String(item===tab)));loading.classList.remove('done');frame.title=titles[tab.dataset.src];frame.src=tab.dataset.src}
+tabs.forEach((tab,index)=>{tab.addEventListener('click',()=>select(tab));tab.addEventListener('keydown',event=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();const next=event.key==='Home'?0:event.key==='End'?tabs.length-1:(index+(event.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;tabs[next].focus();select(tabs[next])})});
+document.getElementById('resetCurrent').addEventListener('click',()=>{const button=frame.contentDocument?.querySelector('[data-action=reset]');if(button)button.click();else frame.contentWindow.location.reload()});frame.addEventListener('load',()=>loading.classList.add('done'));
+</script>
+</body>
+</html>

@@ -15,7 +15,7 @@ execution: code
 
 - **Objective:** Let Clockwork’s builders compare two polished Clockwork Workbench directions through the same complete, interactive intent-to-reality workflow.
 - **Means:** Build two backendless dark-mode prototypes with shared behavior and data, a standardized viewport, readable semantic relationships, restored composite and evidence-navigation mechanisms, and draggable canvas components.
-- **Product authority:** `PRODUCT.md` and `.local/clockwork-vnext-research.md` define Clockwork’s source-of-truth, provenance, graph, composite, and lifecycle rules.
+- **Product authority:** `PRODUCT.md` defines Clockwork’s source-of-truth, provenance, graph, composite, and lifecycle rules; this Product Contract defines the Workbench prototype comparison.
 - **Open blockers:** None. Precision Workbench and Motion Compiler remain the active alternatives.
 
 ---
@@ -160,15 +160,13 @@ flowchart TB
 ### Dependencies and Assumptions
 
 - `PRODUCT.md` remains the product authority for source inspectability, scoped intelligence, provenance, and application-architecture focus.
-- `.local/clockwork-vnext-research.md` remains the authority for Intent/Resolution/Reality, semantic edges, expandable composites, ghost proposals, and framework-neutral graph semantics.
 - Synthetic scenario data is acceptable when clearly labeled and identical across alternatives.
 - The approved reference directions are Precision Workbench and Motion Compiler; the Direct Model Canvas alternative is retired.
 
 ### Sources and Research
 
 - `PRODUCT.md`
-- `.local/clockwork-vnext-research.md`
 - `README.md`
 - `clockwork/cli.py`
 - `clockwork/formatters.py`
-- `.context/compound-engineering/ce-prototype/2026-08-24-clockwork-ui-directions/04-reference-directions/`
+- `prototypes/clockwork-workbench/`
