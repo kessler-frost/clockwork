@@ -85,7 +85,7 @@ The prototypes must test Clockwork’s real product premise rather than static d
 - R17. Every visible control must have a meaningful state change, including hover, focus, active, disabled, pending, success, and applicable error behavior.
 - R18. Each alternative must have one coherent visual system with explicit typography, spacing, color, component, icon, and motion rules grounded in the approved reference directions.
 - R19. Motion must communicate selection, spatial continuity, composite expansion, and lifecycle state; high-frequency and keyboard actions remain immediate, and reduced-motion users receive a non-spatial fallback.
-- R20. Each alternative must pass a bounded visual-diff review in Orca’s built-in browser at the standardized viewport before it is shown for selection.
+- R20. Each alternative must pass a bounded visual-diff review with the available browser automation at the standardized viewport before it is shown for selection.
 - R21. A mini-map or viewport locator, fit control, pan/zoom controls, visible keyboard focus, and source inspection must remain available in all alternatives.
 - R22. Canvas primitives must be directly movable, with semantic routes updating continuously and preserving relation meaning after placement changes.
 
