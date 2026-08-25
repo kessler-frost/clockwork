@@ -22,14 +22,14 @@ tags:
 
 ## Context
 
-The approved direction is not one generic graph editor. It is a controlled comparison between **two complete, dark, polished products**—**Precision Workbench** and **Motion Compiler**—that expose the same Clockwork premise and lifecycle while deliberately differing in visual grammar, navigation, motion, and canvas feel. The tracked alternatives are selected in the comparison gallery at `prototypes/clockwork-workbench/401-working-gallery.html:19-25`.
+The approved direction now has one recommended **Hybrid Workbench** plus two complete dark references: **Precision Workbench** and **Motion Compiler**. Hybrid uses Precision as the persistent operating shell and Motion as the lifecycle/evidence and physical-feedback source while all three surfaces expose the same Clockwork premise and lifecycle. The tracked surfaces are selected in `prototypes/clockwork-workbench/401-working-gallery.html`.
 
 Clockwork Workbench is a visual co-author, not a read-only operations dashboard. Python/Pydantic remains the inspectable source of truth; visual and source edits converge on one semantic model, and intent, resolution, and reality remain separately inspectable (`PRODUCT.md:25-40`). This means a prototype must demonstrate source-backed intent, scoped authorization, provenance-bearing resolution, deterministic planning/application, observed evidence, assertions, drift, and recovery—not merely arrange attractive nodes (`docs/plans/2026-08-24-0455-feat-clockwork-stateful-canvas-prototypes-plan.md:29-44`).
 
 The canonical comparison contract is:
 
-- both alternatives default to dark mode and expose the same capabilities, synthetic scenario, lifecycle, and recoverable failure (`docs/plans/2026-08-24-0455-feat-clockwork-stateful-canvas-prototypes-plan.md:53-59`);
-- the scenario contains six application primitives—Frontend, Photo API composite, PostgreSQL database, Media store, Image jobs queue, and Processor worker—shown in both implementations (`prototypes/clockwork-workbench/410-precision-working.html:207-214`, `prototypes/clockwork-workbench/420-motion-working.html:921-927`);
+- Hybrid, Precision, and Motion default to dark mode and expose the same capabilities, canonical fixture, lifecycle, history counts, and recoverable failure (`docs/plans/2026-08-24-0455-feat-clockwork-stateful-canvas-prototypes-plan.md:53-91`);
+- the scenario contains six application primitives—Frontend, Photo API composite, PostgreSQL database, Media store, Image jobs queue, and Processor worker—shown in all three implementations;
 - the contract calls for seven typed semantic relationships and four filterable relation families: Calls, Data, Storage, and Jobs (`docs/plans/2026-08-24-0455-feat-clockwork-stateful-canvas-prototypes-plan.md:57-65`);
 - every alternative owns an exact 1280×720 internal artboard; the gallery places its iframe in a 1152×648 wrapper using `scale(.9)`, so alternatives are compared at 90% rather than auto-fit independently (`prototypes/clockwork-workbench/401-working-gallery.html:11-11`, `prototypes/clockwork-workbench/401-working-gallery.html:23-25`);
 - first/second-iteration polish is the minimum acceptable finish. These are products to judge, not direction boards (`docs/plans/2026-08-24-0455-feat-clockwork-stateful-canvas-prototypes-plan.md:41-45`).
@@ -76,7 +76,7 @@ The action chain is:
 
 `reopen → resolve → accept → plan → apply → observe → assert → recover → retry`
 
-Both implementations encode that transition order directly (`prototypes/clockwork-workbench/410-precision-working.html:215-229`, `prototypes/clockwork-workbench/420-motion-working.html:949-1036`). The evidence story is equally important:
+Hybrid, Precision, and Motion encode the same transition order. Hybrid’s fact snapshot is authoritative for the comparison; Precision and Motion normalize their visible proposal/update history to it (`prototypes/clockwork-workbench/430-hybrid-workbench.html`, `prototypes/clockwork-workbench/410-precision-working.html:215-229`, `prototypes/clockwork-workbench/420-motion-working.html:949-1036`).
 
 - **Authored:** PostgreSQL 18 is explicit; observed runtime is independently 18.6.
 - **Unresolved:** only `db.primary.major_version` is reopened and authorized for resolution; topology and current reality remain unchanged.
@@ -92,6 +92,14 @@ Both implementations encode that transition order directly (`prototypes/clockwor
 Precision’s exact state facts are at `prototypes/clockwork-workbench/410-precision-working.html:216-225`; Motion’s expanded evidence copy is at `prototypes/clockwork-workbench/420-motion-working.html:949-1029`. Pending time belongs to resolver/plan/apply/observe/assert/retry work, while keyboard/high-frequency actions should be immediate; reduced-motion users receive a non-spatial fallback (`docs/plans/2026-08-24-0455-feat-clockwork-stateful-canvas-prototypes-plan.md:83-90`).
 
 ### 4. Keep each alternative’s visual grammar distinct
+
+#### Hybrid Workbench: Precision shell, Motion lifecycle depth
+
+Hybrid is the recommended composition. Precision owns the persistent resource tree, command and keyboard layer, semantic canvas, contextual Model/State/Source inspector, source drawer, node coordinates, and railway routing. Motion contributes one contiguous lower lifecycle/evidence shelf, copper authorization, sage observation/reconciliation, and physical feedback on disclosure and non-geometric descendants (`prototypes/clockwork-workbench/430-hybrid-workbench.html`).
+
+The hybrid has one canonical fact snapshot, one transition owner, one pending timer/epoch, and one route engine. The lower shelf is a projection over that snapshot, not a second state machine. It opens at 202px and collapses to a 38px header; open state reserves a 474px canvas with hybrid-specific node positions that do not move on disclosure. While open, the shelf action is the sole visible primary lifecycle action; when collapsed, Precision’s lifecycle action returns.
+
+Reset must cancel pending work before restoring lifecycle, node/view coordinates, planes, Intent evidence, composite and overlay disclosure, inspector, focus, and shelf state. Physical springs never animate outer node boxes or attachment geometry; route-safe node placement remains immediate.
 
 #### Precision Workbench: dark, surgical, command-first
 
@@ -129,7 +137,7 @@ Use the repository’s frontend design skills deliberately:
 1. use `impeccable` to define/audit information hierarchy, interaction states, accessibility, responsive boundaries, tokens, and anti-patterns;
 2. use `awwwards-motion-design` when implementing Motion Compiler choreography so selection, composite expansion, lifecycle transitions, and reduced-motion behavior are intentional and performant;
 3. if a supplied screenshot becomes the reference, use `pixel-perfect-replication` and treat the image as a measurable spec rather than inspiration;
-4. keep a short direction block in the prototype—thesis, own-world, story, first viewport, form—so future refinements preserve the design argument. Both prototypes retain such blocks at `prototypes/clockwork-workbench/410-precision-working.html:110-116` and `prototypes/clockwork-workbench/420-motion-working.html:657-663`.
+4. keep a short direction block in each prototype—thesis, own-world, story, first viewport, form, and geometry—so future refinements preserve the design argument. Hybrid, Precision, and Motion retain these blocks in their tracked HTML.
 
 References guide the visual system, never the product model. Reuse atmosphere, spatial logic, and motion principles; do not clone another product’s identity, invent customer proof, or import a diagram model that conflicts with Python authority. The repository has no established production web identity or commercial proof (`PRODUCT.md:45-54`).
 
@@ -163,7 +171,7 @@ At minimum, verify:
 
 Clockwork’s advantage is durable semantic continuity: a builder can change intent without asking an agent to reinterpret an entire repository, because structure, provenance, constraints, alternatives, assertions, and runtime evidence survive across the lifecycle (`PRODUCT.md:13-23`). A static architecture diagram cannot demonstrate that advantage. Neither can a dashboard that collapses desired and observed state into one status badge.
 
-The two-direction pattern isolates the design decision. Because capability, data, lifecycle, viewport, and failure are held constant, reviewers can choose between Precision’s surgical command-first workbench and Motion’s physical state-authoring compiler based on UX and aesthetics rather than hidden differences in scope. The standardized artboard prevents a looser zoom or a missing panel from making one alternative appear calmer or more polished.
+The three-surface pattern isolates the design decision. Capability, data, lifecycle, viewport, and failure stay constant; Hybrid demonstrates the recommended 70% Precision / 30% Motion composition while the two source alternatives remain available for comparison.
 
 The edge hybrid is equally load-bearing. Railway geometry supports stable tracing, neighborhood contrast supports investigation, and plane filters handle temporary overload. Removing any layer makes dense graphs ambiguous, contextless, or brittle. Keeping topology stable across focus and evidence changes also teaches users that the semantic model is persistent even when the viewing lens changes.
 
@@ -176,7 +184,7 @@ Apply this pattern when:
 - regenerating either approved Workbench prototype from scratch;
 - porting the static HTML/CSS/JavaScript prototypes into a production frontend stack;
 - adding a new primitive, relation family, evidence projection, lifecycle stage, or composite behavior;
-- comparing a future visual direction against Precision and Motion;
+- comparing a future visual direction against Hybrid, Precision, and Motion;
 - changing node drag, routing, focus, plane filtering, source inspection, or lifecycle presentation;
 - reviewing whether a canvas proposal still represents Clockwork rather than a generic infrastructure diagram.
 
@@ -195,7 +203,7 @@ Do not apply it as a generic requirement for every Clockwork surface. The patter
 7. Correct backup to 03:00, retry, and show reconciled 3/3.
 8. Reset to authored; in Precision also restore all initial node positions.
 
-The shared flow is specified at `docs/plans/2026-08-24-0455-feat-clockwork-stateful-canvas-prototypes-plan.md:92-142` and implemented as explicit transition maps in `prototypes/clockwork-workbench/410-precision-working.html:215-229` and `prototypes/clockwork-workbench/420-motion-working.html:1032-1036`.
+The shared flow is specified in `docs/plans/2026-08-24-0455-feat-clockwork-stateful-canvas-prototypes-plan.md` and implemented in all three tracked prototypes. The Hybrid contract harness at `prototypes/clockwork-workbench/490-workbench-contract.html` verifies deterministic lifecycle, parity, disclosure, reset, evidence, routing, dimensions, and gallery behavior.
 
 ### Example: drag DB-03 without breaking semantic readability
 
@@ -225,5 +233,7 @@ These rejected boundaries follow `PRODUCT.md:31-43`, the settled design decision
 - `PRODUCT.md` — canonical Clockwork Workbench product identity and UI guardrails.
 - `docs/plans/2026-08-24-0455-feat-clockwork-stateful-canvas-prototypes-plan.md` — requirements, lifecycle, edge model, viewport contract, and acceptance examples.
 - `prototypes/clockwork-workbench/401-working-gallery.html` — fixed-scale comparison surface.
+- `prototypes/clockwork-workbench/430-hybrid-workbench.html` — recommended Hybrid Workbench implementation.
+- `prototypes/clockwork-workbench/490-workbench-contract.html` — deterministic same-origin contract harness.
 - `prototypes/clockwork-workbench/410-precision-working.html` — approved dark Precision Workbench alternative.
 - `prototypes/clockwork-workbench/420-motion-working.html` — approved dark Motion Compiler alternative.
