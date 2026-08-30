@@ -3,6 +3,68 @@
 _This is a living document of potential features and enhancements. Updated frequently as priorities and ideas evolve._
 
 ---
+## Committed Direction
+
+### Clockwork Workbench Production Architecture
+
+**Status:** Architecture decided; approved static prototypes exist; production frontend implementation has not started.
+
+The production Workbench uses React, shadcn over Base UI, the first-party `@clockwork` design system, and React Flow / xyflow. The non-negotiable boundary is:
+
+> **shadcn owns the component ecosystem. React Flow owns spatial interaction. Clockwork owns everything semantic.**
+
+`docs/design/` is the implementation authority for this work. The approved Hybrid Workbench remains the visual and interaction direction.
+
+#### Delivery sequence
+
+1. **Semantic model contract**
+   - Define production primitive, relationship, hierarchy, lifecycle, provenance, proposal, assertion, desired-state, and observed-state contracts.
+   - Keep those contracts independent of React and React Flow.
+   - Preserve Python/Pydantic source inspectability and establish the web boundary without creating a second source of truth.
+
+2. **Typed operations layer**
+   - Implement create, delete, configure, connect, disconnect, resolve, propose, accept, reject, apply, rollback, and reconcile operations.
+   - Centralize validation, proposal policy, provenance, execution, and Clockwork evolution.
+   - Route human and agent changes through the same operation handlers.
+
+3. **Clockwork design-system foundation**
+   - Establish CSS-variable tokens for color, typography, spacing, radius, elevation, and motion.
+   - Configure shadcn with Base UI primitives and build the first semantic `@clockwork` components.
+   - Prioritize primitive, semantic edge, proposal, status, inspector, workbench, and history contracts; do not scaffold empty packages.
+
+4. **React Flow projection adapter**
+   - Project Clockwork primitives and relationships into custom nodes, edges, handles, overlays, and groups.
+   - Keep position, selection, viewport, pan/zoom, filtering, and spatial undo/redo in editor state.
+   - Translate semantic canvas callbacks into Clockwork operations rather than React Flow business logic.
+
+5. **Workbench shell**
+   - Port the approved Hybrid composition: persistent Navigator, central canvas, contextual Model/State/Source/History/Provenance Inspector, command layer, source surface, and lifecycle/status shelf.
+   - Preserve stable topology, semantic focus, relationship-family filtering, composite summaries, and dense tool-like hierarchy.
+
+6. **Proposal, execution, and observation lifecycle**
+   - Render authored, unresolved, proposed, accepted, planned, applied, observed, drifted/failed, recovered, and reconciled state.
+   - Give agent proposals the same validation, provenance, history, and acceptance pathway as human proposals.
+   - Keep desired and observed state independently inspectable until evidence converges.
+
+7. **Accessibility, motion, and hardening**
+   - Provide keyboard and non-drag equivalents for every canvas operation.
+   - Apply semantic motion and reduced-motion behavior from `docs/design/MOTION.md`.
+   - Verify state distinctions without color alone, composite focus preservation, dense-graph performance, and replaceability of the React Flow adapter.
+
+#### Production exit criteria
+
+- No React Flow node or edge object is the canonical domain record.
+- Every meaningful human or agent mutation reaches a typed Clockwork operation.
+- Editor undo/redo cannot alter Clockwork evolution, desired state, or observed evidence.
+- Proposal, provenance, unresolved state, drift, lifecycle, and desired-versus-observed differences have canonical accessible treatments.
+- Composite collapse/expand preserves semantic identity, relationships, and spatial context.
+- The production surface retains source inspection and the approved Hybrid Workbench behavior without copying the prototypes’ static implementation model.
+- Repeated semantic patterns use first-party `@clockwork` primitives; shadcn remains infrastructure rather than the visible product identity.
+
+See `docs/design/DESIGN.md`, `docs/design/CANVAS.md`, `docs/design/INTERACTIONS.md`, `docs/design/MOTION.md`, and `docs/design/ACCESSIBILITY.md`.
+
+---
+
 
 ## Under Consideration
 

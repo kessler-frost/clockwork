@@ -38,6 +38,27 @@ container rm <id>          # Remove a container
 
 **Flow**: Declare (Pydantic) → Resolve (deps) → Complete (Intelligence) → Compile (Pulumi) → Deploy (Automation API)
 
+## Workbench Frontend Architecture
+
+Before implementing or reviewing Workbench interface code, read:
+
+1. `PRODUCT.md`
+2. `docs/design/DESIGN.md`
+3. `docs/design/CANVAS.md`
+4. `docs/design/INTERACTIONS.md`
+5. `docs/design/MOTION.md`
+6. `docs/design/ACCESSIBILITY.md`
+7. `docs/solutions/design-patterns/clockwork-workbench-prototype-direction.md`
+
+**Central rule:** shadcn owns the component ecosystem, React Flow owns spatial interaction, and Clockwork owns everything semantic.
+
+- React Flow nodes and edges are projections; primitives, relationships, hierarchy, lifecycle, provenance, proposals, desired state, and observed state remain in Clockwork.
+- Route meaningful human and agent actions through the same typed Clockwork operations. Canvas callbacks must not become business logic.
+- Keep editor history separate from Clockwork evolution.
+- Look for an existing `@clockwork` primitive before composing generic shadcn components. Promote recurring semantic interactions into the first-party design system; do not abstract one-off markup.
+- Use the shadcn MCP as the external registry-search interface when no existing Clockwork primitive fits. Base UI supplies accessible low-level behavior; Clockwork tokens and components define the finished product.
+- Preserve the approved Hybrid Workbench direction: Precision owns the operating shell and spatial grammar; Motion contributes lifecycle/evidence depth and semantic physical feedback.
+
 ## Architecture Deep Dive
 
 ### Pipeline Stages

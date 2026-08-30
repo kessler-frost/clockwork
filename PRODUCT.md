@@ -28,10 +28,15 @@ A project-local `main.py` defines primitives, semantic connections, composites, 
 
 The planned web surface is **Clockwork Workbench**—also called the Clockwork UI. It is a visual co-author rather than a read-only dashboard, keeping source inspectable while making the semantic graph, unresolved decisions, scoped proposals, deployment state, and observed reality directly manipulable.
 
+The production boundary is fixed: React composes the application, shadcn and Base UI supply component infrastructure, the first-party `@clockwork` design system owns the product language, and React Flow renders spatial interaction as a projection of Clockwork state.
+
 ## Capabilities and Constraints
 
 - Python/Pydantic remains an inspectable source of truth; the UI must not introduce an opaque diagram-only or YAML-only model.
 - Visual and source edits must resolve to one stable semantic model.
+- Meaningful changes pass through typed Clockwork operations shared by human and agent actions; canvas callbacks and components do not create alternate mutation paths.
+- React Flow node and edge objects are replaceable projection data. Primitive identity, relationships, hierarchy, lifecycle, provenance, proposals, desired state, and observed state remain in Clockwork.
+- Domain evolution and editor history remain independent: applying or reconciling intent is not canvas undo/redo, and moving or selecting a node is not domain history.
 - Intent, resolution, and reality remain simultaneously inspectable.
 - The model distinguishes specified, inferred, AI-resolved, observed, and drifted state.
 - Each resolved decision can retain authorship, reason, constraints, rejected alternatives, related assertions, and revision authority.
@@ -40,7 +45,7 @@ The planned web surface is **Clockwork Workbench**—also called the Clockwork U
 - Semantic edges, expandable composites, assertions, resource health, deployment changes, outputs, and errors are first-class data.
 - The UI must not collapse into a chat-first app builder or make manual diagram composition the mandatory programming interface.
 - Initial application primitives should focus on services, containers, databases, queues, object stores, volumes, endpoints, jobs, and secrets. Broader software primitives remain deliberately deferred.
-- The existing runtime requires Python 3.12+ and currently uses Typer, Rich, Pydantic, and Pulumi. The production web stack is undecided; this visual prototype uses static HTML, CSS, and JavaScript.
+- The existing runtime requires Python 3.12+ and currently uses Typer, Rich, Pydantic, and Pulumi. The production Workbench stack is React, shadcn over Base UI, the `@clockwork` design system, and React Flow / xyflow; the tracked comparison prototypes remain static HTML, CSS, and JavaScript.
 
 ## Brand Commitments
 
@@ -51,7 +56,8 @@ The product name is Clockwork. **Clockwork Workbench** is the canonical name for
 - `README.md` documents the product mechanism, current resource examples, and CLI workflow.
 - `clockwork/cli.py` and `clockwork/formatters.py` define the current lifecycle actions, hierarchy, statuses, and provenance display.
 - `docs/plans/2026-08-24-0455-feat-clockwork-stateful-canvas-prototypes-plan.md` records the Clockwork Workbench graph grammar, visual co-authoring guardrails, lifecycle, interaction requirements, and current prototype directions.
-- The repository has no existing web frontend, design system, logo, customer proof, benchmarks, or production UI imagery. Future surfaces must not fabricate commercial claims.
+- `docs/design/` defines the production frontend stack, layer ownership, canvas adapter, operation pathways, motion, and accessibility contracts.
+- The repository has no existing production web frontend, implemented component registry, logo, customer proof, benchmarks, or production UI imagery. Future surfaces must not fabricate commercial claims.
 
 ## Product Principles
 
@@ -61,3 +67,6 @@ The product name is Clockwork. **Clockwork Workbench** is the canonical name for
 4. Let visual and Python authoring converge on one semantic model.
 5. Treat assertions and observed state as part of authoring, not postscript diagnostics.
 6. Prove the model on a concrete application-architecture wedge before expanding to everything software.
+7. Route meaningful human and agent actions through the same typed operations, validation, provenance, and history.
+8. Keep Clockwork evolution independent of canvas presentation and editor undo/redo.
+9. Treat React Flow as a replaceable spatial projection and shadcn/Base UI as infrastructure beneath Clockwork’s first-party design language.

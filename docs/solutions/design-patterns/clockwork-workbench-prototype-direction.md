@@ -167,6 +167,37 @@ At minimum, verify:
 9. dragging nodes continuously updates route endpoints, labels, switches, direction, and lane separation; Precision reset restores original placement;
 10. screenshots at authored, proposed, observed-drift, failed, and reconciled states still read as one coherent product in each direction.
 
+### 7. Port through the production ownership boundary
+
+The tracked prototypes prove product behavior and visual direction; they do not define the production state architecture. A production port must preserve the interaction contract while replacing prototype-local DOM state with the boundaries in `docs/design/`.
+
+Use this ownership split:
+
+- **Clockwork model:** primitive and relationship identity, hierarchy, lifecycle, provenance, proposals, assertions, desired state, and observed state;
+- **Clockwork operations:** validation, proposal policy, execution, provenance, and domain evolution for both human and agent actions;
+- **React application:** Workbench composition and projections over authoritative state;
+- **`@clockwork` design system:** tokens, primitive anatomy, semantic edges, inspector, status, proposal, history, and interaction patterns;
+- **shadcn + Base UI:** component infrastructure and accessible low-level behavior;
+- **React Flow:** position, selection, dragging, handles, connections, viewport, grouping, and spatial rendering.
+
+Do not translate prototype calls that directly change DOM classes, local stage strings, or SVG paths into equivalent React Flow mutations. Translate their intent into one of two categories:
+
+1. an editor action for position, selection, viewport, focus, filters, or disclosure; or
+2. a typed Clockwork operation for any primitive, relationship, proposal, lifecycle, desired-state, observed-state, execution, or reconciliation change.
+
+Editor actions belong to editor history. Clockwork operations belong to Clockwork evolution. Moving DB-03 is not a domain event; accepting PostgreSQL 19 is not canvas undo/redo.
+
+Production source order is:
+
+1. `PRODUCT.md` for product semantics;
+2. `docs/design/DESIGN.md` for stack and design-system ownership;
+3. `docs/design/CANVAS.md` for projection and editor boundaries;
+4. `docs/design/INTERACTIONS.md` for typed operation pathways;
+5. `docs/design/MOTION.md` and `docs/design/ACCESSIBILITY.md` for transition and access contracts;
+6. this document and the Hybrid prototype for approved composition, visual grammar, and acceptance behavior.
+
+This keeps React Flow replaceable, prevents a second semantic model from forming in the canvas, and lets agent proposals inherit the same validation, provenance, history, and lifecycle as direct human interaction.
+
 ## Why This Matters
 
 Clockwork’s advantage is durable semantic continuity: a builder can change intent without asking an agent to reinterpret an entire repository, because structure, provenance, constraints, alternatives, assertions, and runtime evidence survive across the lifecycle (`PRODUCT.md:13-23`). A static architecture diagram cannot demonstrate that advantage. Neither can a dashboard that collapses desired and observed state into one status badge.
@@ -231,6 +262,11 @@ These rejected boundaries follow `PRODUCT.md:31-43`, the settled design decision
 ## Related
 
 - `PRODUCT.md` — canonical Clockwork Workbench product identity and UI guardrails.
+- `docs/design/DESIGN.md` — production stack, first-party design system, workbench anatomy, and architectural invariants.
+- `docs/design/CANVAS.md` — React Flow projection boundary, semantic relationships, composites, and separate editor history.
+- `docs/design/INTERACTIONS.md` — shared human/agent operations, proposals, Inspector, and feedback contracts.
+- `docs/design/MOTION.md` — semantic transition tokens, choreography, reduced motion, and performance.
+- `docs/design/ACCESSIBILITY.md` — keyboard, focus, canvas alternatives, state communication, and verification.
 - `docs/plans/2026-08-24-0455-feat-clockwork-stateful-canvas-prototypes-plan.md` — requirements, lifecycle, edge model, viewport contract, and acceptance examples.
 - `prototypes/clockwork-workbench/401-working-gallery.html` — fixed-scale comparison surface.
 - `prototypes/clockwork-workbench/430-hybrid-workbench.html` — recommended Hybrid Workbench implementation.
