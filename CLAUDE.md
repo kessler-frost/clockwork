@@ -1,3 +1,5 @@
+**Product priority:** Treat Clockwork as a persistent executable representation of user intent: preserve specified intent, reason only over authorized ambiguity, and keep resolution and observed reality traceable to that intent.
+
 # Clockwork Development Guide
 
 **Intelligent, Composable Primitives for Infrastructure in Python.**
