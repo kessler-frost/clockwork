@@ -81,8 +81,8 @@
       background: var(--graphite-100);
       color: var(--chalk);
       font-family: var(--font-ui);
-      font-size: 11px;
-      line-height: 1.35;
+      font-size: 12px;
+      line-height: 1.45;
       -webkit-font-smoothing: antialiased;
       text-rendering: geometricPrecision;
     }
@@ -97,7 +97,7 @@
       outline: 2px solid var(--focus-ring);
       outline-offset: 2px;
     }
-    button:disabled { cursor: not-allowed; opacity: .38; }
+    button:disabled { cursor: not-allowed; opacity: .8; }
 
     .icon-button,
     .plain-button,
@@ -117,7 +117,7 @@
       width: 1280px;
       height: 720px;
       display: grid;
-      grid-template-rows: 44px 474px 202px;
+      grid-template-rows: 48px 454px 218px;
       background: var(--graphite-100);
       overflow: hidden;
     }
@@ -139,12 +139,12 @@
       border-right: var(--line) solid var(--graphite-60);
     }
     .brand-mark { width: 21px; height: 21px; color: var(--chalk); }
-    .brand-name { font-weight: 600; letter-spacing: -.025em; }
-    .brand-mode { color: var(--mist); font-family: var(--font-data); font-size: 7px; letter-spacing: .05em; }
+    .brand-name { margin: 0; font-size: 24px; font-weight: 600; line-height: 1.1; letter-spacing: -.025em; }
+    .brand-mode { color: var(--mist); font-family: var(--font-data); font-size: 12px; line-height: 1.2; letter-spacing: .04em; }
     .document-bar { display: flex; align-items: center; justify-content: space-between; min-width: 0; padding: 0 var(--space-3); }
     .document-crumb { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; }
-    .document-crumb strong { font-size: 11px; font-weight: 500; }
-    .document-crumb code { color: var(--mist); font-family: var(--font-data); font-size: 8px; }
+    .document-crumb strong { overflow: hidden; font-size: 14px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+    .document-crumb code { flex: 0 0 auto; color: var(--mist); font-family: var(--font-data); font-size: 12px; }
     .tool-cluster { display: flex; align-items: center; gap: var(--space-1); }
     .icon-button {
       width: 28px;
@@ -159,7 +159,7 @@
     .icon-button svg { width: 15px; height: 15px; }
     .icon-button.is-active, .icon-button[aria-pressed="true"] { color: var(--graphite-100); background: var(--chalk); }
     .top-status {
-      min-width: 250px;
+      min-width: 270px;
       display: flex;
       align-items: center;
       justify-content: flex-end;
@@ -168,9 +168,9 @@
       border-left: var(--line) solid var(--graphite-60);
       color: var(--fog);
     }
-    .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--sage); box-shadow: 0 0 0 3px rgba(142, 166, 151, .13); }
-    .top-status strong { font-size: 9px; font-weight: 500; }
-    .top-status span:last-child { color: var(--mist); font-family: var(--font-data); font-size: 7px; }
+    .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--sage); }
+    .top-status strong { font-size: 13px; font-weight: 500; }
+    .top-status span:last-child { color: var(--mist); font-family: var(--font-data); font-size: 12px; }
 
     .editor {
       --hierarchy-width: 184px;
@@ -188,7 +188,7 @@
     .hierarchy { border-right: var(--line) solid var(--graphite-60); }
     .inspector { border-left: var(--line) solid var(--graphite-60); }
     .panel-heading {
-      height: 36px;
+      height: 40px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -196,10 +196,10 @@
       border-bottom: var(--line) solid var(--graphite-60);
       white-space: nowrap;
     }
-    .panel-heading h2 { margin: 0; font-size: 9px; font-weight: 500; letter-spacing: .035em; }
+    .panel-heading h2 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: .02em; }
     .collapse-button {
-      width: 24px;
-      height: 24px;
+      width: 28px;
+      height: 28px;
       flex: 0 0 auto;
       display: grid;
       place-items: center;
@@ -208,56 +208,57 @@
       background: transparent;
       border-radius: var(--radius-1);
     }
-    .collapse-button svg { width: 13px; height: 13px; }
+    .collapse-button svg { width: 14px; height: 14px; }
     .inspector .collapse-button svg { transform: rotate(180deg); }
-    .hierarchy-collapsed .hierarchy .panel-heading, .inspector-collapsed .inspector .panel-heading { padding-left: 6px; padding-right: 6px; }
+    .hierarchy-collapsed .hierarchy .panel-heading, .inspector-collapsed .inspector .panel-heading { padding-left: 5px; padding-right: 5px; }
     .hierarchy-collapsed .hierarchy h2, .inspector-collapsed .inspector h2 { opacity: 0; width: 0; }
     .hierarchy-body, .inspector-body { transition: opacity var(--hover-time) var(--hover-ease); }
     .hierarchy-collapsed .hierarchy-body, .inspector-collapsed .inspector-body { opacity: 0; pointer-events: none; }
 
-    .hierarchy-body { height: 438px; padding: var(--space-2) 0; overflow: hidden; }
+    .hierarchy-body { height: 414px; padding: var(--space-2) 0; overflow: hidden; }
     .tree-label {
-      height: 25px;
+      height: 26px;
       display: flex;
       align-items: center;
       gap: var(--space-2);
       padding: 0 var(--space-3);
       color: var(--mist);
-      font-size: 8px;
+      font-size: 12px;
       text-transform: uppercase;
-      letter-spacing: .08em;
+      letter-spacing: .04em;
     }
-    .tree-label svg { width: 11px; height: 11px; }
+    .tree-label svg { width: 12px; height: 12px; }
     .tree-row {
       width: 100%;
-      height: 29px;
+      height: 30px;
       display: grid;
       grid-template-columns: 14px minmax(0, 1fr) auto;
       align-items: center;
-      gap: var(--space-2);
-      padding: 0 var(--space-3) 0 var(--space-4);
+      gap: 6px;
+      padding: 0 var(--space-3);
       color: var(--fog);
       text-align: left;
       background: transparent;
       white-space: nowrap;
+      border-left: 2px solid transparent;
     }
     .tree-row svg { width: 13px; height: 13px; color: var(--mist); }
     .tree-row span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; }
-    .tree-id { color: var(--mist); font-family: var(--font-data); font-size: 7px; }
-    .tree-row.is-selected { color: var(--chalk); background: var(--graphite-70); box-shadow: inset 2px 0 0 var(--copper); }
+    .tree-id { color: var(--mist); font-family: var(--font-data); font-size: 12px; }
+    .tree-row.is-selected { color: var(--chalk); border-left-color: var(--copper); background: var(--graphite-70); }
     .tree-row.is-selected svg { color: var(--copper-soft); }
     .tree-divider { height: 1px; margin: var(--space-2) var(--space-3); background: var(--graphite-60); opacity: .7; }
-    .hierarchy-foot { margin: var(--space-4) var(--space-3) 0; padding-top: var(--space-3); border-top: var(--line) solid var(--graphite-60); }
-    .hierarchy-foot strong { display: block; margin-bottom: var(--space-2); color: var(--fog); font-size: 8px; font-weight: 500; }
-    .legend-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
-    .legend-item { display: flex; align-items: center; gap: 6px; color: var(--mist); font-family: var(--font-data); font-size: 6.5px; }
-    .legend-mark { width: 8px; height: 8px; border: var(--line) solid var(--mist); }
+    .hierarchy-foot { margin: var(--space-2) var(--space-3) 0; padding-top: var(--space-2); border-top: var(--line) solid var(--graphite-60); }
+    .hierarchy-foot strong { display: block; margin-bottom: 6px; color: var(--fog); font-size: 12px; font-weight: 600; }
+    .legend-grid { display: grid; grid-template-columns: 1fr; gap: var(--space-1); }
+    .legend-item { display: flex; align-items: center; gap: 6px; color: var(--mist); font-family: var(--font-data); font-size: 12px; line-height: 1.15; }
+    .legend-mark { width: 10px; height: 10px; border: var(--line) solid var(--mist); }
     .legend-mark.inferred { border-radius: 50%; }
     .legend-mark.resolved { border-color: var(--copper); transform: rotate(45deg); }
     .legend-mark.observed { background: var(--sage); border-color: var(--sage); }
-    .legend-mark.drift { border-color: var(--danger); background: repeating-linear-gradient(135deg, transparent 0 2px, var(--danger) 2px 3px); }
+    .legend-mark.drift { border-color: var(--danger); background: var(--danger); }
 
-    .stage-panel { min-width: 0; display: grid; grid-template-rows: 36px 438px; background: var(--stage-soft); color: var(--stage-ink); }
+    .stage-panel { min-width: 0; display: grid; grid-template-rows: 40px 414px; background: var(--stage-soft); color: var(--stage-ink); }
     .stage-toolbar {
       display: flex;
       align-items: center;
@@ -267,26 +268,27 @@
       border-bottom: var(--line) solid var(--stage-line);
       background: var(--stage);
     }
-    .stage-title { display: flex; align-items: center; gap: var(--space-2); min-width: 112px; font-weight: 600; }
-    .stage-title svg { width: 14px; height: 14px; }
+    .stage-title { min-width: 132px; display: flex; align-items: center; gap: var(--space-2); font-size: 14px; font-weight: 600; }
+    .stage-title svg { width: 15px; height: 15px; }
     .plane-controls { display: flex; align-items: center; gap: 2px; }
     .plane-button {
-      height: 24px;
+      min-height: 30px;
       display: flex;
       align-items: center;
-      gap: 5px;
-      padding: 0 7px;
+      gap: 6px;
+      padding: 6px 9px;
       color: var(--stage-muted);
       background: transparent;
       border: var(--line) solid transparent;
       border-radius: var(--radius-1);
-      font-size: 8px;
+      font-size: 12px;
+      line-height: 1.2;
     }
-    .plane-button::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .plane-button::before { content: ""; width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: currentColor; }
     .plane-button[aria-pressed="true"] { color: var(--stage-ink); background: var(--stage-soft); border-color: var(--stage-line); }
-    .plane-button[aria-pressed="false"] { text-decoration: line-through; opacity: .62; }
-    .plane-count { font-family: var(--font-data); font-size: 7px; }
-    .stage-meta { min-width: 92px; display: flex; justify-content: flex-end; color: var(--stage-muted); font-family: var(--font-data); font-size: 7px; }
+    .plane-button[aria-pressed="false"] { text-decoration: line-through; opacity: .9; }
+    .plane-count { font-family: var(--font-data); font-size: 12px; }
+    .stage-meta { min-width: 126px; display: flex; justify-content: flex-end; color: var(--stage-muted); font-family: var(--font-data); font-size: 12px; }
 
     .stage-canvas {
       position: relative;
@@ -298,9 +300,9 @@
     }
     .stage-canvas.is-panning { cursor: grabbing; }
     .stage-grid { position: absolute; inset: 0; width: 100%; height: 100%; color: var(--stage-line-strong); opacity: .44; pointer-events: none; }
-    .ruler-x, .ruler-y { position: absolute; z-index: 2; color: var(--stage-muted); font-family: var(--font-data); font-size: 6px; pointer-events: none; }
-    .ruler-x { top: 7px; left: 50%; transform: translateX(-50%); }
-    .ruler-y { top: 50%; left: 7px; transform: translateY(-50%) rotate(-90deg); }
+    .ruler-x, .ruler-y { position: absolute; z-index: 2; color: var(--stage-muted); font-family: var(--font-data); font-size: 12px; pointer-events: none; }
+    .ruler-x { top: var(--space-2); left: 50%; transform: translateX(-50%); }
+    .ruler-y { top: 50%; left: var(--space-2); transform: translateY(-50%) rotate(-90deg); }
     .world {
       --pan-x: 0px;
       --pan-y: 0px;
@@ -316,14 +318,14 @@
       will-change: transform;
     }
     .stage-canvas.is-panning .world { transition: opacity var(--hover-time) var(--hover-ease); }
-    .world-frame { position: absolute; inset: 0; border: var(--line) solid var(--stage-line); background: var(--stage); box-shadow: 0 15px 36px rgba(41, 49, 47, .16); }
-    .world-heading { position: absolute; z-index: 3; top: var(--space-3); left: var(--space-4); right: var(--space-4); display: flex; align-items: center; justify-content: space-between; pointer-events: none; }
-    .world-heading strong { font-size: 10px; font-weight: 600; }
-    .world-heading span { color: var(--stage-muted); font-family: var(--font-data); font-size: 7px; }
+    .world-frame { position: absolute; inset: 0; border: var(--line) solid var(--stage-line); background: var(--stage); }
+    .world-heading { position: absolute; z-index: 3; top: var(--space-3); left: var(--space-4); right: var(--space-4); display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); pointer-events: none; }
+    .world-heading strong { flex: 0 0 auto; font-size: 14px; font-weight: 600; }
+    .world-heading span { overflow: hidden; color: var(--stage-muted); font-family: var(--font-data); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
     .edge-map { position: absolute; inset: 0; z-index: 1; width: 820px; height: 400px; overflow: visible; pointer-events: none; }
-    .edge-group { opacity: .52; transition: opacity var(--hover-time) var(--hover-ease); }
+    .edge-group { opacity: .9; transition: opacity var(--hover-time) var(--hover-ease); }
     .edge-group.is-active { opacity: 1; }
-    .edge-group.is-quiet { opacity: .16; }
+    .edge-group.is-quiet { opacity: .84; }
     .edge-group.is-hidden { opacity: 0; }
     .edge-separator { fill: none; stroke: var(--stage); stroke-width: 5; stroke-linejoin: round; }
     .edge-line { fill: none; stroke-width: 1.35; stroke-linejoin: round; }
@@ -333,66 +335,65 @@
     .edge-group[data-family="jobs"] .edge-line, .edge-group[data-family="jobs"] .switch-dot { stroke: var(--relation-jobs); }
     .switch-dot { fill: var(--stage); stroke-width: 1.2; }
     .edge-label-bg { fill: var(--stage); stroke: var(--stage-line); stroke-width: 1; }
-    .edge-label { fill: var(--stage-muted); font-family: var(--font-data); font-size: 6.5px; }
+    .edge-label { fill: var(--stage-muted); font-family: var(--font-data); font-size: 12px; }
 
     .node {
       --node-x: 0px;
       --node-y: 0px;
       position: absolute;
       z-index: 4;
-      min-height: 68px;
+      min-height: 82px;
       display: flex;
       flex-direction: column;
       color: var(--stage-ink);
       background: var(--stage);
       border: var(--line) solid var(--stage-line-strong);
       border-radius: var(--radius-1);
-      box-shadow: 0 5px 13px rgba(36, 45, 43, .1);
       transform: translate3d(var(--node-x), var(--node-y), 0);
       cursor: grab;
       touch-action: none;
       user-select: none;
-      transition: transform var(--settle-time) var(--spring-settle), box-shadow var(--hover-time) var(--hover-ease), border-color var(--hover-time) var(--hover-ease), background-color var(--hover-time) var(--hover-ease), opacity var(--hover-time) var(--hover-ease);
+      transition: transform var(--settle-time) var(--spring-settle), border-color var(--hover-time) var(--hover-ease), background-color var(--hover-time) var(--hover-ease), opacity var(--hover-time) var(--hover-ease);
     }
-    .node.is-dragging { z-index: 8; cursor: grabbing; transition: box-shadow var(--hover-time) var(--hover-ease), border-color var(--hover-time) var(--hover-ease), opacity var(--hover-time) var(--hover-ease); box-shadow: 0 18px 30px rgba(34, 42, 41, .22); }
-    .node.is-selected { border-color: var(--copper-deep); box-shadow: 0 0 0 1px var(--copper), 0 10px 22px rgba(39, 46, 44, .17); }
-    .node.is-selected::before { content: ""; position: absolute; inset: -5px; border: var(--line) solid rgba(137, 80, 55, .48); pointer-events: none; }
-    .node-handle { position: absolute; z-index: 2; width: 7px; height: 7px; display: none; background: var(--stage); border: var(--line) solid var(--copper-deep); }
+    .node.is-dragging { z-index: 8; cursor: grabbing; border-color: var(--stage-muted); transition: border-color var(--hover-time) var(--hover-ease), opacity var(--hover-time) var(--hover-ease); }
+    .node.is-selected { border: 2px solid var(--copper); }
+    .node-handle { position: absolute; z-index: 2; width: 8px; height: 8px; display: none; background: var(--stage); border: var(--line) solid var(--copper-deep); }
     .is-selected .node-handle { display: block; }
     .node-handle.nw { left: -5px; top: -5px; }
     .node-handle.ne { right: -5px; top: -5px; }
     .node-handle.sw { left: -5px; bottom: -5px; }
     .node-handle.se { right: -5px; bottom: -5px; }
-    .node-top { min-height: 34px; display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 7px; padding: 6px 7px 2px; }
-    .node-icon { width: 22px; height: 22px; display: grid; place-items: center; color: var(--stage-muted); border: var(--line) solid var(--stage-line); border-radius: 2px; }
-    .node-icon svg { width: 13px; height: 13px; }
+    .node-top { min-height: 48px; display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); padding: var(--space-2) 9px var(--space-1); }
+    .node-icon { width: 26px; height: 26px; display: grid; place-items: center; color: var(--stage-muted); background: var(--stage-soft); border-radius: 2px; }
+    .node-icon svg { width: 14px; height: 14px; }
     .node-identity { min-width: 0; }
-    .node-id { display: block; color: var(--stage-muted); font-family: var(--font-data); font-size: 6.5px; letter-spacing: .04em; }
-    .node-name { display: block; margin-top: 1px; overflow: hidden; font-size: 10px; font-weight: 600; line-height: 1.1; text-overflow: ellipsis; white-space: nowrap; }
-    .health-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--sage-deep); }
-    .node-detail { min-height: 24px; display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: 0 7px 6px 36px; color: var(--stage-muted); font-family: var(--font-data); font-size: 6.5px; }
+    .node-id { display: block; overflow: hidden; color: var(--stage-muted); font-family: var(--font-data); font-size: 12px; line-height: 1.2; letter-spacing: .04em; text-overflow: ellipsis; white-space: nowrap; }
+    .node-name { display: block; margin-top: 2px; overflow: hidden; font-size: 14px; font-weight: 600; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+    .health-dot { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: var(--sage-deep); }
+    .node-detail { min-height: 34px; display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: 0 9px var(--space-2) 43px; color: var(--stage-muted); font-family: var(--font-data); font-size: 12px; line-height: 1.2; }
     .node-detail span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .node-evidence { flex: 0 0 auto; color: var(--copper-deep); }
-    .node-web { width: 138px; }
-    .node-api { width: 178px; height: 104px; }
-    .node-api.is-expanded { height: 166px; }
-    .node-database { width: 160px; min-height: 86px; }
-    .node-store { width: 148px; }
-    .node-queue { width: 146px; }
-    .node-worker { width: 150px; }
+    .node-web { width: 210px; }
+    .node-api { width: 260px; height: 148px; }
+    .node-api.is-expanded { height: 218px; }
+    .node-database { width: 270px; min-height: 94px; }
+    .node-store { width: 220px; }
+    .node-queue { width: 220px; }
+    .node-worker { width: 240px; }
     .node-mark {
       position: absolute;
-      top: -18px;
-      right: -1px;
-      height: 17px;
+      top: -25px;
+      right: -2px;
+      min-height: 24px;
       display: none;
       align-items: center;
-      padding: 0 7px;
+      padding: 5px var(--space-2);
       color: var(--graphite-100);
       background: var(--copper);
       border-radius: var(--radius-1) var(--radius-1) 0 0;
       font-family: var(--font-data);
-      font-size: 6.5px;
+      font-size: 12px;
+      line-height: 1.2;
     }
     .node-database.has-mark .node-mark { display: flex; }
     .node-database.has-drift .node-mark, .node-database.has-failure .node-mark { color: var(--chalk); background: var(--danger-deep); }
@@ -401,79 +402,79 @@
 
     .composite-button {
       position: absolute;
-      right: 6px;
-      bottom: 6px;
-      width: 21px;
-      height: 21px;
+      right: var(--space-2);
+      bottom: var(--space-2);
+      width: 28px;
+      height: 28px;
       display: grid;
       place-items: center;
       padding: 0;
       color: var(--stage-muted);
       background: var(--stage-soft);
-      border: var(--line) solid var(--stage-line);
+      border: 0;
       border-radius: var(--radius-1);
     }
-    .composite-button svg { width: 11px; height: 11px; transform: rotate(-90deg); transition: transform var(--settle-time) var(--spring-snappy); }
+    .composite-button svg { width: 13px; height: 13px; transform: rotate(-90deg); transition: transform var(--settle-time) var(--spring-snappy); }
     .node-api.is-expanded .composite-button svg { transform: rotate(90deg); }
-    .composite-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 3px var(--space-2); margin: 0 32px 6px 36px; color: var(--stage-muted); font-family: var(--font-data); font-size: 6px; }
+    .composite-summary { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-1) var(--space-2); margin: 0 38px var(--space-2) 43px; color: var(--stage-muted); font-family: var(--font-data); font-size: 12px; line-height: 1.2; }
     .composite-summary b { color: var(--stage-ink); font-weight: 500; }
-    .composite-children { min-height: 0; margin: 0 32px 7px 36px; overflow: hidden; opacity: 0; transform: translateY(-6px); transition: opacity 220ms var(--hover-ease), transform var(--panel-time) var(--spring-settle); }
+    .composite-children { min-height: 0; margin: 0 38px var(--space-2) 43px; overflow: hidden; opacity: 0; transform: translateY(-6px); transition: opacity 220ms var(--hover-ease), transform var(--panel-time) var(--spring-settle); }
     .node-api.is-expanded .composite-children { opacity: 1; transform: translateY(0); }
-    .composite-child { height: 17px; display: flex; align-items: center; justify-content: space-between; border-top: var(--line) solid var(--stage-line); color: var(--stage-muted); font-family: var(--font-data); font-size: 6px; }
-    .composite-child strong { color: var(--stage-ink); font-family: var(--font-ui); font-size: 7px; font-weight: 500; }
+    .composite-child { min-height: 30px; display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); border-top: var(--line) solid var(--stage-line); color: var(--stage-muted); font-family: var(--font-data); font-size: 12px; line-height: 1.2; }
+    .composite-child strong { color: var(--stage-ink); font-family: var(--font-ui); font-size: 12px; font-weight: 600; }
 
     .hidden-effect {
       position: absolute;
       z-index: 9;
       top: var(--space-3);
       right: var(--space-3);
-      min-height: 25px;
+      min-height: 36px;
       display: flex;
       align-items: center;
-      gap: 6px;
-      padding: 0 var(--space-2);
+      gap: var(--space-2);
+      padding: var(--space-2) var(--space-3);
       color: var(--stage-muted);
       background: var(--stage);
       border: var(--line) solid var(--stage-line);
       border-radius: var(--radius-1);
       font-family: var(--font-data);
-      font-size: 6.5px;
-      box-shadow: 0 5px 12px rgba(38, 47, 44, .08);
+      font-size: 12px;
+      line-height: 1.2;
     }
     .hidden-effect[hidden] { display: none; }
-    .hidden-effect svg { width: 12px; height: 12px; }
+    .hidden-effect svg { width: 14px; height: 14px; }
 
     .semantic-lens {
       position: absolute;
       z-index: 10;
       left: 50%;
       bottom: var(--space-4);
-      width: 440px;
-      min-height: 58px;
+      width: 560px;
+      min-height: 96px;
       display: grid;
-      grid-template-columns: auto 1fr auto;
+      grid-template-columns: auto minmax(0, 1fr) auto;
       align-items: center;
       gap: var(--space-3);
-      padding: var(--space-2) var(--space-3);
+      padding: var(--space-3) var(--space-4);
       color: var(--chalk);
       background: var(--graphite-90);
       border: var(--line) solid var(--graphite-60);
       border-radius: var(--radius-2);
-      box-shadow: 0 14px 30px rgba(24, 30, 31, .24);
       opacity: 0;
       pointer-events: none;
       transform: translate(-50%, 14px) scale(.98);
       transition: opacity 240ms var(--hover-ease), transform var(--settle-time) var(--spring-snappy);
     }
     .stage-canvas.lens-open .semantic-lens { opacity: 1; pointer-events: auto; transform: translate(-50%, 0) scale(1); }
-    .lens-icon { width: 31px; height: 31px; display: grid; place-items: center; color: var(--copper-soft); border: var(--line) solid var(--graphite-60); border-radius: 50%; }
-    .lens-icon svg { width: 16px; height: 16px; }
-    .lens-copy small { display: block; color: var(--mist); font-family: var(--font-data); font-size: 6.5px; text-transform: uppercase; letter-spacing: .08em; }
-    .lens-copy strong { display: block; margin-top: 2px; font-size: 10px; font-weight: 500; }
-    .lens-copy span { display: block; margin-top: 2px; color: var(--mist); font-size: 7.5px; }
-    .lens-mode { color: var(--copper-soft); font-family: var(--font-data); font-size: 7px; }
-    .stage-canvas.lens-open .edge-group.is-quiet { opacity: .08; }
-    .stage-canvas.lens-open .node.is-quiet { opacity: .32; }
+    .lens-icon { width: 34px; height: 34px; display: grid; place-items: center; color: var(--copper-soft); background: var(--graphite-85); border-radius: 50%; }
+    .lens-icon svg { width: 17px; height: 17px; }
+    .lens-copy { min-width: 0; }
+    .lens-copy small { display: block; overflow: hidden; color: var(--mist); font-family: var(--font-data); font-size: 12px; line-height: 1.2; text-transform: uppercase; letter-spacing: .04em; text-overflow: ellipsis; white-space: nowrap; }
+    .lens-copy strong { display: block; margin-top: var(--space-1); overflow: hidden; font-size: 14px; font-weight: 600; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+    .lens-copy span { display: block; margin-top: var(--space-1); color: var(--mist); font-size: 12px; line-height: 1.35; }
+    .lens-mode { color: var(--copper-soft); font-family: var(--font-data); font-size: 12px; }
+    .stage-canvas.lens-open .edge-group.is-quiet { opacity: .78; }
+    .stage-canvas.lens-open .node.is-quiet { opacity: .95; }
 
     .source-plane {
       position: absolute;
@@ -481,34 +482,33 @@
       top: 0;
       right: 0;
       bottom: 0;
-      width: 318px;
+      width: 360px;
       color: var(--chalk);
       background: var(--graphite-90);
       border-left: var(--line) solid var(--graphite-60);
-      box-shadow: -12px 0 28px rgba(21, 26, 29, .18);
       opacity: 0;
       visibility: hidden;
       transform: translateX(100%);
       transition: opacity 240ms var(--hover-ease), transform var(--panel-time) var(--spring-settle), visibility 0ms linear var(--panel-time);
     }
     .stage-canvas.source-open .source-plane { opacity: 1; visibility: visible; transform: translateX(0); transition: opacity 240ms var(--hover-ease), transform var(--panel-time) var(--spring-settle), visibility 0ms linear 0ms; }
-    .source-head { height: 40px; display: flex; align-items: center; justify-content: space-between; padding: 0 var(--space-3); border-bottom: var(--line) solid var(--graphite-60); }
+    .source-head { height: 48px; display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-2) var(--space-3); border-bottom: var(--line) solid var(--graphite-60); }
     .source-head div { min-width: 0; }
-    .source-head strong { display: block; font-size: 9px; font-weight: 500; }
-    .source-head code { display: block; margin-top: 2px; color: var(--mist); font-family: var(--font-data); font-size: 6.5px; }
-    .source-body { height: 398px; padding: var(--space-3) 0; overflow: auto; font-family: var(--font-data); font-size: 7px; line-height: 1.75; }
-    .source-line { display: grid; grid-template-columns: 31px 1fr; padding: 0 var(--space-3); color: var(--fog); }
-    .source-line em { color: var(--graphite-60); font-style: normal; text-align: right; padding-right: var(--space-2); }
-    .source-line.is-hit { color: var(--chalk); background: var(--graphite-70); box-shadow: inset 2px 0 0 var(--copper); }
+    .source-head strong { display: block; overflow: hidden; font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+    .source-head code { display: block; margin-top: 2px; overflow: hidden; color: var(--mist); font-family: var(--font-data); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+    .source-body { height: 366px; padding: var(--space-3) 0; overflow: auto; font-family: var(--font-data); font-size: 12px; line-height: 1.6; }
+    .source-line { display: grid; grid-template-columns: 40px max-content; min-width: max-content; padding: 0 var(--space-3); color: var(--fog); border-left: 2px solid transparent; }
+    .source-line em { color: var(--mist); font-style: normal; text-align: right; padding-right: var(--space-2); }
+    .source-line.is-hit { color: var(--chalk); border-left-color: var(--copper); background: var(--graphite-70); }
     .source-token { color: var(--copper-soft); }
     .source-comment { color: var(--mist); }
 
     .pan-zoom {
       position: absolute;
       z-index: 8;
-      left: var(--space-3);
-      bottom: var(--space-3);
-      height: 28px;
+      left: var(--space-1);
+      bottom: var(--space-2);
+      height: 36px;
       display: flex;
       align-items: center;
       overflow: hidden;
@@ -516,26 +516,24 @@
       background: var(--stage);
       border: var(--line) solid var(--stage-line);
       border-radius: var(--radius-1);
-      box-shadow: 0 5px 12px rgba(38, 47, 44, .09);
     }
-    .mini-button { width: 27px; height: 27px; display: grid; place-items: center; padding: 0; color: var(--stage-muted); background: transparent; border-right: var(--line) solid var(--stage-line); }
+    .mini-button { width: 35px; height: 35px; display: grid; place-items: center; padding: 0; color: var(--stage-muted); background: transparent; border-right: var(--line) solid var(--stage-line); }
     .mini-button:last-child { border-right: 0; }
-    .mini-button svg { width: 12px; height: 12px; }
-    .zoom-readout { min-width: 38px; color: var(--stage-muted); font-family: var(--font-data); font-size: 6.5px; text-align: center; }
+    .mini-button svg { width: 14px; height: 14px; }
+    .zoom-readout { min-width: 50px; padding: 0 var(--space-2); color: var(--stage-muted); font-family: var(--font-data); font-size: 12px; text-align: center; }
 
     .minimap {
       position: absolute;
       z-index: 8;
       right: var(--space-3);
       bottom: var(--space-3);
-      width: 112px;
-      height: 64px;
-      padding: 5px;
+      width: 128px;
+      height: 72px;
+      padding: var(--space-2);
       color: var(--stage-muted);
       background: var(--stage);
       border: var(--line) solid var(--stage-line);
       border-radius: var(--radius-1);
-      box-shadow: 0 5px 12px rgba(38, 47, 44, .09);
     }
     .minimap svg { width: 100%; height: 100%; }
     .mini-edge { fill: none; stroke: var(--stage-line-strong); stroke-width: 1; }
@@ -543,90 +541,92 @@
     .mini-node.selected { fill: var(--copper-deep); }
     .minimap-window { fill: none; stroke: var(--copper-deep); stroke-width: 1; vector-effect: non-scaling-stroke; transition: transform var(--settle-time) var(--spring-settle); }
 
-    .inspector-body { height: 438px; padding: var(--space-3); overflow: auto; }
+    .inspector-body { height: 414px; padding: var(--space-3); overflow: auto; }
     .selection-heading { padding-bottom: var(--space-3); border-bottom: var(--line) solid var(--graphite-60); }
     .selection-heading-line { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
-    .selection-heading strong { overflow: hidden; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-    .selection-health { display: flex; align-items: center; gap: 5px; color: var(--fog); font-family: var(--font-data); font-size: 6px; }
-    .selection-heading code { display: block; margin-top: 3px; color: var(--mist); font-family: var(--font-data); font-size: 7px; }
+    .selection-heading strong { overflow: hidden; font-size: 15px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+    .selection-health { display: flex; align-items: center; gap: 5px; color: var(--fog); font-family: var(--font-data); font-size: 12px; }
+    .selection-heading code { display: block; margin-top: var(--space-1); overflow: hidden; color: var(--mist); font-family: var(--font-data); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
     .inspector-tabs { display: grid; grid-template-columns: 1fr 1fr; margin: var(--space-3) 0; border: var(--line) solid var(--graphite-60); border-radius: var(--radius-1); overflow: hidden; }
-    .inspector-tabs span { min-height: 24px; display: grid; place-items: center; color: var(--mist); font-size: 8px; }
+    .inspector-tabs span { min-height: 32px; display: grid; place-items: center; padding: 6px var(--space-2); color: var(--mist); font-size: 12px; }
     .inspector-tabs .is-active { color: var(--chalk); background: var(--graphite-70); }
     .property-section { padding: var(--space-3) 0; border-top: var(--line) solid var(--graphite-60); }
     .property-section:first-of-type { padding-top: 0; border-top: 0; }
-    .property-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-2); color: var(--mist); font-size: 7px; text-transform: uppercase; letter-spacing: .08em; }
+    .property-title { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); margin-bottom: var(--space-2); color: var(--mist); font-size: 12px; line-height: 1.3; text-transform: uppercase; letter-spacing: .04em; }
+    .property-title span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .property-title span:last-child { color: var(--copper-soft); font-family: var(--font-data); }
-    .property-row { min-height: 24px; display: grid; grid-template-columns: 70px minmax(0, 1fr); align-items: center; gap: var(--space-2); color: var(--mist); font-size: 8px; }
-    .property-row code { overflow: hidden; color: var(--chalk); font-family: var(--font-data); font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
-    .inspector-callout { margin-top: var(--space-2); padding: var(--space-2); color: var(--fog); background: var(--graphite-90); border: var(--line) solid var(--graphite-60); border-radius: var(--radius-1); font-size: 7px; line-height: 1.45; }
-    .inspector-callout strong { color: var(--copper-soft); font-weight: 500; }
+    .property-row { min-height: 30px; display: grid; grid-template-columns: 76px minmax(0, 1fr); align-items: center; gap: var(--space-2); color: var(--mist); font-size: 12px; }
+    .property-row code { overflow: hidden; color: var(--chalk); font-family: var(--font-data); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+    .inspector-callout { margin-top: var(--space-2); padding: var(--space-3) 0 0; color: var(--fog); background: transparent; border: 0; border-top: var(--line) solid var(--graphite-60); border-radius: 0; font-size: 12px; line-height: 1.5; }
+    .inspector-callout strong { color: var(--copper-soft); font-weight: 600; }
     .inspector-actions { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); margin-top: var(--space-3); }
-    .plain-button { min-height: 28px; padding: 0 var(--space-2); color: var(--fog); background: var(--graphite-90); border: var(--line) solid var(--graphite-60); border-radius: var(--radius-1); font-size: 8px; }
+    .plain-button { min-height: 38px; padding: var(--space-2) 10px; color: var(--fog); background: var(--graphite-90); border: var(--line) solid var(--graphite-60); border-radius: var(--radius-1); font-size: 12px; line-height: 1.2; }
     .plain-button.primary { color: var(--graphite-100); background: var(--copper); border-color: var(--copper); }
 
     .lower-surface { min-height: 0; border-top: var(--line) solid var(--graphite-60); background: var(--graphite-90); }
-    .lower-header { height: 38px; display: grid; grid-template-columns: 184px minmax(0, 1fr) 252px; align-items: stretch; border-bottom: var(--line) solid var(--graphite-60); }
-    .lower-name { display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-3); border-right: var(--line) solid var(--graphite-60); font-weight: 500; }
-    .lower-name svg { width: 14px; height: 14px; color: var(--copper); }
+    .lower-header { height: 42px; display: grid; grid-template-columns: 184px minmax(0, 1fr) 252px; align-items: stretch; border-bottom: var(--line) solid var(--graphite-60); }
+    .lower-name { display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-3); border-right: var(--line) solid var(--graphite-60); font-size: 13px; font-weight: 600; }
+    .lower-name svg { width: 15px; height: 15px; color: var(--copper); }
     .evidence-controls-wrap { display: flex; align-items: center; justify-content: center; }
     .evidence-controls {
       position: relative;
-      width: 288px;
-      height: 26px;
+      width: 330px;
+      height: 34px;
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      padding: 2px;
+      padding: 3px;
       background: var(--graphite-100);
       border: var(--line) solid var(--graphite-60);
       border-radius: var(--radius-1);
     }
-    .evidence-slider { position: absolute; z-index: 0; top: 2px; left: 2px; width: calc((100% - 4px) / 3); height: 20px; background: var(--graphite-70); border: var(--line) solid var(--graphite-60); border-radius: 2px; transform: translateX(calc(var(--evidence-index, 0) * 100%)); transition: transform var(--settle-time) var(--spring-snappy); }
-    .evidence-button { position: relative; z-index: 1; padding: 0; color: var(--mist); background: transparent; border-radius: 2px; font-size: 8px; }
+    .evidence-slider { position: absolute; z-index: 0; top: 3px; left: 3px; width: calc((100% - 6px) / 3); height: 26px; background: var(--graphite-70); border: 0; border-radius: 2px; transform: translateX(calc(var(--evidence-index, 0) * 100%)); transition: transform var(--settle-time) var(--spring-snappy); }
+    .evidence-button { position: relative; z-index: 1; padding: 6px var(--space-2); color: var(--mist); background: transparent; border-radius: 2px; font-size: 12px; line-height: 1.2; }
     .evidence-button.is-active { color: var(--chalk); }
-    .lower-counts { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-2); padding: 0 var(--space-3); border-left: var(--line) solid var(--graphite-60); color: var(--mist); font-family: var(--font-data); font-size: 7px; }
-    .count-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--copper); }
+    .lower-counts { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-2); padding: var(--space-1) var(--space-3); border-left: var(--line) solid var(--graphite-60); color: var(--mist); font-family: var(--font-data); font-size: 12px; line-height: 1.2; text-align: right; }
+    .count-dot { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: var(--copper); }
 
-    .lower-body { height: 164px; display: grid; grid-template-columns: 184px minmax(0, 1fr) 252px; }
+    .lower-body { height: 176px; display: grid; grid-template-columns: 184px minmax(0, 1fr) 252px; }
     .state-summary { min-width: 0; padding: var(--space-3); border-right: var(--line) solid var(--graphite-60); background: var(--graphite-85); }
-    .state-summary small, .action-dock small { display: block; color: var(--mist); font-family: var(--font-data); font-size: 6.5px; text-transform: uppercase; letter-spacing: .08em; }
-    .state-summary strong { display: block; margin-top: var(--space-1); font-size: 11px; font-weight: 500; }
-    .state-summary p { margin: var(--space-1) 0 var(--space-3); color: var(--mist); font-size: 7px; line-height: 1.4; }
+    .state-summary small, .action-dock small { display: block; color: var(--mist); font-family: var(--font-data); font-size: 12px; line-height: 1.2; text-transform: uppercase; letter-spacing: .02em; }
+    .state-summary strong { display: block; margin-top: var(--space-1); font-size: 15px; font-weight: 600; line-height: 1.2; }
+    .state-summary p { margin: var(--space-1) 0 var(--space-2); color: var(--mist); font-size: 12px; line-height: 1.4; }
     .assertion-meter { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-1); }
     .assertion-segment { height: 3px; background: var(--graphite-60); }
     .assertion-segment.pass { background: var(--sage); }
     .assertion-segment.fail { background: var(--danger); }
     .assertion-segment.pending { background: var(--amber); }
-    .assertion-copy { display: block; margin-top: var(--space-2); color: var(--fog); font-family: var(--font-data); font-size: 6.5px; }
+    .assertion-copy { display: block; margin-top: var(--space-2); color: var(--fog); font-family: var(--font-data); font-size: 12px; line-height: 1.2; }
 
-    .evidence-surface { position: relative; min-width: 0; display: grid; grid-template-columns: repeat(3, 1fr); overflow: hidden; }
-    .evidence-rail { position: absolute; z-index: 0; top: 48px; left: 14%; right: 14%; height: 1px; background: var(--graphite-60); }
+    .evidence-surface { position: relative; min-width: 0; display: grid; grid-template-columns: repeat(3, 1fr); }
+    .evidence-rail { position: absolute; z-index: 0; top: 52px; left: 14%; right: 14%; height: 1px; background: var(--graphite-60); }
     .evidence-rail::before, .evidence-rail::after { content: ""; position: absolute; top: -3px; width: 7px; height: 7px; border-radius: 50%; background: var(--graphite-60); }
     .evidence-rail::before { left: 33%; }
     .evidence-rail::after { right: 33%; }
-    .evidence-cell { position: relative; z-index: 1; min-width: 0; padding: var(--space-3) var(--space-4); border-right: var(--line) solid var(--graphite-60); opacity: .62; transition: opacity var(--hover-time) var(--hover-ease), background-color var(--hover-time) var(--hover-ease), transform var(--settle-time) var(--spring-snappy); }
+    .evidence-cell { position: relative; z-index: 1; min-width: 0; padding: var(--space-3) var(--space-4); border-right: var(--line) solid var(--graphite-60); opacity: .88; transition: opacity var(--hover-time) var(--hover-ease), background-color var(--hover-time) var(--hover-ease); }
     .evidence-cell:last-child { border-right: 0; }
-    .evidence-cell.is-active { opacity: 1; background: var(--graphite-85); transform: translateY(-2px); }
-    .evidence-kicker { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); color: var(--mist); font-family: var(--font-data); font-size: 6.5px; text-transform: uppercase; letter-spacing: .07em; }
-    .evidence-kicker i { width: 8px; height: 8px; display: block; background: var(--graphite-90); border: var(--line) solid var(--mist); }
+    .evidence-cell.is-active { opacity: 1; background: var(--graphite-85); }
+    .evidence-kicker { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); color: var(--mist); font-family: var(--font-data); font-size: 12px; line-height: 1.2; text-transform: uppercase; letter-spacing: .04em; }
+    .evidence-kicker span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .evidence-kicker i { width: 9px; height: 9px; flex: 0 0 auto; display: block; background: var(--graphite-90); border: var(--line) solid var(--mist); }
     .evidence-cell[data-mode="resolution"] .evidence-kicker i { border-color: var(--copper); transform: rotate(45deg); }
     .evidence-cell[data-mode="reality"] .evidence-kicker i { border-radius: 50%; border-color: var(--sage); background: var(--sage); }
-    .evidence-cell strong { display: block; margin-top: var(--space-4); overflow: hidden; font-size: 11px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
-    .evidence-cell code { display: block; margin-top: var(--space-1); overflow: hidden; color: var(--fog); font-family: var(--font-data); font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
-    .evidence-cell p { margin: var(--space-2) 0 0; color: var(--mist); font-size: 7px; line-height: 1.35; }
+    .evidence-cell strong { display: block; margin-top: var(--space-3); overflow: hidden; font-size: 15px; font-weight: 600; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+    .evidence-cell code { display: block; margin-top: var(--space-1); overflow: hidden; color: var(--fog); font-family: var(--font-data); font-size: 12px; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+    .evidence-cell p { margin: var(--space-2) 0 0; color: var(--mist); font-size: 12px; line-height: 1.4; }
 
     .action-dock { padding: var(--space-3); border-left: var(--line) solid var(--graphite-60); background: var(--graphite-85); }
-    .action-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); }
-    .shortcut { color: var(--mist); font-family: var(--font-data); font-size: 6px; }
-    .action-stack { height: 58px; margin-top: var(--space-2); }
-    .action-button { width: 100%; min-height: 34px; display: none; align-items: center; justify-content: space-between; gap: var(--space-2); padding: 0 var(--space-3); color: var(--graphite-100); background: var(--copper); border: var(--line) solid var(--copper); border-radius: var(--radius-1); font-size: 9px; font-weight: 500; }
+    .action-head { display: grid; gap: 2px; }
+    .shortcut { color: var(--mist); font-family: var(--font-data); font-size: 12px; line-height: 1.2; }
+    .action-stack { height: 56px; margin-top: var(--space-2); }
+    .action-button { width: 100%; min-height: 38px; display: none; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) var(--space-3); color: var(--graphite-100); background: var(--copper); border: var(--line) solid var(--copper); border-radius: var(--radius-1); font-size: 12px; font-weight: 600; line-height: 1.2; }
     .action-button.is-next { display: flex; }
-    .action-button svg { width: 14px; height: 14px; }
+    .action-button svg { width: 15px; height: 15px; }
     .action-button.is-pending { color: var(--chalk); background: var(--copper-deep); border-color: var(--copper-deep); }
     .action-button.is-pending svg { animation: pending-turn 720ms linear infinite; }
-    .complete-copy { display: none; min-height: 34px; align-items: center; gap: var(--space-2); color: var(--fog); font-size: 8px; }
-    .complete-copy svg { width: 16px; height: 16px; color: var(--sage); }
+    .complete-copy { display: none; min-height: 38px; align-items: center; gap: var(--space-2); color: var(--fog); font-size: 12px; line-height: 1.3; }
+    .complete-copy svg { width: 17px; height: 17px; flex: 0 0 auto; color: var(--sage); }
     .action-dock.is-complete .complete-copy { display: flex; }
-    .reset-action { width: 100%; min-height: 26px; color: var(--mist); background: transparent; border: var(--line) solid var(--graphite-60); border-radius: var(--radius-1); font-size: 7px; }
+    .reset-action { width: 100%; min-height: 34px; padding: var(--space-2); color: var(--mist); background: transparent; border: var(--line) solid var(--graphite-60); border-radius: var(--radius-1); font-size: 12px; line-height: 1.2; }
     @keyframes pending-turn { to { transform: rotate(360deg); } }
 
     .keyboard-input *, .keyboard-input *::before, .keyboard-input *::after { transition-duration: 0ms !important; animation-duration: 0ms !important; }
@@ -637,9 +637,9 @@
       .plane-button:hover { color: var(--stage-ink); background: var(--stage-soft); }
       .mini-button:hover { color: var(--stage-ink); background: var(--stage-soft); }
       .plain-button:hover { color: var(--chalk); border-color: var(--fog); transform: translateY(-1px); }
-      .plain-button.primary:hover, .action-button:hover { color: var(--graphite-100); background: var(--copper-soft); border-color: var(--copper-soft); transform: translateY(-1px); box-shadow: 0 7px 14px rgba(16, 21, 23, .18); }
-      .node:hover { border-color: var(--stage-muted); box-shadow: 0 9px 20px rgba(36, 45, 43, .14); }
-      .composite-button:hover { color: var(--stage-ink); border-color: var(--stage-muted); background: var(--stage); }
+      .plain-button.primary:hover, .action-button:hover { color: var(--graphite-100); background: var(--copper-soft); border-color: var(--copper-soft); transform: translateY(-1px); }
+      .node:hover { border-color: var(--stage-muted); }
+      .composite-button:hover { color: var(--stage-ink); background: var(--stage); }
       .evidence-button:hover { color: var(--chalk); }
       .reset-action:hover { color: var(--chalk); border-color: var(--fog); }
     }
@@ -692,11 +692,11 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     <header class="topbar">
       <div class="brand-lockup">
         <svg class="brand-mark" aria-hidden="true"><use href="#i-logo"></use></svg>
-        <div><div class="brand-name">Clockwork</div><div class="brand-mode">MOTION COMPILER</div></div>
+        <div><h1 class="brand-name">Clockwork</h1><div class="brand-mode">MOTION COMPILER</div></div>
       </div>
       <div class="document-bar">
         <div class="document-crumb"><strong>Photo-sharing / production</strong><code>architecture.cw</code></div>
-        <div class="tool-cluster" aria-label="Canvas tools">
+        <div class="tool-cluster" aria-label="Canvas tools" role="toolbar">
           <button class="icon-button is-active" id="selectTool" type="button" aria-label="Select and move nodes" aria-pressed="true" title="Select and move"><svg aria-hidden="true"><use href="#i-pointer"></use></svg></button>
           <button class="icon-button" type="button" data-action="focus" aria-label="Open semantic lens" aria-pressed="false" title="Semantic lens"><svg aria-hidden="true"><use href="#i-focus"></use></svg></button>
           <button class="icon-button" type="button" data-action="source" aria-label="Open source drawer" aria-expanded="false" title="Source"><svg aria-hidden="true"><use href="#i-source"></use></svg></button>
@@ -736,10 +736,10 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         <header class="stage-toolbar">
           <div class="stage-title"><svg aria-hidden="true"><use href="#i-fit"></use></svg>Semantic stage</div>
           <div class="plane-controls" role="group" aria-label="Relation planes">
-            <button class="plane-button" type="button" data-plane="calls" aria-pressed="true">Calls <span class="plane-count">1</span></button>
-            <button class="plane-button" type="button" data-plane="data" aria-pressed="true">Data <span class="plane-count">2</span></button>
-            <button class="plane-button" type="button" data-plane="storage" aria-pressed="true">Storage <span class="plane-count">2</span></button>
-            <button class="plane-button" type="button" data-plane="jobs" aria-pressed="true">Jobs <span class="plane-count">2</span></button>
+            <button class="plane-button" type="button" data-plane="calls" aria-pressed="true">Calls <span class="plane-count"></span></button>
+            <button class="plane-button" type="button" data-plane="data" aria-pressed="true">Data <span class="plane-count"></span></button>
+            <button class="plane-button" type="button" data-plane="storage" aria-pressed="true">Storage <span class="plane-count"></span></button>
+            <button class="plane-button" type="button" data-plane="jobs" aria-pressed="true">Jobs <span class="plane-count"></span></button>
           </div>
           <div class="stage-meta"><span id="stageMode">INTENT · OVERVIEW</span></div>
         </header>
@@ -769,7 +769,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
               <div class="node-detail"><span>web.public</span><span class="node-evidence">specified</span></div>
             </div>
 
-            <div class="node node-api" data-node="api" data-x="238" data-y="54" tabindex="0" role="button" aria-label="API-02 Photo API composite, collapsed, two children">
+            <div class="node node-api" data-node="api" data-x="250" data-y="54" role="group" aria-label="API-02 Photo API composite, collapsed, two children">
               <span class="node-handle nw"></span><span class="node-handle ne"></span><span class="node-handle sw"></span><span class="node-handle se"></span>
               <div class="node-top"><span class="node-icon"><svg aria-hidden="true"><use href="#i-api"></use></svg></span><span class="node-identity"><span class="node-id">API-02 · COMPOSITE</span><span class="node-name">Photo API</span></span><span class="health-dot"></span></div>
               <div class="composite-summary"><span><b>main.py</b> source</span><span><b>2</b> children</span><span><b>4</b> ext ports</span><span><b>2/2</b> assertions</span><span><b>healthy</b></span><span><b>0</b> proposals</span></div>
@@ -777,14 +777,14 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
               <button class="composite-button" type="button" data-composite="api" aria-label="Expand Photo API composite" aria-expanded="false"><svg aria-hidden="true"><use href="#i-chevron"></use></svg></button>
             </div>
 
-            <div class="node node-database is-selected" data-node="database" data-x="628" data-y="42" tabindex="0" role="button" aria-label="DB-03 PostgreSQL 18, selected">
+            <div class="node node-database is-selected" data-node="database" data-x="550" data-y="42" tabindex="0" role="button" aria-label="DB-03 PostgreSQL 18, selected">
               <span class="node-mark" id="dbMark">AUTHORED 18</span>
               <span class="node-handle nw"></span><span class="node-handle ne"></span><span class="node-handle sw"></span><span class="node-handle se"></span>
               <div class="node-top"><span class="node-icon"><svg aria-hidden="true"><use href="#i-db"></use></svg></span><span class="node-identity"><span class="node-id">DB-03</span><span class="node-name" id="dbNodeName">PostgreSQL 18</span></span><span class="health-dot"></span></div>
               <div class="node-detail"><span>db.primary</span><span class="node-evidence" id="dbNodeEvidence">specified 18</span></div>
             </div>
 
-            <div class="node node-store" data-node="store" data-x="630" data-y="218" tabindex="0" role="button" aria-label="OBJ-04 Media store, inferred">
+            <div class="node node-store" data-node="store" data-x="590" data-y="218" tabindex="0" role="button" aria-label="OBJ-04 Media store, inferred">
               <span class="node-handle nw"></span><span class="node-handle ne"></span><span class="node-handle sw"></span><span class="node-handle se"></span>
               <div class="node-top"><span class="node-icon"><svg aria-hidden="true"><use href="#i-store"></use></svg></span><span class="node-identity"><span class="node-id">OBJ-04</span><span class="node-name">Media store</span></span><span class="health-dot"></span></div>
               <div class="node-detail"><span>object.media</span><span class="node-evidence">inferred</span></div>
@@ -810,19 +810,19 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
             <span class="lens-mode" id="lensMode">INTENT</span>
           </div>
 
-          <aside class="source-plane" id="sourcePlane" aria-label="Source evidence drawer">
+          <aside class="source-plane" id="sourcePlane" aria-label="Source evidence drawer" aria-hidden="true" inert>
             <div class="source-head"><div><strong id="sourceTitle">DB-03 / source evidence</strong><code id="sourcePath">main.py:42–48</code></div><button class="icon-button" type="button" id="closeSource" aria-label="Close source drawer"><svg aria-hidden="true"><use href="#i-chevron"></use></svg></button></div>
             <div class="source-body" id="sourceBody"></div>
           </aside>
 
-          <div class="pan-zoom" aria-label="Viewport controls">
+          <div class="pan-zoom" aria-label="Viewport controls" role="group">
             <button class="mini-button" type="button" id="zoomOut" aria-label="Zoom out"><svg aria-hidden="true"><use href="#i-minus"></use></svg></button>
             <span class="zoom-readout" id="zoomReadout">100%</span>
             <button class="mini-button" type="button" id="zoomIn" aria-label="Zoom in"><svg aria-hidden="true"><use href="#i-plus"></use></svg></button>
             <button class="mini-button" type="button" id="resetView" aria-label="Reset pan and zoom"><svg aria-hidden="true"><use href="#i-reset"></use></svg></button>
           </div>
 
-          <div class="minimap" aria-label="Canvas mini-map and viewport locator">
+          <div class="minimap" aria-label="Canvas mini-map and viewport locator" role="group">
             <svg viewBox="0 0 100 52" role="img" aria-label="Architecture mini-map">
               <path class="mini-edge" d="M16 14H34M48 14H76M42 19V38M76 19V34M34 42H18M48 42H76"/>
               <rect class="mini-node" data-mini-node="web" x="7" y="9" width="12" height="8"/><rect class="mini-node" data-mini-node="api" x="33" y="9" width="16" height="10"/><rect class="mini-node selected" data-mini-node="database" x="76" y="8" width="15" height="9"/><rect class="mini-node" data-mini-node="store" x="77" y="34" width="14" height="8"/><rect class="mini-node" data-mini-node="queue" x="36" y="38" width="13" height="8"/><rect class="mini-node" data-mini-node="worker" x="8" y="38" width="14" height="8"/>
@@ -836,7 +836,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         <div class="panel-heading"><h2>Inspector</h2><button class="collapse-button" id="toggleInspector" type="button" aria-label="Collapse inspector" aria-expanded="true"><svg aria-hidden="true"><use href="#i-chevron"></use></svg></button></div>
         <div class="inspector-body">
           <div class="selection-heading"><div class="selection-heading-line"><strong id="inspectorName">DB-03 / PostgreSQL</strong><span class="selection-health"><i class="health-dot"></i><span id="inspectorHealth">healthy</span></span></div><code id="inspectorPath">app.data.db.primary</code></div>
-          <div class="inspector-tabs" aria-label="Inspector views"><span class="is-active">Properties</span><span>Provenance</span></div>
+          <div class="inspector-tabs" aria-label="Inspector views" role="group"><span class="is-active">Properties</span><span>Provenance</span></div>
           <section class="property-section">
             <div class="property-title"><span>Identity</span><span id="inspectorProvenance">specified</span></div>
             <div class="property-row"><span>Kind</span><code id="inspectorKind">database</code></div>
@@ -937,13 +937,13 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     };
 
     const relations = [
-      { id: 'web-api', from: 'web', to: 'api', family: 'calls', label: 'calls /api/*', lane: -6 },
-      { id: 'api-database', from: 'api', to: 'database', family: 'data', label: 'reads + writes', lane: -9 },
-      { id: 'api-store', from: 'api', to: 'store', family: 'storage', label: 'stores media', lane: 8 },
-      { id: 'api-queue', from: 'api', to: 'queue', family: 'jobs', label: 'publishes', lane: -7 },
-      { id: 'queue-worker', from: 'queue', to: 'worker', family: 'jobs', label: 'consumes', lane: 6 },
-      { id: 'worker-store', from: 'worker', to: 'store', family: 'storage', label: 'stores derivatives', lane: 12 },
-      { id: 'worker-database', from: 'worker', to: 'database', family: 'data', label: 'writes status', lane: -12 }
+      { id: 'web-api', from: 'web', to: 'api', family: 'calls', label: 'calls /api/*', lane: -6, labelOffset: [-120, 58] },
+      { id: 'api-database', from: 'api', to: 'database', family: 'data', label: 'reads + writes', lane: -9, labelOffset: [45, 60] },
+      { id: 'api-store', from: 'api', to: 'store', family: 'storage', label: 'stores media', lane: 8, labelOffset: [-4, 0] },
+      { id: 'api-queue', from: 'api', to: 'queue', family: 'jobs', label: 'publishes', lane: -7, labelOffset: [96, -29] },
+      { id: 'queue-worker', from: 'queue', to: 'worker', family: 'jobs', label: 'consumes', lane: 6, labelOffset: [-66, -64] },
+      { id: 'worker-store', from: 'worker', to: 'store', family: 'storage', label: 'stores derivatives', lane: 12, labelOffset: [-62, 90] },
+      { id: 'worker-database', from: 'worker', to: 'database', family: 'data', label: 'writes status', lane: -12, labelOffset: [2, 12] }
     ];
 
     const lifecycleFacts = {
@@ -1029,21 +1029,32 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       }
     };
 
-    const nextAction = { authored: 'reopen', unresolved: 'resolve', proposed: 'accept', accepted: 'plan', planned: 'apply', applied: 'observe', observed: 'assert', failed: 'recover', recovered: 'retry', reconciled: null };
-    const actionTarget = { reopen: 'unresolved', resolve: 'proposed', accept: 'accepted', plan: 'planned', apply: 'applied', observe: 'observed', assert: 'failed', recover: 'recovered', retry: 'reconciled' };
-    const pendingActions = new Set(['resolve', 'plan', 'apply', 'observe', 'assert', 'retry']);
+    const transitions = {
+      authored: { action: 'reopen', target: 'unresolved' },
+      unresolved: { action: 'resolve', target: 'proposed' },
+      proposed: { action: 'accept', target: 'accepted' },
+      accepted: { action: 'plan', target: 'planned' },
+      planned: { action: 'apply', target: 'applied' },
+      applied: { action: 'observe', target: 'observed' },
+      observed: { action: 'assert', target: 'failed' },
+      failed: { action: 'recover', target: 'recovered' },
+      recovered: { action: 'retry', target: 'reconciled' },
+      reconciled: null
+    };
     const pendingLabels = { resolve: 'Resolving…', plan: 'Planning…', apply: 'Applying…', observe: 'Observing…', assert: 'Asserting…', retry: 'Retrying…' };
     const actionLabels = { reopen: 'Reopen version', resolve: 'Resolve with AI', accept: 'Accept resolution', plan: 'Plan one update', apply: 'Apply plan', observe: 'Observe runtime', assert: 'Run assertions', recover: 'Recover schedule', retry: 'Retry assertions' };
+    const planeCounts = relations.reduce((counts, relation) => counts.set(relation.family, (counts.get(relation.family) || 0) + 1), new Map());
 
     let selectedNode = 'database';
     let selectedEvidence = 'intent';
     let lifecycle = 'authored';
     let isPending = false;
-    const visiblePlanes = new Set(['calls', 'data', 'storage', 'jobs']);
+    const visiblePlanes = new Set(planeCounts.keys());
     const view = { panX: 0, panY: 0, zoom: 1 };
 
-    const nodeElement = (name) => world.querySelector(`.node[data-node="${name}"]`);
-    const worldNodes = () => [...world.querySelectorAll('.node[data-node]')];
+    const nodeElements = [...world.querySelectorAll('.node[data-node]')];
+    const nodeByName = new Map(nodeElements.map((node) => [node.dataset.node, node]));
+    const nodeElement = (name) => nodeByName.get(name);
 
     const setKeyboardMode = (event) => {
       const keyboard = event && event.detail === 0;
@@ -1056,6 +1067,10 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       node.style.setProperty('--node-x', `${Number(node.dataset.x)}px`);
       node.style.setProperty('--node-y', `${Number(node.dataset.y)}px`);
     };
+    const clampNodePosition = (node, x, y) => ({
+      x: Math.max(0, Math.min(820 - node.offsetWidth, x)),
+      y: Math.max(34, Math.min(400 - node.offsetHeight, y))
+    });
     const renderedNodePosition = (node) => {
       const transform = getComputedStyle(node).transform;
       if (!transform || transform === 'none') return { x: Number(node.dataset.x), y: Number(node.dataset.y) };
@@ -1063,13 +1078,17 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       return { x: matrix.m41, y: matrix.m42 };
     };
 
-    const edgeGeometry = (relation) => {
-      const from = nodeElement(relation.from);
-      const to = nodeElement(relation.to);
-      const fromPosition = renderedNodePosition(from); const toPosition = renderedNodePosition(to);
-      const fx = fromPosition.x; const fy = fromPosition.y; const tx = toPosition.x; const ty = toPosition.y;
-      const fw = from.offsetWidth; const fh = from.offsetHeight;
-      const tw = to.offsetWidth; const th = to.offsetHeight;
+    const snapshotNodeGeometry = () => new Map(nodeElements.map((node) => {
+      const position = renderedNodePosition(node);
+      return [node.dataset.node, { ...position, width: node.offsetWidth, height: node.offsetHeight }];
+    }));
+
+    const edgeGeometry = (relation, nodeGeometry) => {
+      const from = nodeGeometry.get(relation.from);
+      const to = nodeGeometry.get(relation.to);
+      const fx = from.x; const fy = from.y; const tx = to.x; const ty = to.y;
+      const fw = from.width; const fh = from.height;
+      const tw = to.width; const th = to.height;
       const fcx = fx + fw / 2; const fcy = fy + fh / 2;
       const tcx = tx + tw / 2; const tcy = ty + th / 2;
       const horizontal = Math.abs(tcx - fcx) >= Math.abs(tcy - fcy);
@@ -1078,35 +1097,84 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         const sx = fcx + direction * fw / 2; const sy = fcy;
         const ex = tcx - direction * tw / 2; const ey = tcy;
         const mid = (sx + ex) / 2 + relation.lane;
-        return { d: `M${sx} ${sy}H${mid}V${ey}H${ex}`, dots: [[mid, sy], [mid, ey]], labelX: mid + 4, labelY: (sy + ey) / 2 - 5 };
+        return { d: `M${sx} ${sy}H${mid}V${ey}H${ex}`, dots: [[mid, sy], [mid, ey]], labelX: mid + 4, labelY: (sy + ey) / 2 - 9 };
       }
       const direction = tcy >= fcy ? 1 : -1;
       const sx = fcx; const sy = fcy + direction * fh / 2;
       const ex = tcx; const ey = tcy - direction * th / 2;
       const mid = (sy + ey) / 2 + relation.lane;
-      return { d: `M${sx} ${sy}V${mid}H${ex}V${ey}`, dots: [[sx, mid], [ex, mid]], labelX: (sx + ex) / 2 + 4, labelY: mid - 5 };
+      return { d: `M${sx} ${sy}V${mid}H${ex}V${ey}`, dots: [[sx, mid], [ex, mid]], labelX: (sx + ex) / 2 + 4, labelY: mid - 9 };
     };
+
+    const svgElement = (tagName, className) => {
+      const element = document.createElementNS('http://www.w3.org/2000/svg', tagName);
+      if (className) element.setAttribute('class', className);
+      return element;
+    };
+
+    const edgeElements = new Map(relations.map((relation) => {
+      const group = svgElement('g', 'edge-group');
+      group.dataset.relationId = relation.id;
+      group.dataset.family = relation.family;
+      group.dataset.from = relation.from;
+      group.dataset.to = relation.to;
+      const separator = svgElement('path', 'edge-separator');
+      const line = svgElement('path', 'edge-line');
+      line.setAttribute('marker-end', `url(#arrow-${relation.family})`);
+      const dots = [svgElement('circle', 'switch-dot'), svgElement('circle', 'switch-dot')];
+      dots.forEach((dot) => dot.setAttribute('r', '2.5'));
+      const labelGroup = svgElement('g');
+      const labelBackground = svgElement('rect', 'edge-label-bg');
+      labelBackground.setAttribute('x', '0');
+      labelBackground.setAttribute('y', '0');
+      labelBackground.setAttribute('width', String(relation.label.length * 7.4 + 12));
+      labelBackground.setAttribute('height', '20');
+      labelBackground.setAttribute('rx', '2');
+      const label = svgElement('text', 'edge-label');
+      label.setAttribute('x', '6');
+      label.setAttribute('y', '14');
+      label.textContent = relation.label;
+      labelGroup.append(labelBackground, label);
+      group.append(separator, line, ...dots, labelGroup);
+      relationsLayer.append(group);
+      return [relation.id, { group, separator, line, dots, labelGroup }];
+    }));
 
     const drawEdges = () => {
-      relationsLayer.innerHTML = relations.map((relation) => {
-        const geometry = edgeGeometry(relation);
-        const width = relation.label.length * 4.2 + 10;
+      const nodeGeometry = snapshotNodeGeometry();
+      relations.forEach((relation) => {
+        const geometry = edgeGeometry(relation, nodeGeometry);
+        const elements = edgeElements.get(relation.id);
         const active = relation.from === selectedNode || relation.to === selectedNode;
         const hidden = !visiblePlanes.has(relation.family);
-        const classes = ['edge-group', active ? 'is-active' : 'is-quiet', hidden ? 'is-hidden' : ''].join(' ');
-        const dots = geometry.dots.map(([x, y]) => `<circle class="switch-dot" cx="${x}" cy="${y}" r="2.5"/>`).join('');
-        return `<g class="${classes}" data-relation-id="${relation.id}" data-family="${relation.family}" data-from="${relation.from}" data-to="${relation.to}"><path class="edge-separator" d="${geometry.d}"/><path class="edge-line" d="${geometry.d}" marker-end="url(#arrow-${relation.family})"/>${dots}<g transform="translate(${geometry.labelX} ${geometry.labelY})"><rect class="edge-label-bg" x="0" y="0" width="${width}" height="13" rx="2"/><text class="edge-label" x="5" y="9">${relation.label}</text></g></g>`;
-      }).join('');
+        elements.group.setAttribute('class', `edge-group ${active ? 'is-active' : 'is-quiet'}${hidden ? ' is-hidden' : ''}`);
+        elements.separator.setAttribute('d', geometry.d);
+        elements.line.setAttribute('d', geometry.d);
+        elements.dots.forEach((dot, index) => {
+          dot.setAttribute('cx', String(geometry.dots[index][0]));
+          dot.setAttribute('cy', String(geometry.dots[index][1]));
+        });
+        const labelX = geometry.labelX + relation.labelOffset[0];
+        const labelY = geometry.labelY + relation.labelOffset[1];
+        elements.labelGroup.setAttribute('transform', `translate(${labelX} ${labelY})`);
+      });
     };
 
+    let edgeAnimationFrame = null;
+    let sourceOpener = null;
     const animateEdgeGeometry = () => {
+      if (edgeAnimationFrame !== null) cancelAnimationFrame(edgeAnimationFrame);
+      if (reducedMotion.matches) {
+        edgeAnimationFrame = null;
+        drawEdges();
+        return;
+      }
       const started = performance.now();
       const tick = (now) => {
         drawEdges();
-        if (now - started < 500 && !reducedMotion.matches) requestAnimationFrame(tick);
+        edgeAnimationFrame = now - started < 500 ? requestAnimationFrame(tick) : null;
       };
-      requestAnimationFrame(tick);
-      setTimeout(drawEdges, reducedMotion.matches ? 0 : 520);
+      edgeAnimationFrame = requestAnimationFrame(tick);
     };
 
     const renderSource = () => {
@@ -1129,7 +1197,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         if (relation.from === selectedNode) neighbors.add(relation.to);
         if (relation.to === selectedNode) neighbors.add(relation.from);
       });
-      worldNodes().forEach((node) => node.classList.toggle('is-quiet', !neighbors.has(node.dataset.node)));
+      nodeElements.forEach((node) => node.classList.toggle('is-quiet', !neighbors.has(node.dataset.node)));
       drawEdges();
     };
 
@@ -1170,7 +1238,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       if (!nodeCatalog[name]) return;
       setKeyboardMode(event);
       selectedNode = name;
-      worldNodes().forEach((node) => node.classList.toggle('is-selected', node.dataset.node === name));
+      nodeElements.forEach((node) => node.classList.toggle('is-selected', node.dataset.node === name));
       document.querySelectorAll('.tree-row[data-node]').forEach((row) => row.classList.toggle('is-selected', row.dataset.node === name));
       document.querySelectorAll('[data-mini-node]').forEach((node) => node.classList.toggle('selected', node.dataset.miniNode === name));
       editor.classList.remove('inspector-collapsed');
@@ -1209,7 +1277,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     };
 
     const updateActions = () => {
-      const current = nextAction[lifecycle];
+      const current = transitions[lifecycle]?.action;
       document.querySelectorAll('.action-button[data-action]').forEach((button) => {
         const active = button.dataset.action === current;
         button.classList.toggle('is-next', active);
@@ -1229,7 +1297,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       document.getElementById('stageLabel').textContent = facts.label;
       document.getElementById('stateTitle').textContent = facts.title;
       document.getElementById('stateMessage').textContent = facts.message;
-      document.getElementById('topStatus').textContent = isPending ? pendingLabels[nextAction[lifecycle]] : facts.title;
+      document.getElementById('topStatus').textContent = isPending ? pendingLabels[transitions[lifecycle].action] : facts.title;
       document.getElementById('topStatusMeta').textContent = `DB-03 · ${facts.intentTitle.replace('PostgreSQL ', '')} / ${facts.realityTitle.replace('Runtime ', '')}`;
       document.getElementById('lifecycleCounts').textContent = `${facts.proposal} proposal${facts.proposal === 1 ? '' : 's'} · ${facts.updates} update${facts.updates === 1 ? '' : 's'} · ${facts.pass}/3 checks`;
       document.getElementById('intentTitle').textContent = facts.intentTitle;
@@ -1253,7 +1321,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       updateEvidence(selectedEvidence);
       updateActions();
       updateInspector();
-      updateLens();
     };
 
     const transitionLifecycle = (action, event) => {
@@ -1265,10 +1332,11 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         renderLifecycle();
         return;
       }
-      if (isPending || nextAction[lifecycle] !== action) return;
+      const transition = transitions[lifecycle];
+      if (isPending || transition?.action !== action) return;
       const keyboard = setKeyboardMode(event);
-      const target = actionTarget[action];
-      const needsPending = pendingActions.has(action) && !keyboard;
+      const target = transition.target;
+      const needsPending = pendingLabels[action] !== undefined && !keyboard;
       if (!needsPending) {
         lifecycle = target;
         renderLifecycle();
@@ -1322,10 +1390,16 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     const toggleSource = (open, event) => {
       setKeyboardMode(event);
       const sourceButton = document.querySelector('[data-action="source"]');
+      const wasOpen = stageCanvas.classList.contains('source-open');
+      sourceOpener = open && !wasOpen ? event.currentTarget : sourceOpener;
       stageCanvas.classList.toggle('source-open', open);
       sourceButton.setAttribute('aria-expanded', String(open));
       sourceButton.classList.toggle('is-active', open);
-      renderSource();
+      sourcePlane.setAttribute('aria-hidden', String(!open));
+      sourcePlane.inert = !open;
+      const focusTarget = open ? closeSource : wasOpen && event.currentTarget === closeSource ? sourceOpener ?? sourceButton : null;
+      focusTarget?.focus();
+      sourceOpener = !open && wasOpen ? null : sourceOpener;
     };
 
     const toggleLens = (event) => {
@@ -1348,7 +1422,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     });
 
     document.querySelectorAll('.tree-row[data-node]').forEach((row) => row.addEventListener('click', (event) => selectNode(row.dataset.node, event)));
-    worldNodes().forEach((node) => {
+    nodeElements.forEach((node) => {
       setNodePosition(node);
       let drag = null;
       node.addEventListener('pointerdown', (event) => {
@@ -1360,17 +1434,17 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       });
       node.addEventListener('pointermove', (event) => {
         if (!drag || event.pointerId !== drag.pointerId) return;
-        const x = Math.max(0, Math.min(820 - node.offsetWidth, drag.baseX + (event.clientX - drag.originX) / view.zoom));
-        const y = Math.max(34, Math.min(400 - node.offsetHeight, drag.baseY + (event.clientY - drag.originY) / view.zoom));
-        node.dataset.x = String(x);
-        node.dataset.y = String(y);
+        const position = clampNodePosition(node, drag.baseX + (event.clientX - drag.originX) / view.zoom, drag.baseY + (event.clientY - drag.originY) / view.zoom);
+        node.dataset.x = String(position.x);
+        node.dataset.y = String(position.y);
         setNodePosition(node);
         drawEdges();
       });
       const settleNode = (event) => {
         if (!drag || event.pointerId !== drag.pointerId) return;
-        node.dataset.x = String(Math.round(Number(node.dataset.x) / 8) * 8);
-        node.dataset.y = String(Math.round(Number(node.dataset.y) / 8) * 8);
+        const position = clampNodePosition(node, Math.round(Number(node.dataset.x) / 8) * 8, Math.round(Number(node.dataset.y) / 8) * 8);
+        node.dataset.x = String(position.x);
+        node.dataset.y = String(position.y);
         node.classList.remove('is-dragging');
         node.releasePointerCapture(event.pointerId);
         drag = null;
@@ -1387,13 +1461,14 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     });
 
     document.querySelectorAll('[data-plane]').forEach((button) => {
+      const plane = button.dataset.plane;
+      const count = planeCounts.get(plane) || 0;
+      button.querySelector('.plane-count').textContent = String(count);
       button.addEventListener('click', (event) => {
         setKeyboardMode(event);
-        const plane = button.dataset.plane;
         const active = visiblePlanes.has(plane);
         if (active) visiblePlanes.delete(plane); else visiblePlanes.add(plane);
         button.setAttribute('aria-pressed', String(!active));
-        const count = relations.filter((relation) => relation.family === plane).length;
         button.querySelector('.plane-count').textContent = active ? `−${count}` : String(count);
         updateHiddenEffect();
       });
@@ -1410,6 +1485,11 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       event.currentTarget.setAttribute('aria-expanded', String(expanded));
       event.currentTarget.setAttribute('aria-label', `${expanded ? 'Collapse' : 'Expand'} Photo API composite`);
       api.setAttribute('aria-label', `API-02 Photo API composite, ${expanded ? 'expanded' : 'collapsed'}, two children`);
+      api.querySelector('.composite-children').setAttribute('aria-hidden', String(!expanded));
+      const position = clampNodePosition(api, Number(api.dataset.x), Number(api.dataset.y));
+      api.dataset.x = String(position.x);
+      api.dataset.y = String(position.y);
+      setNodePosition(api);
       animateEdgeGeometry();
     });
 
@@ -1467,10 +1547,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       updateView();
     }, { passive: false });
 
-    worldNodes().forEach(setNodePosition);
     drawEdges();
     renderLifecycle();
-    renderSource();
     updateView();
   </script>
 </body>
